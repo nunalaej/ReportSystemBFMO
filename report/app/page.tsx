@@ -74,19 +74,6 @@ export default function Home() {
               </p>
             </div>
           </div>
-
-          {/* Light / Dark switch */}
-          <label className="create-scope__switch">
-            <input
-              type="checkbox"
-              checked={lightMode}
-              onChange={() => setLightMode((v) => !v)}
-            />
-            <span className="create-scope__slider" />
-            <span className="create-scope__switch-label">
-              {lightMode ? "Light mode" : "Dark mode"}
-            </span>
-          </label>
         </header>
 
         {/* BODY */}
