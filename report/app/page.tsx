@@ -43,7 +43,7 @@ export default function Home() {
       >
         {/* HEADER */}
         <header className="create-scope__panel-head login-card-head">
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="header">
             <Image
               src="/logo-dlsud.png"
               alt="DLSU-D logo"
@@ -81,11 +81,7 @@ export default function Home() {
           {/* Intro text */}
           <div style={{ marginBottom: 20 }}>
             <p
-              style={{
-                margin: 0,
-                fontSize: 14,
-                color: "var(--text-2)",
-              }}
+              className="welcome"
             >
               Welcome to the online reporting portal for maintenance concerns at
               DLSU-D. Please use your DLSU-D Account to Login
@@ -110,25 +106,11 @@ export default function Home() {
                 fallbackRedirectUrl="/Users/Student-Dashboard"
                 signUpFallbackRedirectUrl="/Users/Student-Dashboard"
               >
-                <button type="button" className="morphButton expanded">
-                  <span className="icon">
-                    <span style={{ fontSize: 18, fontWeight: 700 }}>↪</span>
-                  </span>
+                <button type="button" className="neonButton">
                   <span className="buttonLabel">Sign In</span>
                 </button>
               </SignInButton>
 
-              <SignUpButton
-                mode="modal"
-                fallbackRedirectUrl="/Users/Student-Dashboard"
-              >
-                <button type="button" className="morphButton">
-                  <span className="icon">
-                    <span style={{ fontSize: 18, fontWeight: 700 }}>＋</span>
-                  </span>
-                  <span className="buttonLabel">Create Account</span>
-                </button>
-              </SignUpButton>
             </SignedOut>
 
             <SignedIn>

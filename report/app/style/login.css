@@ -56,7 +56,10 @@ body {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
-  padding: 20px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 20px;
+  padding-bottom: 5px;
   align-items: start;
 }
 .create-scope__panel-body {
@@ -69,6 +72,24 @@ body {
   align-items: center;
 }
 
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  align-content: center;
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.welcome {
+  font-size: 13px;
+  padding-left: 10px;
+  padding-right:10px;
+  text-align: center;
+  padding-bottom: 5px;
+}
 /* Theme tokens (dark default) */
 .create-scope {
   --bg: #0f1115;
@@ -342,6 +363,7 @@ body {
 
 /* Footer */
 .login-footer {
+  padding-top: 15px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -362,3 +384,46 @@ body {
   background: var(--outline);
   border-radius: 999px;
 }
+
+
+/* Neon Gradient Sign In Button */
+.neonButton {
+  align-items: center;
+  background-image: linear-gradient(144deg, #00b46f, #00ad5f 50%, #00ba57);
+  border: 0;
+  border-radius: 8px;
+  box-sizing: border-box;
+  color: #ffffff;
+  display: flex;
+  font-size: 16px;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 150px;
+  padding: 3px;
+  text-decoration: none;
+  user-select: none;
+  touch-action: manipulation;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.neonButton span {
+  background-color: rgba(95, 169, 86, 0.66);
+  padding: 14px 24px;
+  border-radius: 6px;
+  width: 100%;
+  height: 100%;
+  transition: 300ms;
+}
+
+.neonButton:hover span {
+  background: none;
+  box-shadow: rgba(7, 180, 8, 0.571) 0 15px 30px -5px;
+
+}
+
+.neonButton:active {
+  transform: scale(0.9);
+}
+
+

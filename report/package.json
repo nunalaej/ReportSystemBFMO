@@ -8,12 +8,13 @@
     "start": "next start",
     "lint": "eslint"
   },
-    "dependencies": {
+  "dependencies": {
     "@clerk/nextjs": "^6.35.4",
+    "mongodb": "^7.0.0",
     "next": "16.0.3",
     "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-bits": "^1.0.5"
+    "react-bits": "^1.0.5",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
