@@ -12,6 +12,7 @@
     "@clerk/nextjs": "^6.35.4",
     "next": "16.0.3",
     "react": "19.2.0",
+    "react-bits": "^1.0.5",
     "react-dom": "19.2.0"
   },
   "devDependencies": {
