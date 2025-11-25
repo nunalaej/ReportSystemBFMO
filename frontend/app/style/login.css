@@ -418,7 +418,7 @@ body {
 
 .neonButton:hover span {
   background: none;
-  box-shadow: rgba(7, 180, 8, 0.571) 0 15px 30px -5px;
+  box-shadow: rgba(7, 180, 8, 0.571) 0 15px 100px 3px;
 
 }
 
