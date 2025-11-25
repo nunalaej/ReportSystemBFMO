@@ -1,4 +1,4 @@
-// app/Users/Student-Dashboard/page.tsx
+// app/Student/Student-Dashboard/page.tsx
 
 import "./Student-Db.css";
 import Link from "next/link";
@@ -6,10 +6,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 
 export default async function StudentDashboard() {
-  // auth() is async in your version
   const { userId } = await auth();
 
-  // If not logged in, kick back to home/login
   if (!userId) {
     redirect("/");
   }
@@ -23,18 +21,22 @@ export default async function StudentDashboard() {
         </p>
 
         <div className="student-dashboard__actions">
-          <Link href="/Users/Create-Report">
+          {/* Adjust this href to where your Create page actually lives */}
+          <Link href="/Student/create">
             <button className="student-dashboard__btn-primary">
               Create New Report
             </button>
           </Link>
 
-          <Link href="/Users/View-Reports">
+          <Link href="/ReportDataList">
             <button className="student-dashboard__btn-secondary">
               View Created Reports
             </button>
           </Link>
         </div>
+
+        {/* Here is where the data from /api/getAllData shows up */}
+        <section style={{ marginTop: 32 }}></section>
       </main>
     </div>
   );
