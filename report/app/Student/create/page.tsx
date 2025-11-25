@@ -12,7 +12,7 @@ import React, {
   ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs"; // ⬅ add this
+import { useUser } from "@clerk/nextjs";
 
 /* Types */
 interface PanelProps {
@@ -148,8 +148,15 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
   },
 ];
 
-const META_URL = "/api/meta";
-
+/**
+ * API base for reports and meta:
+ * - If NEXT_PUBLIC_API_BASE is set it will call that backend, for example
+ *     https://your-backend.onrender.com
+ * - If not set it will use Next routes on the same domain like /api/meta
+ */
+const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const API_BASE = RAW_BASE.replace(/\/+$/, "");
+const META_URL = API_BASE ? `${API_BASE}/api/meta` : "/api/meta";
 
 const collegeOptions: string[] = [
   "CICS",
@@ -164,7 +171,7 @@ const collegeOptions: string[] = [
 ];
 
 export default function Create(): JSX.Element {
-  const { user, isLoaded } = useUser(); // ⬅ get logged in Clerk user
+  const { user, isLoaded } = useUser();
   const router = useRouter();
 
   const [formData, setFormData] = useState<FormDataState>({
@@ -192,7 +199,8 @@ export default function Create(): JSX.Element {
 
   const [hasRoom, setHasRoom] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState<boolean>(false);
+  const [sidebarOverlayOpen, setSidebarOverlayOpen] =
+    useState<boolean>(false);
   const [light, setLight] = useState<boolean>(false);
 
   const [specificRoom, setSpecificRoom] = useState<boolean>(false);
@@ -223,7 +231,6 @@ export default function Create(): JSX.Element {
     };
   }, [preview]);
 
-  // Load email from localStorage currentUser and prefill
   // Load email from Clerk user and prefill
   useEffect(() => {
     if (!isLoaded || !user) return;
@@ -298,7 +305,14 @@ export default function Create(): JSX.Element {
   useEffect(() => {
     const fetchReports = async () => {
       try {
-        const res = await fetch("/api/reports");
+        const url = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
+        const res = await fetch(url, { credentials: "omit" });
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          console.error("Reports fetch failed:", res.status, raw);
+          return;
+        }
+
         const data = await res.json();
 
         let list: Report[] = [];
@@ -331,7 +345,7 @@ export default function Create(): JSX.Element {
 
     normal.sort((a, b) => String(a).localeCompare(String(b)));
 
-    return [...normal, ...others]; // "Other" always last
+    return [...normal, ...others];
   }, [meta.buildings]);
 
   const concernOptions = useMemo(() => {
@@ -344,7 +358,7 @@ export default function Create(): JSX.Element {
 
     normal.sort((a, b) => String(a).localeCompare(String(b)));
 
-    return [...normal, ...others]; // "Other" always last
+    return [...normal, ...others];
   }, [meta.concerns]);
 
   const selectedConcern = useMemo(
@@ -362,11 +376,11 @@ export default function Create(): JSX.Element {
   // Rooms allowed per building (full set) for non ICTC buildings
   const buildingRoomRanges: Record<string, string[] | null> = {
     JFH: ["101-109", "201-210", "301-310", "401-405"],
-    ICTC: null, // handled separately
+    ICTC: null,
     PCH: ["101-109", "201-210", "301-310", "401-405"],
     Ayuntamiento: null,
     "Food Square": null,
-    COS: ["101-110"], // single floor, rooms 101-110
+    COS: ["101-110"],
     CBAA: ["101-109", "201-210", "301-310", "401-405"],
     CTHM: ["101-109", "201-210"],
     GMH: ["101-109"],
@@ -446,7 +460,6 @@ export default function Create(): JSX.Element {
 
   useEffect(() => {
     if (isIctc) {
-      // ICTC handled separately
       return;
     }
     const showRoom = Array.isArray(availableRooms) && availableRooms.length > 0;
@@ -531,19 +544,22 @@ export default function Create(): JSX.Element {
           data.append(k, v as Blob | string);
         }
       });
-      const res = await fetch("/api/reports", {
-  method: "POST",
-  body: data,
-});
 
+      const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
+
+      const res = await fetch(submitUrl, {
+        method: "POST",
+        body: data,
+      });
 
       if (!res.ok) {
-  const text = await res.text();
-  console.error("Submit error status:", res.status, text);
-}
-
+        const text = await res.text().catch(() => "");
+        console.error("Submit error status:", res.status, text);
+        throw new Error(text || `Submit failed with status ${res.status}`);
+      }
 
       const result = await res.json();
+
       if (result.success) {
         if (result.report && typeof result.report === "object") {
           setExistingReports((prev) => [...prev, result.report as Report]);
@@ -570,7 +586,8 @@ export default function Create(): JSX.Element {
       } else {
         showMsg("error", result.message || "Submission failed.");
       }
-    } catch {
+    } catch (err) {
+      console.error("Submit error:", err);
       showMsg("error", "Network error while submitting report.");
     } finally {
       setSubmitting(false);

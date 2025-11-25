@@ -1,4 +1,3 @@
-// lib/models/report.ts
 import { Schema, model, models } from "mongoose";
 
 const CommentSchema = new Schema(
@@ -38,10 +37,10 @@ const ReportSchema = new Schema(
   { timestamps: true }
 );
 
-// ⬇ use env collection name or default
+// use env collection name or default
 const collectionName =
   process.env.MONGODB_COLLECTION || "ReportCollection";
 
-// 3rd argument sets the MongoDB collection name explicitly
+// third argument sets the MongoDB collection name explicitly
 export const Report =
   models.Report || model("Report", ReportSchema, collectionName);
