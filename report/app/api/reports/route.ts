@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
-import { connectDB } from "@/lib/mongodb/mongodb";
+import { connectDB } from "@/lib/mongodb";
 import { Report } from "@/lib/models/report";
 
 export const runtime = "nodejs"; // ensure Node runtime, not edge

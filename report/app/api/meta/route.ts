@@ -1,52 +1,53 @@
 // app/api/meta/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
+import { connectDB } from "@/lib/mongodb";
 
-const DEFAULT_BUILDINGS = [
-  "Ayuntamiento",
-  "JFH",
-  "ICTC",
-  "PCH",
-  "Food Square",
-  "COS",
-  "CBAA",
-  "CTHM",
-  "GMH",
-  "CEAT",
-  "Other",
-];
+// schema for Buildings & Concern collection
+const MetaSchema = new mongoose.Schema(
+  {
+    buildings: [String],
+    concerns: [
+      {
+        id: String,
+        label: String,
+        subconcerns: [String],
+      },
+    ],
+  },
+  { collection: "Buildings&Concern" }
+);
 
-const DEFAULT_CONCERNS = [
-  {
-    id: "electrical",
-    label: "Electrical",
-    subconcerns: ["Lights", "Aircons", "Wires", "Outlets", "Switches", "Other"],
-  },
-  {
-    id: "civil",
-    label: "Civil",
-    subconcerns: ["Walls", "Ceilings", "Cracks", "Doors", "Windows", "Other"],
-  },
-  {
-    id: "mechanical",
-    label: "Mechanical",
-    subconcerns: ["TV", "Projectors", "Fans", "Elevators", "Other"],
-  },
-  {
-    id: "safety-hazard",
-    label: "Safety Hazard",
-    subconcerns: ["Spikes", "Open Wires", "Blocked Exits", "Wet Floor", "Other"],
-  },
-  {
-    id: "other",
-    label: "Other",
-    subconcerns: ["Other"],
-  },
-];
+const Meta = mongoose.models.Meta || mongoose.model("Meta", MetaSchema);
 
 export async function GET() {
-  // Simple: just return defaults
-  return NextResponse.json({
-    buildings: DEFAULT_BUILDINGS,
-    concerns: DEFAULT_CONCERNS,
-  });
+  try {
+    await connectDB();
+    const doc = await Meta.findOne().lean();
+    return NextResponse.json(doc || { buildings: [], concerns: [] });
+  } catch (err) {
+    console.error("GET /api/meta error:", err);
+    return NextResponse.json({ error: "Failed to load" }, { status: 500 });
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    await connectDB();
+    const body = await req.json();
+
+    const updated = await Meta.findOneAndUpdate(
+      {},
+      {
+        buildings: body.buildings ?? [],
+        concerns: body.concerns ?? [],
+      },
+      { upsert: true, new: true }
+    ).lean();
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("PUT /api/meta error:", err);
+    return NextResponse.json({ error: "Failed to save" }, { status: 500 });
+  }
 }

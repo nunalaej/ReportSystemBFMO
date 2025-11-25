@@ -15,12 +15,10 @@ const ReportSchema = new Schema(
     heading: String,
     description: String,
 
-    // Concern details
     concern: String,
     subConcern: String,
     otherConcern: String,
 
-    // Location details
     building: String,
     otherBuilding: String,
     college: { type: String, default: "Unspecified" },
@@ -40,4 +38,10 @@ const ReportSchema = new Schema(
   { timestamps: true }
 );
 
-export const Report = models.Report || model("Report", ReportSchema);
+// ⬇ use env collection name or default
+const collectionName =
+  process.env.MONGODB_COLLECTION || "ReportCollection";
+
+// 3rd argument sets the MongoDB collection name explicitly
+export const Report =
+  models.Report || model("Report", ReportSchema, collectionName);
