@@ -1,0 +1,922 @@
+/* Theme variables scoped to this page only */
+.create-scope {
+  --bg: #0b1220;             /* dark base */
+  --surface: #121a2b;
+  --muted: #a8b3c7;
+  --text: #e6eef8;
+  --text-2: #c7d1e2;
+  --brand: #008563;          /* brand color */
+  --brand-2: #0a6e55;        /* darker shade */
+  --success: #18c08f;
+  --error: #ff6b6b;
+  --info: #6aa7ff;
+  --outline: #24304a;
+  --ring: #3a67d6;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --radius: 14px;
+
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #18233a 0, #050814 50%, #02030a 100%);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter,
+    Arial, "Noto Sans", sans-serif;
+}
+
+/* Light theme overrides */
+.create-scope.create-scope--light {
+  --bg: #e4e6f0;
+  --surface: #ffffff;
+  --muted: #6b778c;
+  --text: #0e1626;
+  --text-2: #2f3a4f;
+  --brand: #008563;
+  --brand-2: #0a6e55;
+  --success: #0a9d73;
+  --error: #e05252;
+  --info: #2d6bff;
+  --outline: #e0e4f0;
+  --ring: #2d6bff;
+  --shadow: 0 18px 40px rgba(30, 62, 98, 0.18);
+}
+
+/* Layout container */
+.create-scope__layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.create-scope__layout.is-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+/* Page scroll */
+.create-scope {
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+/* Global scrollbar styling */
+/* Firefox */
+.create-scope {
+  scrollbar-width: thin;
+  scrollbar-color: var(--outline) transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari) */
+.create-scope::-webkit-scrollbar {
+  width: 10px;
+}
+.create-scope::-webkit-scrollbar-track {
+  background: transparent;
+}
+.create-scope::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--outline) 85%, transparent);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.create-scope::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--outline) 60%, transparent);
+}
+
+/* Sidebar scroll styling so the mobile panel has its own scrollwheel */
+.create-scope__sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--outline) transparent;
+}
+
+.create-scope__sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+.create-scope__sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.create-scope__sidebar::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--outline) 85%, transparent);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.create-scope__sidebar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--outline) 60%, transparent);
+}
+
+/* ===================== SIDEBAR ===================== */
+.create-scope__sidebar {
+  position: sticky;
+  top: 16px;
+  align-self: flex-start;
+  background: linear-gradient(180deg, rgba(4, 59, 45, 0.96) 0%, #013a2c 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 14px 14px 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+}
+.create-scope__sidebar-toggle {
+  appearance: none;
+  border: 0;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+  padding: 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+.create-scope__sidebar-toggle:hover {
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+}
+.create-scope__sidebar-inner {
+  display: grid;
+  gap: 14px;
+}
+
+/* Brand block */
+.create-scope__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+.create-scope__brand-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #02241b;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+.create-scope__brand-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.create-scope__brand-title {
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+/* Drawer on small screens */
+.create-scope__scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 10, 20, 0.6);
+  backdrop-filter: blur(2px);
+}
+@media (max-width: 980px) {
+  .create-scope__layout {
+    grid-template-columns: 1fr;
+    padding-inline: 12px;
+  }
+  .create-scope__sidebar {
+    position: fixed;
+    z-index: 40;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 80vw;
+    transform: translateX(-100%);
+    transition: transform 0.25s;
+    border-radius: 0 18px 18px 0;
+
+    /* make the mobile panel scroll */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .create-scope__sidebar.is-open {
+    transform: translateX(0);
+  }
+  .create-scope__scrim.is-open {
+    display: block;
+    z-index: 30;
+  }
+}
+
+/* Main area */
+.create-scope__main {
+  min-height: 100%;
+  width: 100%;
+  display: grid;
+  place-items: start stretch;
+}
+
+/* Panel - generic */
+.create-scope__panel {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto 18px;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.create-scope__panel-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(14px, 2.2vw, 22px) clamp(16px, 3vw, 28px);
+  border-bottom: 1px solid var(--outline);
+}
+.create-scope__panel-title {
+  margin: 0;
+  font-size: clamp(18px, 2.4vw, 24px);
+}
+.create-scope__panel-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.create-scope__panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.create-scope__panel-body {
+  padding: clamp(16px, 3vw, 28px);
+}
+
+/* Panels inside sidebar - flatter, denser */
+.create-scope__sidebar .create-scope__panel {
+  max-width: 100%;
+  margin: 0 0 10px;
+  background: rgba(6, 41, 32, 0.9);
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.create-scope__sidebar .create-scope__panel-head {
+  padding: 10px 12px;
+}
+.create-scope__sidebar .create-scope__panel-body {
+  padding: 10px 12px 12px;
+}
+.create-scope__sidebar .create-scope__panel-title {
+  font-size: 16px;
+}
+.create-scope__sidebar .create-scope__panel-subtitle {
+  font-size: 12px;
+}
+
+/* Toolbar wrapper */
+.create-scope__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Signed in email text */
+.create-scope__user-email {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Toolbar button */
+.create-scope__ghost-btn {
+  appearance: none;
+  border: 1px solid var(--outline);
+  background: transparent;
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: 0.15s;
+}
+.create-scope__ghost-btn:hover {
+  background-color: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.create-scope__ghost-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--brand) 25%, transparent);
+  border-color: var(--brand);
+}
+.create-scope__ghost-btn:active {
+  transform: translateY(1px);
+}
+
+.create-scope__logout-btn {
+  appearance: none;
+  border: 1px solid var(--outline);
+  background: #e05252;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: 0.15s;
+}
+
+.create-scope__logout-btn:hover {
+  background-color: #ff6b6b;
+  color: #fff;
+  border-color: #e05252;
+}
+.create-scope__logout-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, #e05252 25%, transparent);
+  border-color: #e05252;
+}
+.create-scope__logout-btn:active {
+  transform: translateY(1px);
+}
+
+.create-scope__reset-btn {
+  appearance: none;
+  border: 1px solid var(--outline);
+  background: #003fa3;
+  color: #ffffff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: 0.15s;
+}
+
+.create-scope__reset-btn:hover {
+  background-color: #00b3ff;
+  color: #fff;
+  border-color: #140065;
+}
+.create-scope__reset-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px color-mix(in oklab, #e05252 25%, transparent);
+  border-color: #e05252;
+}
+.create-scope__reset-btn:active {
+  transform: translateY(1px);
+}
+
+/* Generic key-value grid */
+.create-scope__kv {
+  display: grid;
+  grid-template-columns: 1.2fr auto;
+  gap: 8px 10px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.create-scope__kv > div:nth-child(2n) {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Preview */
+.create-scope__preview {
+  border: 1px dashed var(--outline);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+}
+.create-scope__preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #00000010;
+  border-radius: 12px;
+}
+.create-scope__preview-empty {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  padding: 12px;
+  text-align: center;
+}
+
+/* Hide the real file input but keep it accessible */
+.create-scope__file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Theme switch */
+.create-scope__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.create-scope__switch input {
+  display: none;
+}
+.create-scope__slider {
+  width: 42px;
+  height: 24px;
+  background: var(--outline);
+  border-radius: 999px;
+  position: relative;
+  transition: 0.2s;
+}
+.create-scope__slider::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.2s;
+  box-shadow: var(--shadow);
+}
+.create-scope__switch input:checked + .create-scope__slider {
+  background: var(--brand);
+}
+.create-scope__switch input:checked + .create-scope__slider::after {
+  transform: translateX(18px);
+}
+.create-scope__switch-label {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* Messages */
+.create-scope__message {
+  margin-bottom: 16px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  background: rgba(106, 167, 255, 0.08);
+  border: 1px solid rgba(106, 167, 255, 0.35);
+  color: var(--text);
+}
+.create-scope__message.is-success {
+  background: rgba(24, 192, 143, 0.08);
+  border-color: rgba(24, 192, 143, 0.35);
+}
+.create-scope__message.is-error {
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.38);
+}
+
+/* Form */
+.create-scope__form {
+  display: grid;
+  gap: 16px;
+}
+.create-scope__group {
+  display: grid;
+  gap: 8px;
+}
+.create-scope__group label {
+  font-weight: 600;
+  color: var(--text-2);
+}
+.create-scope__hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+.create-scope__hint.is-success {
+  color: var(--success);
+}
+
+.create-scope__form input[type="text"],
+.create-scope__form input[type="email"],
+.create-scope__form select,
+.create-scope__form textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.create-scope__form textarea {
+  resize: vertical;
+}
+.create-scope__form input::placeholder,
+.create-scope__form textarea::placeholder {
+  color: color-mix(in oklab, var(--muted) 90%, transparent);
+}
+
+.create-scope__form input:focus,
+.create-scope__form select:focus,
+.create-scope__form textarea:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ring) 20%, transparent);
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+}
+.create-scope__form .is-invalid {
+  border-color: var(--error);
+}
+
+.create-scope__row-two {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-width: 720px) {
+  .create-scope__row-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dropdown options readable in dark mode */
+.create-scope select option {
+  color: #000;
+  background: #fff;
+}
+
+/* OTP row */
+.create-scope__otp-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+}
+.create-scope__otp-row input[type="text"] {
+  letter-spacing: 0.18em;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* Buttons */
+.create-scope__btn {
+  appearance: none;
+  border: 0;
+  background: var(--brand);
+  color: white;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.05s ease, filter 0.15s ease, background 0.15s;
+}
+.create-scope__btn:hover {
+  filter: brightness(1.05);
+  background-color: var(--brand);
+}
+.create-scope__btn:active {
+  transform: translateY(1px);
+}
+.create-scope__btn.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.create-scope__btn--ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--outline);
+}
+.create-scope__btn--primary {
+  background: #008563 !important;
+  background-color: #008563 !important;
+  border-color: #008563 !important;
+}
+
+.create-scope__btn--primary:hover {
+  filter: brightness(1.05);
+  background: #008563 !important;
+}
+
+.create-scope__btn--primary:active {
+  background: #007250 !important;
+}
+
+.create-scope__w-full {
+  width: 100%;
+}
+
+/* Dropzone */
+.create-scope__dropzone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--outline);
+  border-radius: 14px;
+  min-height: 120px;
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+  transition: border-color 0.2s, background 0.2s;
+  overflow: hidden;
+}
+.create-scope__dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.create-scope__dropzone-inner {
+  text-align: center;
+  padding: 18px;
+  color: var(--text-2);
+}
+.create-scope__dropzone-inner svg {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 8px;
+  color: var(--brand);
+}
+.create-scope__dropzone.is-dragover {
+  border-color: var(--brand);
+  background: color-mix(in oklab, var(--brand) 12%, transparent);
+}
+
+.create-scope__preview-img {
+  margin-top: 10px;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  max-height: 320px;
+  object-fit: cover;
+}
+
+/* Safari arrow for selects */
+.create-scope select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(1em + 2px),
+    calc(100% - 13px) calc(1em + 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
+}
+
+/* Fieldhead + Pill (for future use) */
+.create-scope__fieldhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.create-scope__fieldhead-l {
+  display: grid;
+  gap: 2px;
+}
+.create-scope__field-label {
+  font-weight: 600;
+  color: var(--text-2);
+  font-size: 14px;
+}
+.create-scope__field-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.create-scope__fieldhead-r {
+  display: flex;
+  align-items: center;
+}
+
+.create-scope__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--text);
+  background: rgba(255,255,255,.06);
+  border: 1px solid var(--outline);
+}
+.create-scope__pill.is-ok {
+  background: color-mix(in oklab, var(--brand) 18%, transparent);
+  border-color: color-mix(in oklab, var(--brand) 65%, var(--outline));
+}
+
+/* Summary bits */
+.create-scope__summary {
+  display: grid;
+  gap: 12px;
+}
+.create-scope__progress {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid var(--outline);
+  overflow: hidden;
+}
+.create-scope__progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  width: 0%;
+  transition: width .2s ease;
+}
+.create-scope__summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+.create-scope__summary-row strong {
+  font-size: 14px;
+}
+.create-scope__summary-row .is-ok {
+  color: var(--success);
+}
+.create-scope__summary-row .is-warn {
+  color: var(--info);
+}
+.create-scope__summary-rule {
+  border: 0;
+  height: 1px;
+  background: var(--outline);
+}
+.create-scope__summary-kv {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr;
+  gap: 8px 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.create-scope__summary-kv > div:nth-child(2n) {
+  text-align: right;
+  font-weight: 500;
+}
+
+/* ================= LIGHT MODE SIDEBAR OVERRIDES ================ */
+
+/* Sidebar shell */
+.create-scope.create-scope--light .create-scope__sidebar {
+  background: linear-gradient(180deg, #008563 0%, #0a6e55 100%);
+  box-shadow: var(--shadow);
+  color: #ffffff;
+}
+
+/* Brand title stays white and crisp */
+.create-scope.create-scope--light .create-scope__brand-title {
+  color: #ffffff;
+}
+
+/* Sidebar toggle in light mode */
+.create-scope.create-scope--light .create-scope__sidebar-toggle {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+.create-scope.create-scope--light .create-scope__sidebar-toggle:hover {
+  background: rgba(0, 0, 0, 0.16);
+}
+
+/* Cards inside the sidebar become light surfaces */
+.create-scope.create-scope--light .create-scope__sidebar .create-scope__panel {
+  background: #ffffff;
+  border-color: var(--outline);
+  color: #0c0c0c;
+}
+
+/* Sidebar panel headings and text use light theme text tokens */
+.create-scope.create-scope--light .create-scope__sidebar .create-scope__panel-title {
+  color: var(--text-2);
+}
+.create-scope.create-scope--light .create-scope__sidebar .create-scope__panel-subtitle {
+  color: var(--muted);
+}
+
+.create-scope.create-scope--light .create-scope__sidebar .create-scope__kv,
+.create-scope.create-scope--light .create-scope__sidebar .create-scope__summary-kv {
+  color: var(--text-2);
+}
+
+/* Ghost buttons inside sidebar and toolbar align with light palette */
+.create-scope.create-scope--light .create-scope__ghost-btn {
+  border-color: var(--outline);
+  color: var(--text-2);
+}
+.create-scope.create-scope--light .create-scope__ghost-btn:hover {
+  background-color: var(--brand);
+  color: #ffffff;
+  border-color: var(--brand);
+}
+
+/* ============ TOP BAR AND BURGER MENU ============ */
+
+.create-scope__topbar {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.create-scope__topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Logo in top bar */
+.create-scope__topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.create-scope__topbar-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+.create-scope__topbar-brand span {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-2);
+}
+
+/* Burger menu (from Uiverse, adapted) */
+.burger {
+  position: relative;
+  width: 40px;
+  height: 30px;
+  background: transparent;
+  cursor: pointer;
+  display: block;
+}
+
+.burger input {
+  display: none;
+}
+
+.burger span {
+  display: block;
+  position: absolute;
+  height: 4px;
+  width: 100%;
+  background: var(--text);
+  border-radius: 9px;
+  opacity: 1;
+  left: 0;
+  transform: rotate(0deg);
+  transition: 0.25s ease-in-out;
+}
+
+.burger span:nth-of-type(1) {
+  top: 0px;
+  transform-origin: left center;
+}
+
+.burger span:nth-of-type(2) {
+  top: 50%;
+  transform: translateY(-50%);
+  transform-origin: left center;
+}
+
+.burger span:nth-of-type(3) {
+  top: 100%;
+  transform-origin: left center;
+  transform: translateY(-100%);
+}
+
+.burger input:checked ~ span:nth-of-type(1) {
+  transform: rotate(45deg);
+  top: 0px;
+  left: 5px;
+}
+
+.burger input:checked ~ span:nth-of-type(2) {
+  width: 0%;
+  opacity: 0;
+}
+
+.burger input:checked ~ span:nth-of-type(3) {
+  transform: rotate(-45deg);
+  top: 28px;
+  left: 5px;
+}
+
+/* Hide burger on desktop, show on mobile */
+@media (min-width: 981px) {
+  .burger {
+    display: none;
+  }
+}
+
+/* Required star for empty required fields */
+.create-scope__required-star {
+  color: var(--error);
+  margin-left: 2px;
+  font-weight: 700;
+}

@@ -1,4 +1,4 @@
-// app/Student/Student-Dashboard/page.tsx
+// app/Student/Dashboard/page.tsx
 
 import "./Student-Db.css";
 import Link from "next/link";
