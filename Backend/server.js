@@ -5,12 +5,11 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
-const metaRouter = require("./api/meta");
-const reportsRouter = require("./api/reports");
-
 const app = express();
 
-// CORS – allow your frontend (set CORS_ORIGIN in env)
+/* -------------------------------
+   CORS CONFIG
+--------------------------------*/
 const allowedOrigins = (process.env.CORS_ORIGIN || "")
   .split(",")
   .map((o) => o.trim())
@@ -22,36 +21,48 @@ app.use(
   })
 );
 
-// Basic JSON parsing
+/* -------------------------------
+   BASIC MIDDLEWARE
+--------------------------------*/
 app.use(express.json());
 
-// Serve uploaded images
+// Serve uploaded files (if you later use /uploads)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// MongoDB
+/* -------------------------------
+   MONGODB CONNECTION
+--------------------------------*/
 const mongoUri = process.env.MONGODB_URI;
-const dbName = process.env.MONGODB_NAME; // optional if already in URI
+const dbName = process.env.MONGODB_NAME;
 
 if (!mongoUri) {
-  console.error("Missing MONGODB_URI");
+  console.error("❌ Missing MONGODB_URI in environment variables.");
   process.exit(1);
 }
 
-// Important: NO useNewUrlParser/useUnifiedTopology options – those caused your error
 mongoose
   .connect(mongoUri, dbName ? { dbName } : undefined)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected successfully"))
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    process.exit(1); // stop server if DB cannot connect
+  });
 
-// Routes
-app.use("/api/meta", metaRouter);
-app.use("/api/reports", reportsRouter);
-
-// Health check
+/* -------------------------------
+   HEALTH CHECK
+--------------------------------*/
 app.get("/", (req, res) => {
-  res.json({ ok: true, message: "Changes" });
+  res.json({
+    ok: true,
+    message: "Backend is running on Render",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-// Port
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
+/* -------------------------------
+   START SERVER
+--------------------------------*/
+const PORT = process.env.PORT || 5000; // Render will inject PORT
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+});

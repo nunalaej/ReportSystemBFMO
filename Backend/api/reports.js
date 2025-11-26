@@ -27,18 +27,26 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// GET /api/reports
+// Backend/api/reports.js
+
 router.get("/", async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 }).lean();
     res.json({ success: true, reports });
   } catch (err) {
     console.error("Error fetching reports:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to load reports" });
+
+    // TEMPORARY: expose error to see what's wrong
+    res.status(500).json({
+      success: false,
+      message: "Failed to load reports",
+      error: err.message,
+      // comment next line out if you do not want full stack
+      // stack: err.stack,
+    });
   }
 });
+
 
 // POST /api/reports
 router.post("/", upload.single("imageFile"), async (req, res) => {
