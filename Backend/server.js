@@ -49,7 +49,7 @@ app.use("/api/reports", reportsRouter);
 
 // Health check
 app.get("/", (req, res) => {
-  res.json({ ok: true, message: "BFMO backend is running" });
+  res.json({ ok: true, message: "Changes" });
 });
 
 // Port
