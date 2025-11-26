@@ -1,27 +1,83 @@
-import { connectDB } from "@/lib/mongodb";
-import { Report } from "@/models/Report";
+// Backend/api/reports.js
+const express = require("express");
+const path = require("path");
+const fs = require("fs");
+const multer = require("multer");
+const Report = require("../models/Report");
 
-export default async function handler(req, res) {
-  if (req.method === "POST") {
-    try {
-      await connectDB();
+const router = express.Router();
 
-      const newReport = new Report({
-        ...req.body,
-      });
-
-      const savedReport = await newReport.save();
-
-      res.status(200).json({
-        success: true,
-        message: "Report submitted successfully",
-        report: savedReport,
-      });
-    } catch (error) {
-      console.error("Error saving report:", error);
-      res.status(500).json({ success: false, message: error.message });
-    }
-  } else {
-    res.status(405).json({ message: "Method Not Allowed" });
-  }
+// Ensure uploads dir exists
+const uploadDir = path.join(__dirname, "..", "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
 }
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const ext = path.extname(file.originalname || "");
+    const base = path.basename(file.originalname || "image", ext);
+    const safeBase = base.replace(/[^a-z0-9_-]/gi, "_");
+    cb(null, `${safeBase}-${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+// GET /api/reports
+router.get("/", async (req, res) => {
+  try {
+    const reports = await Report.find().sort({ createdAt: -1 }).lean();
+    res.json({ success: true, reports });
+  } catch (err) {
+    console.error("Error fetching reports:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to load reports" });
+  }
+});
+
+// POST /api/reports
+router.post("/", upload.single("imageFile"), async (req, res) => {
+  try {
+    const body = req.body;
+
+    let imagePath = "";
+    if (req.file) {
+      imagePath = `/uploads/${req.file.filename}`;
+    }
+
+    const report = await Report.create({
+      email: body.email,
+      heading: body.heading,
+      description: body.description,
+      concern: body.concern,
+      subConcern: body.subConcern || "",
+      otherConcern: body.otherConcern || "",
+      building: body.building,
+      otherBuilding: body.otherBuilding || "",
+      college: body.college || "Unspecified",
+      floor: body.floor || "",
+      room: body.room || "",
+      otherRoom: body.otherRoom || "",
+      image: imagePath,
+      status: "Pending",
+    });
+
+    res.json({
+      success: true,
+      message: "Report submitted successfully.",
+      report,
+    });
+  } catch (err) {
+    console.error("Error creating report:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to submit report" });
+  }
+});
+
+module.exports = router;

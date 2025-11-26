@@ -1,83 +1,33 @@
-// Backend/routes/reports.js
-const express = require("express");
-const path = require("path");
-const fs = require("fs");
-const multer = require("multer");
-const Report = require("../models/Report");
+// Backend/models/Report.js
+const mongoose = require("mongoose");
 
-const router = express.Router();
+const collectionName = process.env.MONGODB_COLLECTION || "ReportCollection";
 
-// Ensure uploads dir exists
-const uploadDir = path.join(__dirname, "..", "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
+const ReportSchema = new mongoose.Schema(
+  {
+    email: String,
+    heading: String,
+    description: String,
+    concern: String,
+    subConcern: { type: String, default: "" },
+    otherConcern: { type: String, default: "" },
+    building: String,
+    otherBuilding: { type: String, default: "" },
+    college: { type: String, default: "Unspecified" },
+    floor: { type: String, default: "" },
+    room: { type: String, default: "" },
+    otherRoom: { type: String, default: "" },
+    image: { type: String, default: "" },
+    status: {
+      type: String,
+      default: "Pending",
+      enum: ["Pending", "In Progress", "Resolved", "Archived"],
+    },
   },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname || "");
-    const base = path.basename(file.originalname || "image", ext);
-    const safeBase = base.replace(/[^a-z0-9_-]/gi, "_");
-    cb(null, `${safeBase}-${Date.now()}${ext}`);
-  },
-});
-
-const upload = multer({ storage });
-
-// GET /api/reports
-router.get("/", async (req, res) => {
-  try {
-    const reports = await Report.find().sort({ createdAt: -1 }).lean();
-    res.json({ success: true, reports });
-  } catch (err) {
-    console.error("Error fetching reports:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to load reports" });
+  {
+    timestamps: true,
+    collection: collectionName,
   }
-});
+);
 
-// POST /api/reports
-router.post("/", upload.single("imageFile"), async (req, res) => {
-  try {
-    const body = req.body;
-
-    let imagePath = "";
-    if (req.file) {
-      imagePath = `/uploads/${req.file.filename}`;
-    }
-
-    const report = await Report.create({
-      email: body.email,
-      heading: body.heading,
-      description: body.description,
-      concern: body.concern,
-      subConcern: body.subConcern || "",
-      otherConcern: body.otherConcern || "",
-      building: body.building,
-      otherBuilding: body.otherBuilding || "",
-      college: body.college || "Unspecified",
-      floor: body.floor || "",
-      room: body.room || "",
-      otherRoom: body.otherRoom || "",
-      image: imagePath,
-      status: "Pending",
-    });
-
-    res.json({
-      success: true,
-      message: "Report submitted successfully.",
-      report,
-    });
-  } catch (err) {
-    console.error("Error creating report:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to submit report" });
-  }
-});
-
-module.exports = router;
+module.exports = mongoose.model("Report", ReportSchema);
