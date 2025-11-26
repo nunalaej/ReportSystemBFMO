@@ -29,6 +29,13 @@ app.use(express.json());
 // Serve uploaded files (if you later use /uploads)
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+
+const metaRouter = require("./api/meta");
+const reportsRouter = require("./api/reports");
+
+app.use("/api/meta", metaRouter);
+app.use("/api/reports", reportsRouter);
+
 /* -------------------------------
    MONGODB CONNECTION
 --------------------------------*/
