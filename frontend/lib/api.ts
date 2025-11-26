@@ -23,7 +23,7 @@ export interface Report {
 
 // 2. Base URL for backend
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_BASE || "https://backendsystem-njyn.onrender.com/";
 
 // 3. Export fetchReports
 export async function fetchReports(): Promise<Report[]> {
