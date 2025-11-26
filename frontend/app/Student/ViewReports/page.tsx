@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import "@/app/style/report.css";
 // Adjust this import to where your Navigation component actually lives
 // Static default image served from /public/default.jpg
 const defaultImg = "/default.jpg";
