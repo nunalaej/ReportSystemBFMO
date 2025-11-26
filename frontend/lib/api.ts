@@ -1,9 +1,33 @@
+// frontend/lib/api.ts
+
+// 1. Export the Report type
+export interface Report {
+  _id: string;
+  email?: string;
+  heading: string;
+  description?: string;
+  concern?: string;
+  subConcern?: string;
+  otherConcern?: string;
+  building?: string;
+  otherBuilding?: string;
+  college?: string;
+  floor?: string;
+  room?: string;
+  otherRoom?: string;
+  image?: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// 2. Base URL for backend
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
-export async function fetchReports() {
+// 3. Export fetchReports
+export async function fetchReports(): Promise<Report[]> {
   const res = await fetch(`${API_BASE}/api/reports`, {
-    // avoid caching so you always see latest
     cache: "no-store",
   });
 
@@ -17,5 +41,5 @@ export async function fetchReports() {
     throw new Error(data.message || "Failed to load reports");
   }
 
-  return data.reports as any[];
+  return data.reports as Report[];
 }
