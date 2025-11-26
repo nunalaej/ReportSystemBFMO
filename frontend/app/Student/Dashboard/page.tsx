@@ -52,7 +52,7 @@ export default function StudentDashboard() {
             </Link>
 
             {/* View Reports */}
-            <Link href="/Student/MyReports" className="card1">
+            <Link href="/Student/ViewReports" className="card1">
               <div className="card-inner">
                 <div className="card-icon-badge">
                   <span className="card-icon">📂</span>
