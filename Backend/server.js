@@ -5,8 +5,8 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
-const metaRouter = require("./routes/meta");
-const reportsRouter = require("./routes/reports");
+const metaRouter = require("./api/meta");
+const reportsRouter = require("./api/reports");
 
 const app = express();
 
