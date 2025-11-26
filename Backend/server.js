@@ -10,17 +10,11 @@ const app = express();
 /* -------------------------------
    CORS CONFIG
 --------------------------------*/
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
-
 app.use(
   cors({
-    origin: allowedOrigins.length ? allowedOrigins : "*",
+    origin: "*",
   })
 );
-
 /* -------------------------------
    BASIC MIDDLEWARE
 --------------------------------*/
