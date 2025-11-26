@@ -1,4 +1,4 @@
-// Backend/routes/meta.js
+// Backend/api/meta.js
 const express = require("express");
 const router = express.Router();
 

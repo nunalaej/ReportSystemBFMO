@@ -26,7 +26,7 @@ const ReportSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: collectionName,
+    collection: collectionName, // uses MONGODB_COLLECTION
   }
 );
 
