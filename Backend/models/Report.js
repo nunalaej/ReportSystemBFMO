@@ -1,33 +1,53 @@
 // Backend/models/Report.js
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const collectionName = process.env.MONGODB_COLLECTION || "ReportCollection";
+const CommentSchema = new mongoose.Schema(
+  {
+    text: { type: String, required: true },
+    at: { type: Date, default: Date.now },
+    by: { type: String, default: "System" },
+  },
+  { _id: false }
+);
 
 const ReportSchema = new mongoose.Schema(
   {
-    email: String,
     heading: String,
     description: String,
+
     concern: String,
-    subConcern: { type: String, default: "" },
-    otherConcern: { type: String, default: "" },
+    subConcern: String,
+    otherConcern: String,
+
     building: String,
-    otherBuilding: { type: String, default: "" },
+    otherBuilding: String,
+
     college: { type: String, default: "Unspecified" },
-    floor: { type: String, default: "" },
+    floor: String,
     room: { type: String, default: "" },
-    otherRoom: { type: String, default: "" },
-    image: { type: String, default: "" },
+    otherRoom: String,
+
     status: {
       type: String,
       default: "Pending",
-      enum: ["Pending", "In Progress", "Resolved", "Archived"],
+      enum: [
+        "Pending",
+        "Waiting for Materials",
+        "In Progress",
+        "Resolved",
+        "Archived",
+      ],
     },
+
+    image: String, // Cloudinary URL or /uploads/filename
+
+    comments: { type: [CommentSchema], default: [] },
+
+    createdAt: { type: Date, default: Date.now },
+    email: String,
   },
-  {
-    timestamps: true,
-    collection: collectionName, // uses MONGODB_COLLECTION
-  }
+  { timestamps: true }
 );
 
-module.exports = mongoose.model("Report", ReportSchema);
+export const Report =
+  mongoose.models.Report || mongoose.model("Report", ReportSchema);

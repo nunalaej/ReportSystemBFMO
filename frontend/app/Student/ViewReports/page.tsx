@@ -50,8 +50,7 @@ const formatConcern = (report: Report) => {
 const formatBuilding = (report: Report) => {
   const rawBuilding = report.building || "Unspecified";
 
-  const isOther =
-    rawBuilding && rawBuilding.toLowerCase() === "other";
+  const isOther = rawBuilding && rawBuilding.toLowerCase() === "other";
   const buildingLabel =
     isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
 
@@ -104,10 +103,7 @@ const getStatusClassKey = (statusRaw?: string) => {
   return "pending";
 };
 
-const statusMatchesFilter = (
-  reportStatus: string | undefined,
-  filter: string
-) => {
+const statusMatchesFilter = (reportStatus: string | undefined, filter: string) => {
   const currentStatus = reportStatus || "Pending";
   if (filter === "Archived") return currentStatus === "Archived";
   if (filter === "All Statuses") return currentStatus !== "Archived";
@@ -141,8 +137,7 @@ export default function ReportPage() {
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [showDuplicates, setShowDuplicates] = useState(false);
 
-  const [selectedReport, setSelectedReport] =
-    useState<Report | null>(null);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [statusValue, setStatusValue] = useState("Pending");
   const [commentText, setCommentText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -190,9 +185,7 @@ export default function ReportPage() {
         list = data.data;
       } else {
         console.warn("Unexpected /api/reports payload:", data);
-        setLoadError(
-          "Could not load reports. Check the server response."
-        );
+        setLoadError("Could not load reports. Check the server response.");
       }
 
       setReports(list);
@@ -226,14 +219,10 @@ export default function ReportPage() {
     });
   };
 
-  const reportsToDisplay = showDuplicates
-    ? reports
-    : filterUniqueReports(reports);
+  const reportsToDisplay = showDuplicates ? reports : filterUniqueReports(reports);
 
   const getReportsByGroup = (groupKey: string) =>
-    reports.filter(
-      (r) => `${r.building}-${r.concern}` === groupKey
-    );
+    reports.filter((r) => `${r.building}-${r.concern}` === groupKey);
 
   /* FILTER OPTIONS */
 
@@ -243,8 +232,7 @@ export default function ReportPage() {
       reports
         .filter(
           (r) =>
-            (concernFilter === "All Concerns" ||
-              r.concern === concernFilter) &&
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
             (collegeFilter === "All Colleges" ||
               (r.college || "Unspecified") === collegeFilter) &&
             statusMatchesFilter(r.status, statusFilter)
@@ -260,8 +248,7 @@ export default function ReportPage() {
       reports
         .filter(
           (r) =>
-            (buildingFilter === "All Buildings" ||
-              r.building === buildingFilter) &&
+            (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
             (collegeFilter === "All Colleges" ||
               (r.college || "Unspecified") === collegeFilter) &&
             statusMatchesFilter(r.status, statusFilter)
@@ -277,10 +264,8 @@ export default function ReportPage() {
       reports
         .filter(
           (r) =>
-            (buildingFilter === "All Buildings" ||
-              r.building === buildingFilter) &&
-            (concernFilter === "All Concerns" ||
-              r.concern === concernFilter) &&
+            (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
             statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.college || "Unspecified")
@@ -303,8 +288,7 @@ export default function ReportPage() {
       reports
         .filter(
           (r) =>
-            (buildingFilter === "All Buildings" ||
-              r.building === buildingFilter) &&
+            (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
             (collegeFilter === "All Colleges" ||
               (r.college || "Unspecified") === collegeFilter) &&
             statusMatchesFilter(r.status, statusFilter)
@@ -312,27 +296,17 @@ export default function ReportPage() {
         .map((r) => r.concern)
     );
 
-    if (
-      concernFilter !== "All Concerns" &&
-      !validConcerns.has(concernFilter)
-    ) {
+    if (concernFilter !== "All Concerns" && !validConcerns.has(concernFilter)) {
       setConcernFilter("All Concerns");
     }
-  }, [
-    buildingFilter,
-    collegeFilter,
-    statusFilter,
-    reports,
-    concernFilter,
-  ]);
+  }, [buildingFilter, collegeFilter, statusFilter, reports, concernFilter]);
 
   useEffect(() => {
     const validBuildings = new Set(
       reports
         .filter(
           (r) =>
-            (concernFilter === "All Concerns" ||
-              r.concern === concernFilter) &&
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
             (collegeFilter === "All Colleges" ||
               (r.college || "Unspecified") === collegeFilter) &&
             statusMatchesFilter(r.status, statusFilter)
@@ -340,39 +314,25 @@ export default function ReportPage() {
         .map((r) => r.building)
     );
 
-    if (
-      buildingFilter !== "All Buildings" &&
-      !validBuildings.has(buildingFilter)
-    ) {
+    if (buildingFilter !== "All Buildings" && !validBuildings.has(buildingFilter)) {
       setBuildingFilter("All Buildings");
     }
-  }, [
-    concernFilter,
-    collegeFilter,
-    statusFilter,
-    reports,
-    buildingFilter,
-  ]);
+  }, [concernFilter, collegeFilter, statusFilter, reports, buildingFilter]);
 
   /* FILTERED REPORTS */
 
   const filteredReports = reportsToDisplay.filter((report) => {
     const buildingMatch =
-      buildingFilter === "All Buildings" ||
-      report.building === buildingFilter;
+      buildingFilter === "All Buildings" || report.building === buildingFilter;
 
     const concernMatch =
-      concernFilter === "All Concerns" ||
-      report.concern === concernFilter;
+      concernFilter === "All Concerns" || report.concern === concernFilter;
 
     const collegeMatch =
       collegeFilter === "All Colleges" ||
       (report.college || "Unspecified") === collegeFilter;
 
-    const statusMatch = statusMatchesFilter(
-      report.status,
-      statusFilter
-    );
+    const statusMatch = statusMatchesFilter(report.status, statusFilter);
 
     return buildingMatch && concernMatch && collegeMatch && statusMatch;
   });
@@ -418,14 +378,11 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(
-        `${API_BASE}/api/reports/${selectedReport._id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
         throw new Error("Failed to update report");
@@ -434,11 +391,7 @@ export default function ReportPage() {
       const data = await res.json();
       const updatedReport: Report = data.report;
 
-      setReports((prev) =>
-        prev.map((r) =>
-          r._id === updatedReport._id ? updatedReport : r
-        )
-      );
+      setReports((prev) => prev.map((r) => (r._id === updatedReport._id ? updatedReport : r)));
       setSelectedReport(updatedReport);
       setStatusValue(updatedReport.status || "Pending");
       setCommentText("");
@@ -458,14 +411,11 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(
-        `${API_BASE}/api/reports/${selectedReport._id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!res.ok) {
         throw new Error("Failed to archive report");
@@ -474,11 +424,7 @@ export default function ReportPage() {
       const data = await res.json();
       const updatedReport: Report = data.report;
 
-      setReports((prev) =>
-        prev.map((r) =>
-          r._id === updatedReport._id ? updatedReport : r
-        )
-      );
+      setReports((prev) => prev.map((r) => (r._id === updatedReport._id ? updatedReport : r)));
       setSelectedReport(updatedReport);
       setStatusValue("Archived");
     } catch (err) {
@@ -493,11 +439,7 @@ export default function ReportPage() {
     const classKey = getStatusClassKey(statusRaw);
     const status = statusRaw || "Pending";
 
-    return (
-      <span className={`status-pill status-${classKey}`}>
-        {status}
-      </span>
-    );
+    return <span className={`status-pill status-${classKey}`}>{status}</span>;
   };
 
   /* PRINT CURRENT FILTERED REPORTS */
@@ -532,17 +474,15 @@ export default function ReportPage() {
               .map((r) => {
                 const key = `${r.building}-${r.concern}`;
                 const group = groupMap[key] || [];
-                const similar = group.filter(
-                  (x) => x._id !== r._id
-                );
+                const similar = group.filter((x) => x._id !== r._id);
 
                 const similarHtml =
                   similar.length > 0
                     ? `
                       <div class="similar-block">
                         <strong>${similar.length} similar ${
-                      similar.length === 1 ? "report" : "reports"
-                    }</strong>
+                        similar.length === 1 ? "report" : "reports"
+                      }</strong>
                       </div>`
                     : "";
 
@@ -554,9 +494,7 @@ export default function ReportPage() {
 
                     <p><strong>Building:</strong> ${formatBuilding(r)}</p>
                     <p><strong>Concern:</strong> ${formatConcern(r)}</p>
-                    <p><strong>College:</strong> ${
-                      r.college || "Unspecified"
-                    }</p>
+                    <p><strong>College:</strong> ${r.college || "Unspecified"}</p>
 
                     ${
                       imgSrc
@@ -566,9 +504,7 @@ export default function ReportPage() {
 
                     ${similarHtml}
 
-                    <p><strong>Description:</strong><br>${
-                      r.description || ""
-                    }</p>
+                    <p><strong>Description:</strong><br>${r.description || ""}</p>
                   </div>
                 `;
               })
@@ -661,515 +597,411 @@ export default function ReportPage() {
   /* RENDER */
 
   return (
-    <>
-      <div className="report-wrapper">
-        <div className="header">
-          <div>
-            <h1>Reports</h1>
-            <p className="header-subtitle">
-              Review, update, and archive facility reports in one place.
-            </p>
-          </div>
-          <div className="header-actions">
-            <button className="home-btn" onClick={handleHome}>
-              Home
-            </button>
-            <button className="logout-btn" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
+    <div className="report-wrapper">
+      <div className="header">
+        <div>
+          <h1>Reports</h1>
+          <p className="header-subtitle">Review, update, and archive facility reports in one place.</p>
+        </div>
+        <div className="header-actions">
+          <button className="home-btn" onClick={handleHome}>
+            Home
+          </button>
+          <button className="logout-btn" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </div>
+
+      {loadError && (
+        <div className="load-error-banner">
+          {loadError}{" "}
+          <button type="button" onClick={fetchReports}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      <div className="filters-card">
+        <div className="filters-header-row">
+          <span className="filters-title">Filters</span>
+          <button className="clear-filters-btn" type="button" onClick={handleClearFilters}>
+            Clear filters
+          </button>
         </div>
 
-        {loadError && (
-          <div className="load-error-banner">
-            {loadError}{" "}
-            <button type="button" onClick={fetchReports}>
-              Retry
-            </button>
-          </div>
-        )}
-
-        <div className="filters-card">
-          <div className="filters-header-row">
-            <span className="filters-title">Filters</span>
-            <button
-              className="clear-filters-btn"
-              type="button"
-              onClick={handleClearFilters}
+        <div className="filters">
+          <div className="filter-field">
+            <label htmlFor="building-filter">Building</label>
+            <select
+              id="building-filter"
+              value={buildingFilter}
+              onChange={(e) => setBuildingFilter(e.target.value)}
             >
-              Clear filters
-            </button>
+              {buildingOptions.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="filters">
-            <div className="filter-field">
-              <label htmlFor="building-filter">Building</label>
-              <select
-                id="building-filter"
-                value={buildingFilter}
-                onChange={(e) => setBuildingFilter(e.target.value)}
-              >
-                {buildingOptions.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-field">
-              <label htmlFor="concern-filter">Concern</label>
-              <select
-                id="concern-filter"
-                value={concernFilter}
-                onChange={(e) => setConcernFilter(e.target.value)}
-              >
-                {concernOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-field">
-              <label htmlFor="college-filter">College</label>
-              <select
-                id="college-filter"
-                value={collegeFilter}
-                onChange={(e) => setCollegeFilter(e.target.value)}
-              >
-                {collegeOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="filter-field">
-              <label htmlFor="status-filter">Status</label>
-              <select
-                id="status-filter"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                {statusOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <label className="duplicate-toggle">
-              <input
-                type="checkbox"
-                checked={showDuplicates}
-                onChange={() =>
-                  setShowDuplicates((prev) => !prev)
-                }
-              />
-              Show duplicates
-            </label>
-          </div>
-
-          {filteredReports.length > 0 && (
-            <button
-              className="print-btn"
-              type="button"
-              onClick={handlePrintCollegeReports}
+          <div className="filter-field">
+            <label htmlFor="concern-filter">Concern</label>
+            <select
+              id="concern-filter"
+              value={concernFilter}
+              onChange={(e) => setConcernFilter(e.target.value)}
             >
-              Print current filtered reports
-            </button>
-          )}
+              {concernOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-field">
+            <label htmlFor="college-filter">College</label>
+            <select
+              id="college-filter"
+              value={collegeFilter}
+              onChange={(e) => setCollegeFilter(e.target.value)}
+            >
+              {collegeOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-field">
+            <label htmlFor="status-filter">Status</label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              {statusOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <label className="duplicate-toggle">
+            <input
+              type="checkbox"
+              checked={showDuplicates}
+              onChange={() => setShowDuplicates((prev) => !prev)}
+            />
+            Show duplicates
+          </label>
         </div>
-
-        {filteredReports.length === 0 && !loadError && (
-          <p className="no-reports-msg">
-            No reports found for the current filters. Try submitting a
-            report or clearing filters.
-          </p>
-        )}
 
         {filteredReports.length > 0 && (
-          <>
-            {selectedGroup ? (
-              <div className="reports-list">
-                <div className="group-header">
-                  <h2>
-                    Similar reports for <em>{selectedGroup}</em>
-                  </h2>
-                  <button
-                    onClick={() => setSelectedGroup(null)}
-                    className="back-btn"
-                    type="button"
-                  >
-                    Back
-                  </button>
-                </div>
-
-                {getReportsByGroup(selectedGroup).map((report) => {
-                  const statusKey = getStatusClassKey(report.status);
-
-                  return (
-                    <div
-                      key={report._id}
-                      className="report"
-                      onClick={() => handleCardClick(report)}
-                    >
-                      <div className="report-img-container">
-                        <img
-                          src={getImageSrc(report.image)}
-                          alt={report.heading || "Report"}
-                          className="report-img"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              defaultImg;
-                          }}
-                        />
-                      </div>
-                      <div className="report-body">
-                        <div className="report-header-row">
-                          <h3>
-                            {report.heading || "Untitled report"}
-                          </h3>
-                        </div>
-
-                        <div
-                          className={`status-focus-row status-focus-${statusKey}`}
-                        >
-                          <span className="status-focus-label">
-                            Status
-                          </span>
-                          {renderStatusPill(report.status)}
-                        </div>
-
-                        <p className="report-description">
-                          {report.description ||
-                            "No description provided."}
-                        </p>
-
-                        <div className="report-info">
-                          <p>
-                            <strong>Building:</strong>{" "}
-                            {formatBuilding(report)}
-                          </p>
-                          <p>
-                            <strong>Concern:</strong>{" "}
-                            {formatConcern(report)}
-                          </p>
-                          <p>
-                            <strong>College:</strong>{" "}
-                            {report.college || "Unspecified"}
-                          </p>
-                        </div>
-                        <p className="submitted-date">
-                          {report.createdAt
-                            ? new Date(
-                                report.createdAt
-                              ).toLocaleDateString()
-                            : ""}
-                          {report.createdAt &&
-                            ` (${getRelativeTime(
-                              report.createdAt
-                            )})`}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="reports-list">
-                {filteredReports.map((report) => {
-                  const key = `${report.building}-${report.concern}`;
-                  const duplicates =
-                    (duplicateCounts[key] || 1) - 1;
-                  const statusKey = getStatusClassKey(report.status);
-
-                  return (
-                    <div
-                      key={report._id}
-                      className="report"
-                      onClick={() => handleCardClick(report)}
-                    >
-                      <div className="report-img-container">
-                        <img
-                          src={getImageSrc(report.image)}
-                          alt={report.heading || "Report"}
-                          className="report-img"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              defaultImg;
-                          }}
-                        />
-                      </div>
-                      <div className="report-body">
-                        <div className="report-header-row">
-                          <h3>
-                            {report.heading || "Untitled report"}
-                          </h3>
-                        </div>
-
-                        <div
-                          className={`status-focus-row status-focus-${statusKey}`}
-                        >
-                          <span className="status-focus-label">
-                            Status
-                          </span>
-                          {renderStatusPill(report.status)}
-                        </div>
-
-                        <p className="report-description">
-                          {report.description ||
-                            "No description provided."}
-                        </p>
-
-                        <div className="report-info">
-                          <p>
-                            <strong>Building:</strong>{" "}
-                            {formatBuilding(report)}
-                          </p>
-                          <p>
-                            <strong>Concern:</strong>{" "}
-                            {formatConcern(report)}
-                          </p>
-                          <p>
-                            <strong>College:</strong>{" "}
-                            {report.college || "Unspecified"}
-                          </p>
-                        </div>
-
-                        <p className="submitted-date">
-                          {report.createdAt
-                            ? new Date(
-                                report.createdAt
-                              ).toLocaleDateString()
-                            : ""}
-                          {report.createdAt &&
-                            ` (${getRelativeTime(
-                              report.createdAt
-                            )})`}
-                        </p>
-
-                        {!showDuplicates && duplicates > 0 && (
-                          <p
-                            className="duplicate-msg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedGroup(key);
-                            }}
-                          >
-                            Similar type of report: ({duplicates}{" "}
-                            {duplicates === 1
-                              ? "report"
-                              : "reports"}
-                            )
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
+          <button className="print-btn" type="button" onClick={handlePrintCollegeReports}>
+            Print current filtered reports
+          </button>
         )}
+      </div>
 
-        {selectedReport && (
-          <div
-            className="report-modal-backdrop"
-            onClick={closeDetails}
-          >
-            <div
-              className="report-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="modal-header">
+      {filteredReports.length === 0 && !loadError && (
+        <p className="no-reports-msg">
+          No reports found for the current filters. Try submitting a report or clearing filters.
+        </p>
+      )}
+
+      {filteredReports.length > 0 && (
+        <>
+          {selectedGroup ? (
+            <div className="reports-list">
+              <div className="group-header">
                 <h2>
-                  {selectedReport.heading || "Report details"}
+                  Similar reports for <em>{selectedGroup}</em>
                 </h2>
-                <button
-                  className="modal-close-btn"
-                  onClick={closeDetails}
-                  type="button"
-                >
-                  ✕
+                <button onClick={() => setSelectedGroup(null)} className="back-btn" type="button">
+                  Back
                 </button>
               </div>
 
-              <div className="modal-content">
-                <div className="modal-img-wrapper">
-                  <img
-                    src={getImageSrc(selectedReport.image)}
-                    alt={selectedReport.heading || "Report"}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        defaultImg;
-                    }}
-                  />
+              {getReportsByGroup(selectedGroup).map((report) => {
+                const statusKey = getStatusClassKey(report.status);
+
+                return (
+                  <div
+                    key={report._id}
+                    className="report"
+                    onClick={() => handleCardClick(report)}
+                  >
+                    <div className="report-img-container">
+                      <img
+                        src={getImageSrc(report.image)}
+                        alt={report.heading || "Report"}
+                        className="report-img"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = defaultImg;
+                        }}
+                      />
+                    </div>
+                    <div className="report-body">
+                      <div className="report-header-row">
+                        <h3>{report.heading || "Untitled report"}</h3>
+                      </div>
+
+                      <div className={`status-focus-row status-focus-${statusKey}`}>
+                        <span className="status-focus-label">Status</span>
+                        {renderStatusPill(report.status)}
+                      </div>
+
+                      <p className="report-description">
+                        {report.description || "No description provided."}
+                      </p>
+
+                      <div className="report-info">
+                        <p>
+                          <strong>Building:</strong> {formatBuilding(report)}
+                        </p>
+                        <p>
+                          <strong>Concern:</strong> {formatConcern(report)}
+                        </p>
+                        <p>
+                          <strong>College:</strong> {report.college || "Unspecified"}
+                        </p>
+                      </div>
+                      <p className="submitted-date">
+                        {report.createdAt
+                          ? new Date(report.createdAt).toLocaleDateString()
+                          : ""}
+                        {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="reports-list">
+              {filteredReports.map((report) => {
+                const key = `${report.building}-${report.concern}`;
+                const duplicates = (duplicateCounts[key] || 1) - 1;
+                const statusKey = getStatusClassKey(report.status);
+
+                return (
+                  <div
+                    key={report._id}
+                    className="report"
+                    onClick={() => handleCardClick(report)}
+                  >
+                    <div className="report-img-container">
+                      <img
+                        src={getImageSrc(report.image)}
+                        alt={report.heading || "Report"}
+                        className="report-img"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = defaultImg;
+                        }}
+                      />
+                    </div>
+                    <div className="report-body">
+                      <div className="report-header-row">
+                        <h3>{report.heading || "Untitled report"}</h3>
+                      </div>
+
+                      <div className={`status-focus-row status-focus-${statusKey}`}>
+                        <span className="status-focus-label">Status</span>
+                        {renderStatusPill(report.status)}
+                      </div>
+
+                      <p className="report-description">
+                        {report.description || "No description provided."}
+                      </p>
+
+                      <div className="report-info">
+                        <p>
+                          <strong>Building:</strong> {formatBuilding(report)}
+                        </p>
+                        <p>
+                          <strong>Concern:</strong> {formatConcern(report)}
+                        </p>
+                        <p>
+                          <strong>College:</strong> {report.college || "Unspecified"}
+                        </p>
+                      </div>
+
+                      <p className="submitted-date">
+                        {report.createdAt
+                          ? new Date(report.createdAt).toLocaleDateString()
+                          : ""}
+                        {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+                      </p>
+
+                      {!showDuplicates && duplicates > 0 && (
+                        <p
+                          className="duplicate-msg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedGroup(key);
+                          }}
+                        >
+                          Similar type of report: ({duplicates}{" "}
+                          {duplicates === 1 ? "report" : "reports"})
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {selectedReport && (
+        <div className="report-modal-backdrop" onClick={closeDetails}>
+          <div className="report-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedReport.heading || "Report details"}</h2>
+              <button className="modal-close-btn" onClick={closeDetails} type="button">
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <div className="modal-img-wrapper">
+                <img
+                  src={getImageSrc(selectedReport.image)}
+                  alt={selectedReport.heading || "Report"}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = defaultImg;
+                  }}
+                />
+              </div>
+
+              <div className="modal-info">
+                <p className="modal-description">
+                  {selectedReport.description || "No description provided."}
+                </p>
+
+                <div className="modal-meta-grid">
+                  <p>
+                    <strong>Building:</strong> {formatBuilding(selectedReport)}
+                  </p>
+                  <p>
+                    <strong>Concern:</strong> {formatConcern(selectedReport)}
+                  </p>
+                  <p>
+                    <strong>College:</strong> {selectedReport.college || "Unspecified"}
+                  </p>
+                  <p>
+                    <strong>Email:</strong> {selectedReport.email || "Unspecified"}
+                  </p>
+                  <p>
+                    <strong>Submitted:</strong>{" "}
+                    {selectedReport.createdAt &&
+                      new Date(selectedReport.createdAt).toLocaleString()}{" "}
+                    {selectedReport.createdAt &&
+                      `(${getRelativeTime(selectedReport.createdAt)})`}
+                  </p>
                 </div>
 
-                <div className="modal-info">
-                  <p className="modal-description">
-                    {selectedReport.description ||
-                      "No description provided."}
-                  </p>
-
-                  <div className="modal-meta-grid">
-                    <p>
-                      <strong>Building:</strong>{" "}
-                      {formatBuilding(selectedReport)}
-                    </p>
-                    <p>
-                      <strong>Concern:</strong>{" "}
-                      {formatConcern(selectedReport)}
-                    </p>
-                    <p>
-                      <strong>College:</strong>{" "}
-                      {selectedReport.college ||
-                        "Unspecified"}
-                    </p>
-                    <p>
-                      <strong>Email:</strong>{" "}
-                      {selectedReport.email || "Unspecified"}
-                    </p>
-                    <p>
-                      <strong>Submitted:</strong>{" "}
-                      {selectedReport.createdAt &&
-                        new Date(
-                          selectedReport.createdAt
-                        ).toLocaleString()}{" "}
-                      {selectedReport.createdAt &&
-                        `(${getRelativeTime(
-                          selectedReport.createdAt
-                        )})`}
-                    </p>
+                <div
+                  className={`status-panel status-focus-${getStatusClassKey(
+                    statusValue
+                  )}`}
+                >
+                  <div className="status-panel-header">
+                    <span className="status-panel-title">Status</span>
+                    {renderStatusPill(statusValue)}
                   </div>
-
-                  <div
-                    className={`status-panel status-focus-${getStatusClassKey(
-                      statusValue
-                    )}`}
-                  >
-                    <div className="status-panel-header">
-                      <span className="status-panel-title">
-                        Status
-                      </span>
-                      {renderStatusPill(statusValue)}
-                    </div>
-                    <div className="status-row status-row-inline">
-                      <label
-                        htmlFor="status-select"
-                        className="status-row-label"
-                      >
-                        Update
-                      </label>
-                      <select
-                        id="status-select"
-                        className="status-select"
-                        value={statusValue}
-                        onChange={(e) =>
-                          setStatusValue(e.target.value)
-                        }
-                        disabled={
-                          selectedReport.status === "Archived"
-                        }
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Waiting for Materials">
-                          Waiting for Materials
-                        </option>
-                        <option value="In Progress">
-                          In Progress
-                        </option>
-                        <option value="Resolved">Resolved</option>
-                      </select>
-                    </div>
+                  <div className="status-row status-row-inline">
+                    <label htmlFor="status-select" className="status-row-label">
+                      Update
+                    </label>
+                    <select
+                      id="status-select"
+                      className="status-select"
+                      value={statusValue}
+                      onChange={(e) => setStatusValue(e.target.value)}
+                      disabled={selectedReport.status === "Archived"}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Waiting for Materials">Waiting for Materials</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
                   </div>
+                </div>
 
-                  <div className="comments-section">
-                    <h3>Comments</h3>
+                <div className="comments-section">
+                  <h3>Comments</h3>
 
-                    {Array.isArray(selectedReport.comments) &&
-                    selectedReport.comments.length > 0 ? (
-                      <ul className="comments-list">
-                        {selectedReport.comments.map((c, idx) => (
-                          <li key={idx} className="comment-item">
-                            <p className="comment-text">
-                              {c.text ||
-                                c.comment ||
-                                String(c)}
-                            </p>
-                            <div>
-                              {c.at && (
-                                <span className="comment-date">
-                                  {new Date(
-                                    c.at
-                                  ).toLocaleString()}
-                                  &nbsp;
-                                </span>
-                              )}
-                              {c.by && (
-                                <span className="comment-date">
-                                  by {c.by}
-                                </span>
-                              )}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="no-comments">
-                        No comments yet.
-                      </p>
-                    )}
+                  {Array.isArray(selectedReport.comments) &&
+                  selectedReport.comments.length > 0 ? (
+                    <ul className="comments-list">
+                      {selectedReport.comments.map((c, idx) => (
+                        <li key={idx} className="comment-item">
+                          <p className="comment-text">
+                            {c.text || c.comment || String(c)}
+                          </p>
+                          <div>
+                            {c.at && (
+                              <span className="comment-date">
+                                {new Date(c.at).toLocaleString()}&nbsp;
+                              </span>
+                            )}
+                            {c.by && (
+                              <span className="comment-date">by {c.by}</span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="no-comments">No comments yet.</p>
+                  )}
 
-                    <textarea
-                      className="comment-input"
-                      rows={3}
-                      value={commentText}
-                      onChange={(e) =>
-                        setCommentText(e.target.value)
-                      }
-                      placeholder="Type your comment here..."
-                    />
+                  <textarea
+                    className="comment-input"
+                    rows={3}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Type your comment here..."
+                  />
 
-                    <div className="modal-actions">
-                      {selectedReport.status !== "Archived" && (
-                        <button
-                          className="archive-btn"
-                          onClick={handleArchive}
-                          disabled={saving}
-                          type="button"
-                        >
-                          {saving &&
-                          statusValue === "Archived"
-                            ? "Archiving..."
-                            : "Archive report"}
-                        </button>
-                      )}
-
+                  <div className="modal-actions">
+                    {selectedReport.status !== "Archived" && (
                       <button
-                        className="save-comment-btn"
-                        onClick={handleSaveChanges}
+                        className="archive-btn"
+                        onClick={handleArchive}
                         disabled={saving}
                         type="button"
                       >
-                        {saving &&
-                        statusValue !== "Archived"
-                          ? "Saving..."
-                          : "Save changes"}
+                        {saving && statusValue === "Archived"
+                          ? "Archiving..."
+                          : "Archive report"}
                       </button>
-                    </div>
+                    )}
+
+                    <button
+                      className="save-comment-btn"
+                      onClick={handleSaveChanges}
+                      disabled={saving}
+                      type="button"
+                    >
+                      {saving && statusValue !== "Archived"
+                        ? "Saving..."
+                        : "Save changes"}
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }
