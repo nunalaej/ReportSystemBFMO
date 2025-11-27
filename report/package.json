@@ -1,0 +1,32 @@
+{
+  "name": "report",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.35.4",
+    "mongod": "^2.0.0",
+    "mongodb": "^7.0.0",
+    "mongoose": "^9.0.0",
+    "next": "16.0.3",
+    "nodemon": "^3.1.11",
+    "react": "18.3.1",
+    "react-bits": "^1.0.5",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
