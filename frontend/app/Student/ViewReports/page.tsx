@@ -95,6 +95,7 @@ function getRelativeTime(dateString?: string) {
 
 const getStatusClassKey = (statusRaw?: string) => {
   const status = statusRaw || "Pending";
+  if (status === "Waiting for Materials") return "waiting";
   if (status === "In Progress") return "inprogress";
   if (status === "Resolved") return "completed";
   if (status === "Archived") return "archived";
@@ -272,6 +273,7 @@ export default function ReportPage() {
   const statusOptions = [
     "All Statuses",
     "Pending",
+    "Waiting for Materials",
     "In Progress",
     "Resolved",
     "Archived",
@@ -1070,6 +1072,9 @@ export default function ReportPage() {
                         }
                       >
                         <option value="Pending">Pending</option>
+                        <option value="Waiting for Materials">
+                          Waiting
+                        </option>
                         <option value="In Progress">
                           In Progress
                         </option>
