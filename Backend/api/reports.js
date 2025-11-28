@@ -3,7 +3,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const Report = require("../models/Report");
+const Report = require("./models/Report");
 
 const router = express.Router();
 
@@ -73,7 +73,7 @@ router.post("/", upload.single("imageFile"), async (req, res) => {
       otherRoom: body.otherRoom || "",
       image: imagePath,
       status: "Pending",
-      comments: [], // make sure this array exists
+      comments: [],          // make sure this exists
     });
 
     res.json({
@@ -91,7 +91,7 @@ router.post("/", upload.single("imageFile"), async (req, res) => {
 
 /* ===========================
    PUT /api/reports/:id
-   Update status and optionally add a comment
+   Update status and optionally add comment
 =========================== */
 router.put("/:id", async (req, res) => {
   try {
@@ -105,7 +105,7 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    // Build the update object
+    // Build update object
     const update = {};
 
     if (status) {
