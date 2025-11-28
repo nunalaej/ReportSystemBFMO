@@ -153,7 +153,7 @@ export default function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchReports = async () => {
+    const fetchReports = async () => {
     try {
       setLoadError("");
 
@@ -163,19 +163,32 @@ export default function ReportPage() {
 
       const data = await res.json().catch(() => null);
 
+      // Basic validation of the response shape
+      if (!res.ok || !data) {
+        console.warn("Failed /api/reports:", data);
+        setLoadError(
+          data?.message || "Could not load reports. Check the server response."
+        );
+        setReports([]);
+        return;
+      }
+
       let list: Report[] = [];
 
+      // Support different shapes, but your backend normally returns { success, reports }
       if (Array.isArray(data)) {
         list = data;
-      } else if (data && Array.isArray(data.reports)) {
+      } else if (Array.isArray(data.reports)) {
         list = data.reports;
-      } else if (data && Array.isArray(data.data)) {
+      } else if (Array.isArray(data.data)) {
         list = data.data;
       } else {
         console.warn("Unexpected /api/reports payload:", data);
         setLoadError(
           "Could not load reports. Check the server response."
         );
+        setReports([]);
+        return;
       }
 
       setReports(list);
@@ -185,6 +198,7 @@ export default function ReportPage() {
       setReports([]);
     }
   };
+
 
   /* DUPLICATES */
 
@@ -385,54 +399,50 @@ export default function ReportPage() {
   /* UPDATE STATUS / COMMENTS */
 
   const handleSaveChanges = async () => {
-    if (!selectedReport) return;
+  if (!selectedReport) return;
 
-    const payload: {
-      status: string;
-      comment?: string;
-      by?: string;
-    } = { status: statusValue };
-
-    if (commentText.trim()) {
-      payload.comment = commentText.trim();
-      payload.by = "Admin";
-    }
-
-    try {
-      setSaving(true);
-
-      // NOTE: use /api/reports/:id – this must exist on your backend
-      const res = await fetch(
-        `${API_BASE}/api/reports/${selectedReport._id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error("Failed to update report");
-      }
-
-      const data = await res.json();
-      const updatedReport: Report = data.report;
-
-      setReports((prev) =>
-        prev.map((r) =>
-          r._id === updatedReport._id ? updatedReport : r
-        )
-      );
-      setSelectedReport(updatedReport);
-      setStatusValue(updatedReport.status || "Pending");
-      setCommentText("");
-    } catch (err) {
-      console.error("Error updating report:", err);
-      alert("There was a problem saving the changes.");
-    } finally {
-      setSaving(false);
-    }
+  const payload: { status: string; comment?: string; by?: string } = {
+    status: statusValue,
   };
+
+  if (commentText.trim()) {
+    payload.comment = commentText.trim();
+    payload.by = "Admin";
+  }
+
+  try {
+    setSaving(true);
+
+    const res = await fetch(
+      `${API_BASE}/api/reports/${selectedReport._id}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.message || "Failed to update report");
+    }
+
+    const updatedReport: Report = data.report;
+
+    setReports((prev) =>
+      prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
+    );
+    setSelectedReport(updatedReport);
+    setStatusValue(updatedReport.status || "Pending");
+    setCommentText("");
+  } catch (err: any) {
+    console.error("Error updating report:", err);
+    alert(err.message || "There was a problem saving the changes.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleArchive = async () => {
     if (!selectedReport) return;

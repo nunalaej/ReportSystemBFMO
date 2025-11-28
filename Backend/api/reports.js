@@ -27,7 +27,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// GET /api/reports
+/* ===========================
+   GET /api/reports
+   List all reports
+=========================== */
 router.get("/", async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 }).lean();
@@ -37,12 +40,15 @@ router.get("/", async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to load reports",
-      error: err.message, // keep for now to debug
+      error: err.message,
     });
   }
 });
 
-// POST /api/reports
+/* ===========================
+   POST /api/reports
+   Create new report
+=========================== */
 router.post("/", upload.single("imageFile"), async (req, res) => {
   try {
     const body = req.body;
@@ -67,6 +73,7 @@ router.post("/", upload.single("imageFile"), async (req, res) => {
       otherRoom: body.otherRoom || "",
       image: imagePath,
       status: "Pending",
+      comments: [], // make sure this array exists
     });
 
     res.json({
@@ -79,6 +86,62 @@ router.post("/", upload.single("imageFile"), async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: "Failed to submit report" });
+  }
+});
+
+/* ===========================
+   PUT /api/reports/:id
+   Update status and optionally add a comment
+=========================== */
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, comment, by } = req.body;
+
+    if (!status && !comment) {
+      return res.status(400).json({
+        success: false,
+        message: "Nothing to update.",
+      });
+    }
+
+    // Build the update object
+    const update = {};
+
+    if (status) {
+      update.status = status;
+    }
+
+    if (comment && comment.trim()) {
+      update.$push = {
+        comments: {
+          text: comment.trim(),
+          by: by || "Admin",
+          at: new Date(),
+        },
+      };
+    }
+
+    const updatedReport = await Report.findByIdAndUpdate(id, update, {
+      new: true,
+    });
+
+    if (!updatedReport) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Report not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Report updated successfully",
+      report: updatedReport,
+    });
+  } catch (err) {
+    console.error("Error updating report:", err);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update report" });
   }
 });
 
