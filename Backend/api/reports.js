@@ -105,11 +105,11 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    // Build update object
+    // Build update object with Mongo operators
     const update = {};
 
     if (status) {
-      update.status = status;
+      update.$set = { status };
     }
 
     if (comment && comment.trim()) {
@@ -124,6 +124,7 @@ router.put("/:id", async (req, res) => {
 
     const updatedReport = await Report.findByIdAndUpdate(id, update, {
       new: true,
+      runValidators: true,
     });
 
     if (!updatedReport) {
@@ -144,5 +145,6 @@ router.put("/:id", async (req, res) => {
       .json({ success: false, message: "Failed to update report" });
   }
 });
+
 
 module.exports = router;

@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 
 const collectionName = process.env.MONGODB_COLLECTION || "ReportCollection";
 
-// Subdocument schema for comments
+// Subdocument schema for each comment
 const CommentSchema = new mongoose.Schema(
   {
     text: { type: String, required: true },
@@ -36,17 +36,16 @@ const ReportSchema = new mongoose.Schema(
     status: {
       type: String,
       default: "Pending",
-      // include all statuses used in your frontend:
       enum: [
         "Pending",
-        "Waiting for Materials",
+        "Waiting for Materials", // used by frontend
         "In Progress",
         "Resolved",
         "Archived",
       ],
     },
 
-    // ADD THIS: list of comments
+    // IMPORTANT: this must exist for $push to work
     comments: {
       type: [CommentSchema],
       default: [],
