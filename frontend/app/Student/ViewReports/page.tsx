@@ -112,6 +112,8 @@ const statusMatchesFilter = (
   return currentStatus === filter;
 };
 
+const REPORTS_PER_PAGE = 12;
+
 export default function ReportPage() {
   const router = useRouter();
 
@@ -131,6 +133,9 @@ export default function ReportPage() {
   const [saving, setSaving] = useState(false);
 
   const [loadError, setLoadError] = useState("");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   /* NAVIGATION */
 
@@ -153,7 +158,7 @@ export default function ReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-    const fetchReports = async () => {
+  const fetchReports = async () => {
     try {
       setLoadError("");
 
@@ -163,7 +168,6 @@ export default function ReportPage() {
 
       const data = await res.json().catch(() => null);
 
-      // Basic validation of the response shape
       if (!res.ok || !data) {
         console.warn("Failed /api/reports:", data);
         setLoadError(
@@ -175,7 +179,6 @@ export default function ReportPage() {
 
       let list: Report[] = [];
 
-      // Support different shapes, but your backend normally returns { success, reports }
       if (Array.isArray(data)) {
         list = data;
       } else if (Array.isArray(data.reports)) {
@@ -192,13 +195,13 @@ export default function ReportPage() {
       }
 
       setReports(list);
+      setCurrentPage(1); // reset page on new data
     } catch (err) {
       console.error("Error fetching reports:", err);
       setLoadError("Network error while loading reports.");
       setReports([]);
     }
   };
-
 
   /* DUPLICATES */
 
@@ -374,6 +377,22 @@ export default function ReportPage() {
     return buildingMatch && concernMatch && collegeMatch && statusMatch;
   });
 
+  // Reset to first page whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates]);
+
+  // Pagination calculations
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredReports.length / REPORTS_PER_PAGE)
+  );
+  const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
+  const paginatedReports = filteredReports.slice(
+    startIndex,
+    startIndex + REPORTS_PER_PAGE
+  );
+
   /* CARD & MODAL HANDLERS */
 
   const handleCardClick = (report: Report) => {
@@ -394,55 +413,56 @@ export default function ReportPage() {
     setCollegeFilter("All Colleges");
     setStatusFilter("All Statuses");
     setShowDuplicates(false);
+    setCurrentPage(1);
   };
 
   /* UPDATE STATUS / COMMENTS */
 
   const handleSaveChanges = async () => {
-  if (!selectedReport) return;
+    if (!selectedReport) return;
 
-  const payload: { status: string; comment?: string; by?: string } = {
-    status: statusValue,
-  };
+    const payload: { status: string; comment?: string; by?: string } = {
+      status: statusValue,
+    };
 
-  if (commentText.trim()) {
-    payload.comment = commentText.trim();
-    payload.by = "Admin";
-  }
-
-  try {
-    setSaving(true);
-
-    const res = await fetch(
-      `${API_BASE}/api/reports/${selectedReport._id}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }
-    );
-
-    const data = await res.json().catch(() => null);
-
-    if (!res.ok || !data?.success) {
-      throw new Error(data?.message || "Failed to update report");
+    if (commentText.trim()) {
+      payload.comment = commentText.trim();
+      payload.by = "Admin";
     }
 
-    const updatedReport: Report = data.report;
+    try {
+      setSaving(true);
 
-    setReports((prev) =>
-      prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
-    );
-    setSelectedReport(updatedReport);
-    setStatusValue(updatedReport.status || "Pending");
-    setCommentText("");
-  } catch (err: any) {
-    console.error("Error updating report:", err);
-    alert(err.message || "There was a problem saving the changes.");
-  } finally {
-    setSaving(false);
-  }
-};
+      const res = await fetch(
+        `${API_BASE}/api/reports/${selectedReport._id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to update report");
+      }
+
+      const updatedReport: Report = data.report;
+
+      setReports((prev) =>
+        prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
+      );
+      setSelectedReport(updatedReport);
+      setStatusValue(updatedReport.status || "Pending");
+      setCommentText("");
+    } catch (err: any) {
+      console.error("Error updating report:", err);
+      alert(err.message || "There was a problem saving the changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleArchive = async () => {
     if (!selectedReport) return;
@@ -497,7 +517,7 @@ export default function ReportPage() {
   /* PRINT CURRENT FILTERED REPORTS */
 
   const handlePrintCollegeReports = () => {
-    const reportsToPrint = filteredReports;
+    const reportsToPrint = filteredReports; // print ALL filtered, not just page
 
     if (reportsToPrint.length === 0) {
       alert("No reports to print for the current filters.");
@@ -877,102 +897,149 @@ export default function ReportPage() {
                 })}
               </div>
             ) : (
-              <div className="reports-list">
-                {filteredReports.map((report) => {
-                  const key = `${report.building}-${report.concern}`;
-                  const duplicates =
-                    (duplicateCounts[key] || 1) - 1;
-                  const statusKey = getStatusClassKey(report.status);
+              <>
+                <div className="reports-list">
+                  {paginatedReports.map((report) => {
+                    const key = `${report.building}-${report.concern}`;
+                    const duplicates =
+                      (duplicateCounts[key] || 1) - 1;
+                    const statusKey = getStatusClassKey(report.status);
 
-                  return (
-                    <div
-                      key={report._id}
-                      className="report"
-                      onClick={() => handleCardClick(report)}
-                    >
-                      <div className="report-img-container">
-                        <img
-                          src={
-                            report.image
-                              ? `${API_BASE}${report.image}`
-                              : defaultImg
-                          }
-                          alt="Report"
-                          className="report-img"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              defaultImg;
-                          }}
-                        />
-                      </div>
-                      <div className="report-body">
-                        <div className="report-header-row">
-                          <h3>
-                            {report.heading || "Untitled report"}
-                          </h3>
-                        </div>
-
-                        <div
-                          className={`status-focus-row status-focus-${statusKey}`}
-                        >
-                          <span className="status-focus-label">
-                            Status
-                          </span>
-                          {renderStatusPill(report.status)}
-                        </div>
-
-                        <p className="report-description">
-                          {report.description ||
-                            "No description provided."}
-                        </p>
-
-                        <div className="report-info">
-                          <p>
-                            <strong>Building:</strong>{" "}
-                            {formatBuilding(report)}
-                          </p>
-                          <p>
-                            <strong>Concern:</strong>{" "}
-                            {formatConcern(report)}
-                          </p>
-                          <p>
-                            <strong>College:</strong>{" "}
-                            {report.college || "Unspecified"}
-                          </p>
-                        </div>
-
-                        <p className="submitted-date">
-                          {report.createdAt
-                            ? new Date(
-                                report.createdAt
-                              ).toLocaleDateString()
-                            : ""}
-                          {report.createdAt &&
-                            ` (${getRelativeTime(
-                              report.createdAt
-                            )})`}
-                        </p>
-
-                        {!showDuplicates && duplicates > 0 && (
-                          <p
-                            className="duplicate-msg"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedGroup(key);
+                    return (
+                      <div
+                        key={report._id}
+                        className="report"
+                        onClick={() => handleCardClick(report)}
+                      >
+                        <div className="report-img-container">
+                          <img
+                            src={
+                              report.image
+                                ? `${API_BASE}${report.image}`
+                                : defaultImg
+                            }
+                            alt="Report"
+                            className="report-img"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                defaultImg;
                             }}
+                          />
+                        </div>
+                        <div className="report-body">
+                          <div className="report-header-row">
+                            <h3>
+                              {report.heading || "Untitled report"}
+                            </h3>
+                          </div>
+
+                          <div
+                            className={`status-focus-row status-focus-${statusKey}`}
                           >
-                            Similar type of report: ({duplicates}{" "}
-                            {duplicates === 1
-                              ? "report"
-                              : "reports"}
-                            )
+                            <span className="status-focus-label">
+                              Status
+                            </span>
+                            {renderStatusPill(report.status)}
+                          </div>
+
+                          <p className="report-description">
+                            {report.description ||
+                              "No description provided."}
                           </p>
-                        )}
+
+                          <div className="report-info">
+                            <p>
+                              <strong>Building:</strong>{" "}
+                              {formatBuilding(report)}
+                            </p>
+                            <p>
+                              <strong>Concern:</strong>{" "}
+                              {formatConcern(report)}
+                            </p>
+                            <p>
+                              <strong>College:</strong>{" "}
+                              {report.college || "Unspecified"}
+                            </p>
+                          </div>
+
+                          <p className="submitted-date">
+                            {report.createdAt
+                              ? new Date(
+                                  report.createdAt
+                                ).toLocaleDateString()
+                              : ""}
+                            {report.createdAt &&
+                              ` (${getRelativeTime(
+                                report.createdAt
+                              )})`}
+                          </p>
+
+                          {!showDuplicates && duplicates > 0 && (
+                            <p
+                              className="duplicate-msg"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroup(key);
+                              }}
+                            >
+                              Similar type of report: ({duplicates}{" "}
+                              {duplicates === 1
+                                ? "report"
+                                : "reports"}
+                              )
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination controls */}
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, idx) => {
+                      const page = idx + 1;
+                      return (
+                        <button
+                          key={page}
+                          type="button"
+                          className={
+                            page === currentPage
+                              ? "page-btn active"
+                              : "page-btn"
+                          }
+                          onClick={() => setCurrentPage(page)}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((p) =>
+                          Math.min(totalPages, p + 1)
+                        )
+                      }
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
