@@ -4,6 +4,7 @@ import "@/app/style/reports.css";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 const defaultImg = "/default.jpg";
 
 // Backend base URL (Render)
@@ -107,8 +108,19 @@ const statusMatchesFilter = (
   filter: string
 ) => {
   const currentStatus = reportStatus || "Pending";
+
+  // When filter is "Archived", only show archived
   if (filter === "Archived") return currentStatus === "Archived";
-  if (filter === "All Statuses") return currentStatus !== "Archived";
+
+  // When filter is "Resolved", only show resolved
+  if (filter === "Resolved") return currentStatus === "Resolved";
+
+  // "All Statuses" = active only (hide Resolved and Archived)
+  if (filter === "All Statuses") {
+    return currentStatus !== "Archived" && currentStatus !== "Resolved";
+  }
+
+  // For other specific filters (Pending, Waiting for Materials, In Progress)
   return currentStatus === filter;
 };
 
@@ -416,26 +428,23 @@ export default function ReportPage() {
     setCurrentPage(1);
   };
 
-  /* UPDATE STATUS / COMMENTS */
+  /* UPDATE STATUS / COMMENTS – ORIGINAL STYLE */
 
-    const handleSaveChanges = async () => {
+  const handleSaveChanges = async () => {
     if (!selectedReport) return;
 
     const trimmed = commentText.trim();
 
-    // Allow extra fields to match whatever the backend expects
     const payload: {
       status: string;
       comment?: string;
-      text?: string;
       by?: string;
     } = {
       status: statusValue,
     };
 
     if (trimmed) {
-      payload.comment = trimmed; // if backend uses "comment"
-      payload.text = trimmed;    // if backend uses "text"
+      payload.comment = trimmed;
       payload.by = "Admin";
     }
 
@@ -453,18 +462,11 @@ export default function ReportPage() {
 
       const data = await res.json().catch(() => null);
 
-      // Treat it as failure only if HTTP is not ok OR backend explicitly says success === false
-      if (!res.ok || (data && data.success === false)) {
+      if (!res.ok || !data?.success) {
         throw new Error(data?.message || "Failed to update report");
       }
 
-      // Support different response shapes: { success, report }, { report }, or direct document
-      const updatedReport: Report =
-        data?.report || data?.data || data;
-
-      if (!updatedReport || !updatedReport._id) {
-        throw new Error("Invalid response from server.");
-      }
+      const updatedReport: Report = data.report;
 
       setReports((prev) =>
         prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
@@ -479,7 +481,6 @@ export default function ReportPage() {
       setSaving(false);
     }
   };
-
 
   const handleArchive = async () => {
     if (!selectedReport) return;
@@ -498,11 +499,12 @@ export default function ReportPage() {
         }
       );
 
-      if (!res.ok) {
-        throw new Error("Failed to archive report");
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to archive report");
       }
 
-      const data = await res.json();
       const updatedReport: Report = data.report;
 
       setReports((prev) =>
@@ -512,9 +514,9 @@ export default function ReportPage() {
       );
       setSelectedReport(updatedReport);
       setStatusValue("Archived");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error archiving report:", err);
-      alert("There was a problem archiving the report.");
+      alert(err.message || "There was a problem archiving the report.");
     } finally {
       setSaving(false);
     }
