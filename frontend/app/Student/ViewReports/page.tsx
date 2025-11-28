@@ -418,15 +418,24 @@ export default function ReportPage() {
 
   /* UPDATE STATUS / COMMENTS */
 
-  const handleSaveChanges = async () => {
+    const handleSaveChanges = async () => {
     if (!selectedReport) return;
 
-    const payload: { status: string; comment?: string; by?: string } = {
+    const trimmed = commentText.trim();
+
+    // Allow extra fields to match whatever the backend expects
+    const payload: {
+      status: string;
+      comment?: string;
+      text?: string;
+      by?: string;
+    } = {
       status: statusValue,
     };
 
-    if (commentText.trim()) {
-      payload.comment = commentText.trim();
+    if (trimmed) {
+      payload.comment = trimmed; // if backend uses "comment"
+      payload.text = trimmed;    // if backend uses "text"
       payload.by = "Admin";
     }
 
@@ -444,11 +453,18 @@ export default function ReportPage() {
 
       const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.success) {
+      // Treat it as failure only if HTTP is not ok OR backend explicitly says success === false
+      if (!res.ok || (data && data.success === false)) {
         throw new Error(data?.message || "Failed to update report");
       }
 
-      const updatedReport: Report = data.report;
+      // Support different response shapes: { success, report }, { report }, or direct document
+      const updatedReport: Report =
+        data?.report || data?.data || data;
+
+      if (!updatedReport || !updatedReport._id) {
+        throw new Error("Invalid response from server.");
+      }
 
       setReports((prev) =>
         prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
@@ -463,6 +479,7 @@ export default function ReportPage() {
       setSaving(false);
     }
   };
+
 
   const handleArchive = async () => {
     if (!selectedReport) return;
