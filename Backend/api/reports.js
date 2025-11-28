@@ -3,7 +3,7 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const Report = require("./models/Report");
+const Report = require("../models/Report");
 
 const router = express.Router();
 
