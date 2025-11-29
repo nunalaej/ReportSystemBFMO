@@ -244,15 +244,16 @@ export default function AdminEditPage() {
               norm(label).replace(/\s+/g, "-") ||
               `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-            const subs = Array.isArray(c.subconcerns)
-              ? c.subconcerns.map((s: any) => String(s || "").trim())
-              : [];
+            const subs: string[] = Array.isArray(c.subconcerns)
+  ? c.subconcerns.map((s: unknown) => String(s || "").trim())
+  : [];
 
-            return {
-              id,
-              label: label || "Unnamed concern",
-              subconcerns: subs.filter((s) => s.length > 0),
-            };
+return {
+  id,
+  label: label || "Unnamed concern",
+  subconcerns: subs.filter((s: string) => s.length > 0),
+};
+
           });
         }
 
@@ -410,14 +411,16 @@ export default function AdminEditPage() {
               String(c.id || "").trim() ||
               norm(label).replace(/\s+/g, "-") ||
               `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-            const subs = Array.isArray(c.subconcerns)
-              ? c.subconcerns.map((s: any) => String(s || "").trim())
-              : [];
-            return {
-              id,
-              label: label || "Unnamed concern",
-              subconcerns: subs.filter((s) => s.length > 0),
-            };
+const subs: string[] = Array.isArray(c.subconcerns)
+  ? c.subconcerns.map((s: unknown) => String(s || "").trim())
+  : [];
+
+return {
+  id,
+  label: label || "Unnamed concern",
+  subconcerns: subs.filter((s: string) => s.length > 0),
+};
+
           })
         );
       }
