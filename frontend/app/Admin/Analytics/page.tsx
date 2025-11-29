@@ -139,6 +139,15 @@ const STATUSES: string[] = [
   "Archived",
 ];
 
+// Default selection: everything except Archived
+const DEFAULT_STATUS_SET = new Set<string>([
+  "Pending",
+  "Waiting for Materials",
+  "In Progress",
+  "Resolved",
+]);
+
+
 // Labels shown in chart/legend per internal key
 const STATUS_LABELS: Record<StatusKey, string> = {
   pending: "Pending",
@@ -365,7 +374,7 @@ const Analytics: FC = () => {
     };
 
   const clearAllFilters = () => {
-    setSelectedStatuses(new Set(STATUSES));
+    setSelectedStatuses(new Set(selectedStatuses));
     setSelectedBuildings(new Set());
     setSelectedConcerns(new Set());
     setSelectedColleges(new Set());
@@ -607,7 +616,10 @@ const Analytics: FC = () => {
 
   const activeFilterCount = useMemo(() => {
     let c = 0;
-    if (selectedStatuses.size !== STATUSES.length) c++;
+    const statusesChanged =
+    selectedStatuses.size !== DEFAULT_STATUS_SET.size ||
+    [...DEFAULT_STATUS_SET].some((s) => !selectedStatuses.has(s)); 
+    if (statusesChanged) c++;   
     if (selectedBuildings.size) c++;
     if (selectedConcerns.size) c++;
     if (selectedColleges.size) c++;

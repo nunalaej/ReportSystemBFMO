@@ -644,7 +644,7 @@ html:not(dark) .status-panel-title {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #000000;
+  color: #bfbfbf;
 }
 
 .status-row-inline {
@@ -657,7 +657,7 @@ html:not(dark) .status-panel-title {
 }
 html:not(dark) .status-row-label {
   font-size: 0.8rem;
-  color: #000000;
+  color: #bfbfbf;
 }
 /* Focus background colors for row and panel */
 .status-focus-pending {
@@ -1003,4 +1003,124 @@ html:not(dark) .status-row-label {
 
 *::-webkit-scrollbar-thumb:hover {
   background-color: rgba(148, 163, 184, 0.8);
+}
+
+/* ==========================
+   COMMENTS LAYOUT WITH SIDE BUTTONS
+   ========================== */
+
+/* One row per comment */
+.comment-item {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #020617;
+}
+
+/* Text + date on the left, buttons on the right */
+.comment-footer {
+  margin-top: 0.15rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Limit width of the left side so buttons do not wrap weirdly */
+.comment-footer > div:first-child {
+  flex: 1;
+}
+
+/* Right side: buttons in a row */
+.comment-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Edit mode: textarea takes full width */
+.comment-edit-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #020617;
+  color: #e5e7eb;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+/* Slight highlight when editing */
+.comment-edit-input.comment-editing {
+  border-color: #3b82f6;
+  background: #020617;
+}
+
+/* Buttons row in edit mode (Save / Cancel) */
+.comment-actions-row {
+  margin-top: 0.35rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Base button style (you already have some, this reinforces it) */
+.comment-btn-edit,
+.comment-btn-delete,
+.comment-btn-save,
+.comment-btn-cancel {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+/* Edit button */
+.comment-btn-edit {
+  background: #020617;
+  color: #93c5fd;
+  border: 1px solid #1d4ed8;
+}
+
+.comment-btn-edit:hover:not(:disabled) {
+  background: #1d4ed8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Delete button */
+.comment-btn-delete {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: 1px solid #f87171;
+}
+
+.comment-btn-delete:hover:not(:disabled) {
+  background: #ef4444;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* Save edit button */
+.comment-btn-save {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.comment-btn-save:hover:not(:disabled) {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+
+/* Cancel edit button */
+.comment-btn-cancel {
+  background: #4b5563;
+  color: #e5e7eb;
+}
+
+.comment-btn-cancel:hover:not(:disabled) {
+  background: #6b7280;
+  transform: translateY(-1px);
 }

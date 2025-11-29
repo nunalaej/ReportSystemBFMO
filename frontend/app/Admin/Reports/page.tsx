@@ -132,6 +132,10 @@ const statusMatchesFilter = (
 
 const REPORTS_PER_PAGE = 12;
 
+// helper to compute the "similar group" key
+const getGroupKey = (r: Report) =>
+  `${(r.building || "").trim()}-${(r.concern || "").trim()}`;
+
 export default function ReportPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
@@ -156,6 +160,10 @@ export default function ReportPage() {
 
   const [loadError, setLoadError] = useState("");
 
+  // edit/delete state for comments
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -164,7 +172,7 @@ export default function ReportPage() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Not signed in → go to landing
+    // Not signed in -> go to landing
     if (!isSignedIn || !user) {
       router.replace("/");
       return;
@@ -181,18 +189,14 @@ export default function ReportPage() {
     }
 
     if (role !== "admin") {
-      // Non admin → send to student dashboard
+      // Non admin -> send to student dashboard
       router.replace("/Student/Dashboard");
       return;
     }
 
-    // User is admin → allow rendering and data fetch
+    // User is admin -> allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
-
-  const handleAnalytics = () => {
-    router.push("/Admin/Analytics");
-  };
 
   /* FETCH REPORTS (only after auth says canView = true) */
 
@@ -250,7 +254,7 @@ export default function ReportPage() {
   const getDuplicateCounts = (reportsArr: Report[]) => {
     const counts: Record<string, number> = {};
     reportsArr.forEach((report) => {
-      const key = `${report.building}-${report.concern}`;
+      const key = getGroupKey(report);
       counts[key] = (counts[key] || 0) + 1;
     });
     return counts;
@@ -261,19 +265,17 @@ export default function ReportPage() {
   const filterUniqueReports = (reportsArr: Report[]) => {
     const seen = new Set<string>();
     return reportsArr.filter((report) => {
-      const key = `${report.building}-${report.concern}`;
+      const key = getGroupKey(report);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   };
 
-  const reportsToDisplay = showDuplicates
-    ? reports
-    : filterUniqueReports(reports);
+  const reportsToDisplay = showDuplicates ? reports : filterUniqueReports(reports);
 
   const getReportsByGroup = (groupKey: string) =>
-    reports.filter((r) => `${r.building}-${r.concern}` === groupKey);
+    reports.filter((r) => getGroupKey(r) === groupKey);
 
   /* FILTER OPTIONS */
 
@@ -422,12 +424,16 @@ export default function ReportPage() {
     setSelectedReport(report);
     setStatusValue(report.status || "Pending");
     setCommentText("");
+    setEditingIndex(null);
+    setEditingText("");
   };
 
   const closeDetails = () => {
     setSelectedReport(null);
     setStatusValue("Pending");
     setCommentText("");
+    setEditingIndex(null);
+    setEditingText("");
   };
 
   const handleClearFilters = () => {
@@ -451,7 +457,54 @@ export default function ReportPage() {
     return `${API_BASE}${path}`;
   };
 
-  /* UPDATE STATUS / COMMENTS */
+  // helper: send the full updated comments array for THIS report to the backend
+  const syncComments = async (updatedComments: Comment[]) => {
+  if (!selectedReport) return;
+
+  try {
+    setSaving(true);
+
+    const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        // keep current status
+        status: selectedReport.status || "Pending",
+        // replace the comments with the updated list
+        comments: updatedComments,
+        overwriteComments: true,
+      }),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.message || "Failed to update comments");
+    }
+
+    const updated = data.report as Report;
+
+    // update list in state
+    setReports((prev) =>
+      prev.map((r) => (r._id === updated._id ? updated : r))
+    );
+
+    // update modal
+    setSelectedReport(updated);
+    setEditingIndex(null);
+    setEditingText("");
+  } catch (err: any) {
+    console.error("Error syncing comments:", err);
+    alert(err.message || "There was a problem updating the comments.");
+  } finally {
+    setSaving(false);
+  }
+};
+
+
+  /* UPDATE STATUS / COMMENTS
+     when saving, update ALL reports with same building + concern
+  */
 
   const handleSaveChanges = async () => {
     if (!selectedReport) return;
@@ -474,28 +527,46 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // find all reports with the same building + concern
+      const groupKey = getGroupKey(selectedReport);
+      const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
-      const data = await res.json().catch(() => null);
+      // update all of them on the server
+      const updatedReports = await Promise.all(
+        groupReports.map(async (r) => {
+          const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to update report");
-      }
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.message || "Failed to update report");
+          }
 
-      const updatedReport: Report = data.report;
-
-      setReports((prev) =>
-        prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
+          return data.report as Report;
+        })
       );
-      setSelectedReport(updatedReport);
-      setStatusValue(updatedReport.status || "Pending");
+
+      // update all in local state
+      setReports((prev) =>
+        prev.map((r) => {
+          const match = updatedReports.find((u) => u._id === r._id);
+          return match || r;
+        })
+      );
+
+      // keep modal in sync with the selected report
+      const updatedSelected =
+        updatedReports.find((u) => u._id === selectedReport._id) ||
+        updatedReports[0];
+
+      setSelectedReport(updatedSelected);
+      setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
     } catch (err: any) {
-      console.error("Error updating report:", err);
+      console.error("Error updating reports:", err);
       alert(err.message || "There was a problem saving the changes.");
     } finally {
       setSaving(false);
@@ -510,28 +581,45 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // find all reports with the same building + concern
+      const groupKey = getGroupKey(selectedReport);
+      const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
-      const data = await res.json().catch(() => null);
+      // archive all of them on the server
+      const updatedReports = await Promise.all(
+        groupReports.map(async (r) => {
+          const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data?.success) {
-        throw new Error(data?.message || "Failed to archive report");
-      }
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.message || "Failed to archive report");
+          }
 
-      const updatedReport: Report = data.report;
-
-      setReports((prev) =>
-        prev.map((r) => (r._id === updatedReport._id ? updatedReport : r))
+          return data.report as Report;
+        })
       );
-      setSelectedReport(updatedReport);
+
+      // update all in local state
+      setReports((prev) =>
+        prev.map((r) => {
+          const match = updatedReports.find((u) => u._id === r._id);
+          return match || r;
+        })
+      );
+
+      const updatedSelected =
+        updatedReports.find((u) => u._id === selectedReport._id) ||
+        updatedReports[0];
+
+      setSelectedReport(updatedSelected);
       setStatusValue("Archived");
     } catch (err: any) {
-      console.error("Error archiving report:", err);
-      alert(err.message || "There was a problem archiving the report.");
+      console.error("Error archiving reports:", err);
+      alert(err.message || "There was a problem archiving the report(s).");
     } finally {
       setSaving(false);
     }
@@ -542,6 +630,58 @@ export default function ReportPage() {
     const status = statusRaw || "Pending";
 
     return <span className={`status-pill status-${classKey}`}>{status}</span>;
+  };
+
+  /* COMMENT EDIT / DELETE HELPERS (single report) */
+
+  const startEditComment = (index: number) => {
+    if (!selectedReport?.comments) return;
+    const c = selectedReport.comments[index];
+    if (!c) return;
+    setEditingIndex(index);
+    setEditingText(c.text || c.comment || "");
+  };
+
+  const cancelEditComment = () => {
+    setEditingIndex(null);
+    setEditingText("");
+  };
+
+  const saveEditedComment = async (index: number) => {
+    if (!selectedReport || !selectedReport.comments) return;
+
+    const trimmed = editingText.trim();
+    if (!trimmed) {
+      alert("Comment cannot be empty.");
+      return;
+    }
+
+    const updatedComments = selectedReport.comments.map((c, i) => {
+      if (i !== index) return c;
+      const updated: Comment = { ...c };
+
+      // prefer updating text and comment to keep both in sync
+      updated.text = trimmed;
+      updated.comment = trimmed;
+      updated.at = new Date().toISOString();
+
+      return updated;
+    });
+
+    await syncComments(updatedComments);
+  };
+
+  const deleteComment = async (index: number) => {
+    if (!selectedReport || !selectedReport.comments) return;
+
+    const confirmDelete = window.confirm("Delete this comment?");
+    if (!confirmDelete) return;
+
+    const updatedComments = selectedReport.comments.filter(
+      (_c, i) => i !== index
+    );
+
+    await syncComments(updatedComments);
   };
 
   /* =========================================================
@@ -605,126 +745,126 @@ export default function ReportPage() {
           : "";
         const safe = (v?: string) => (v ? String(v) : "");
         return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${created}</td>
-            <td>${safe(r.status)}</td>
-            <td>${safe(r.building)}</td>
-            <td>${safe(concernLabel)}</td>
-            <td>${safe(r.college)}</td>
-            <td>${safe(r.floor)}</td>
-            <td>${safe(r.room)}</td>
-            <td>${safe(r.email)}</td>
-          </tr>
-        `;
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${created}</td>
+          <td>${safe(r.status)}</td>
+          <td>${safe(r.building)}</td>
+          <td>${safe(concernLabel)}</td>
+          <td>${safe(r.college)}</td>
+          <td>${safe(r.floor)}</td>
+          <td>${safe(r.room)}</td>
+          <td>${safe(r.email)}</td>
+        </tr>
+      `;
       })
       .join("");
 
     const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>BFMO Reports Analytics</title>
-          <style>
-            body {
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-              font-size: 12px;
-              color: #111827;
-              padding: 16px;
-            }
-            h1 {
-              font-size: 20px;
-              margin-bottom: 4px;
-            }
-            h2 {
-              font-size: 16px;
-              margin-top: 16px;
-              margin-bottom: 4px;
-            }
-            h3 {
-              font-size: 14px;
-              margin-top: 8px;
-              margin-bottom: 4px;
-            }
-            .meta {
-              font-size: 12px;
-              color: #4b5563;
-              margin-bottom: 12px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 8px;
-            }
-            th, td {
-              border: 1px solid #d1d5db;
-              padding: 4px 8px;
-              text-align: left;
-              vertical-align: top;
-            }
-            thead {
-              background: #f3f4f6;
-            }
-            ul {
-              margin: 4px 0 8px 16px;
-              padding: 0;
-            }
-            li {
-              margin: 2px 0;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>BFMO Reports - Analytics (Current Filters)</h1>
-          <div class="meta">
-            Generated at: ${new Date().toLocaleString()}<br />
-            Records shown: ${filteredReports.length}<br />
-            Printed by: ${printedBy}
-          </div>
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>BFMO Reports Analytics</title>
+        <style>
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 12px;
+            color: #111827;
+            padding: 16px;
+          }
+          h1 {
+            font-size: 20px;
+            margin-bottom: 4px;
+          }
+          h2 {
+            font-size: 16px;
+            margin-top: 16px;
+            margin-bottom: 4px;
+          }
+          h3 {
+            font-size: 14px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+          }
+          .meta {
+            font-size: 12px;
+            color: #4b5563;
+            margin-bottom: 12px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+          th, td {
+            border: 1px solid #d1d5db;
+            padding: 4px 8px;
+            text-align: left;
+            vertical-align: top;
+          }
+          thead {
+            background: #f3f4f6;
+          }
+          ul {
+            margin: 4px 0 8px 16px;
+            padding: 0;
+          }
+          li {
+            margin: 2px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>BFMO Reports - Analytics (Current Filters)</h1>
+        <div class="meta">
+          Generated at: ${new Date().toLocaleString()}<br />
+          Records shown: ${filteredReports.length}<br />
+          Printed by: ${printedBy}
+        </div>
 
-          <h2>Summary Statistics</h2>
+        <h2>Summary Statistics</h2>
 
-          <h3>By Concern (Base)</h3>
-          <ul>
-            ${concernBaseStatsHtml}
-          </ul>
+        <h3>By Concern (Base)</h3>
+        <ul>
+          ${concernBaseStatsHtml}
+        </ul>
 
-          <h3>By Concern (Detailed)</h3>
-          <ul>
-            ${concernStatsHtml}
-          </ul>
+        <h3>By Concern (Detailed)</h3>
+        <ul>
+          ${concernStatsHtml}
+        </ul>
 
-          <h3>By Building</h3>
-          <ul>
-            ${buildingStatsHtml}
-          </ul>
+        <h3>By Building</h3>
+        <ul>
+          ${buildingStatsHtml}
+        </ul>
 
-          <h2>Detailed Report</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Date Created</th>
-                <th>Status</th>
-                <th>Building</th>
-                <th>Concern</th>
-                <th>College</th>
-                <th>Floor</th>
-                <th>Room</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                rowsHtml ||
-                '<tr><td colspan="9">No data for current filters.</td></tr>'
-              }
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
+        <h2>Detailed Report</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date Created</th>
+              <th>Status</th>
+              <th>Building</th>
+              <th>Concern</th>
+              <th>College</th>
+              <th>Floor</th>
+              <th>Room</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              rowsHtml ||
+              '<tr><td colspan="9">No data for current filters.</td></tr>'
+            }
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;
@@ -746,6 +886,9 @@ export default function ReportPage() {
     );
   }
 
+  // comments to show: ONLY from the currently selected report
+  const commentsToShow: Comment[] = selectedReport?.comments || [];
+
   return (
     <>
       <div className="report-wrapper">
@@ -757,11 +900,8 @@ export default function ReportPage() {
             </p>
           </div>
           <div className="header-actions">
-            <button className="analytics-btn" onClick={handleAnalytics}>
-              Analytics
-            </button>
             <button className="printreports-btn" onClick={handlePrint}>
-              Print Reports Analytics
+              Print Analytic Reports
             </button>
           </div>
         </div>
@@ -951,7 +1091,7 @@ export default function ReportPage() {
               <>
                 <div className="reports-list">
                   {paginatedReports.map((report) => {
-                    const key = `${report.building}-${report.concern}`;
+                    const key = getGroupKey(report);
                     const duplicates = (duplicateCounts[key] || 1) - 1;
                     const statusKey = getStatusClassKey(report.status);
 
@@ -1166,25 +1306,79 @@ export default function ReportPage() {
                   <div className="comments-section">
                     <h3>Comments</h3>
 
-                    {Array.isArray(selectedReport.comments) &&
-                    selectedReport.comments.length > 0 ? (
+                    {commentsToShow.length > 0 ? (
                       <ul className="comments-list">
-                        {selectedReport.comments.map((c, idx) => (
+                        {commentsToShow.map((c, idx) => (
                           <li key={idx} className="comment-item">
-                            <p className="comment-text">
-                              {c.text || c.comment || String(c)}
-                            </p>
-                            <div>
-                              {c.at && (
-                                <span className="comment-date">
-                                  {new Date(c.at).toLocaleString()}
-                                  &nbsp;
-                                </span>
-                              )}
-                              {c.by && (
-                                <span className="comment-date">by {c.by}</span>
-                              )}
-                            </div>
+                            {editingIndex === idx ? (
+                              <>
+                                <textarea
+                                  className="comment-edit-input"
+                                  rows={2}
+                                  value={editingText}
+                                  onChange={(e) =>
+                                    setEditingText(e.target.value)
+                                  }
+                                />
+                                <div className="comment-actions-row">
+                                  <button
+                                    type="button"
+                                    className="comment-btn-save"
+                                    onClick={() => saveEditedComment(idx)}
+                                    disabled={saving}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="comment-btn-cancel"
+                                    onClick={cancelEditComment}
+                                    disabled={saving}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <p className="comment-text">
+                                  {c.text || c.comment || String(c)}
+                                </p>
+                                <div className="comment-footer">
+                                  <div>
+                                    {c.at && (
+                                      <span className="comment-date">
+                                        {new Date(c.at).toLocaleString()}
+                                        &nbsp;
+                                      </span>
+                                    )}
+                                    {c.by && (
+                                      <span className="comment-date">
+                                        by {c.by}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="comment-actions">
+                                    <button
+                                      type="button"
+                                      className="comment-btn-edit"
+                                      onClick={() => startEditComment(idx)}
+                                      disabled={saving}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="comment-btn-delete"
+                                      onClick={() => deleteComment(idx)}
+                                      disabled={saving}
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -1220,6 +1414,7 @@ export default function ReportPage() {
                         disabled={saving}
                         type="button"
                       >
+                        
                         {saving && statusValue !== "Archived"
                           ? "Saving..."
                           : "Save changes"}
