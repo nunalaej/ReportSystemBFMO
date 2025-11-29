@@ -1,0 +1,109 @@
+/* CONTAINER */
+/* Default: dark mode */
+.input {
+  display: flex;
+  flex-direction: row;
+  font-size: medium;
+  width: auto;
+  background-color: #0d1117;
+  justify-content: center;
+  border-radius: 5px;
+  align-items: center;
+  padding: 4px 8px;
+}
+
+/* Light mode override */
+html:not(.dark) .input {
+  background-color: transparent;
+}
+
+/* BUTTON BASE */
+/* Dark mode */
+.value {
+  background-color: transparent;
+  border: transparent;
+  padding: 10px 14px;
+  color: #ffffff;
+  display: flex;
+  position: relative;
+  gap: 5px;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 10px;
+  align-items: center;
+}
+
+/* Light mode base */
+html:not(.dark) .value {
+  border: transparent;
+  color: #000000;
+  background-color: transparent;
+}
+
+/* HOVER AND FOCUS */
+/* Dark mode hover */
+.value:not(:active):hover,
+.value:focus {
+  background-color:  rgba(0, 133, 83, 0.06);
+  color: #008563;
+}
+
+/* Light mode hover */
+html:not(.dark) .value:not(:active):hover,
+html:not(.dark) .value:focus {
+  color: #008653;
+  background-color: rgba(0, 133, 83, 0.06);
+}
+
+/* Dark mode active/focus */
+.value:focus,
+.value:active {
+  background-color: #008563;
+  outline: none;
+  color: #ffffff;
+}
+
+/* Light mode active/focus */
+html:not(.dark) .value:focus,
+html:not(.dark) .value:active {
+  background-color: transparent;
+  outline: none;
+}
+
+/* ACTIVE UNDERLINE BAR */
+.value::before {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: #008563;
+  border-radius: 5px;
+  opacity: 0;
+}
+
+html:not(.dark) .value::before {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: #008563;
+  border-radius: 5px;
+}
+
+
+
+/* Show bar when focused/active */
+.value:focus::before,
+.value:active::before {
+  opacity: 1;
+}
+
+/* ICON SIZE (if ever you add icons) */
+.value svg {
+  width: 15px;
+  height: 15px;
+}

@@ -83,12 +83,25 @@ html:not(.dark) .analytics-wrapper {
 
 /* stat chips and header actions */
 .header-stats {
-  display: flex;
-  margin-bottom: 20px;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: row;
+    align-content: center;
+    justify-content: center;
+}
+.header-stats-total {
+flex-flow: wrap;
+    place-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between; 
 }
 .stat-chip {
   display: inline-flex;
@@ -107,6 +120,26 @@ html:not(.dark) .stat-chip {
   background: var(--bg-soft);
   border-color: var(--card-border);
 }
+
+.stat-chip-total {
+  display: inline-flex;
+  justify-content: center;
+  align-self: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.9);
+  color: var(--text);
+  border: 1px solid rgba(148,163,184,0.25);
+  font-weight: 600;
+  font-size: 0.85rem;
+  backdrop-filter: blur(12px);
+}
+html:not(.dark) .stat-chip {
+  background: var(--bg-soft);
+  border-color: var(--card-border);
+}
+
 .stat-dot {
   width: 8px;
   height: 8px;
@@ -116,9 +149,12 @@ html:not(.dark) .stat-chip {
   font-weight: 800;
 }
 .header-actions {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
+    max-height: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    display: inline-flex;
+    justify-content: flex-end;
+    margin-left: 120px;
 }
 
 /* grid + cards */
@@ -179,6 +215,21 @@ html:not(.dark) .stat-chip {
   height: 260px;
   padding: 6px;
   box-sizing: border-box;
+}
+
+.bar-wrap {
+  width: 550px;
+  height: 400px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+/* make charts resizable */
+.bar-wrap.resizable {
+  resize: both;
+  overflow: auto;
+  min-height: 220px;
+  max-height: 600px;
 }
 
 /* make charts resizable */
@@ -452,7 +503,7 @@ html:not(.dark) .pa-card__base {
 .filters-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 .filter-block h4 {
   margin: 0 0 8px;

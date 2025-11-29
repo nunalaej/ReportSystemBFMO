@@ -2,7 +2,7 @@
 
 import "@/app/Admin/style/reports.css";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 
@@ -45,6 +45,12 @@ const formatConcern = (report: Report) => {
   const base = report.concern || "Unspecified";
   const sub = report.subConcern || report.otherConcern;
   return sub ? `${base} : ${sub}` : base;
+};
+
+// base concern only, for example "Civil", "Electrical", etc.
+const getBaseConcernFromReport = (r: Report) => {
+  const base = (r.concern || "Unspecified").trim();
+  return base || "Unspecified";
 };
 
 const formatBuilding = (report: Report) => {
@@ -129,6 +135,7 @@ const REPORTS_PER_PAGE = 12;
 export default function ReportPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
+  const firstName = user?.firstName || "";
 
   // only true if user is loaded AND role is admin
   const [canView, setCanView] = useState(false);
@@ -182,16 +189,6 @@ export default function ReportPage() {
     // User is admin → allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
-
-  /* NAVIGATION */
-
-  const handlePrint = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("currentUser");
-      sessionStorage.clear();
-      router.push("/");
-    }
-  };
 
   const handleAnalytics = () => {
     router.push("/Admin/Analytics");
@@ -547,159 +544,196 @@ export default function ReportPage() {
     return <span className={`status-pill status-${classKey}`}>{status}</span>;
   };
 
-  /* PRINT CURRENT FILTERED REPORTS */
+  /* =========================================================
+    PRINT ANALYTICS (SUMMARY STATS) FOR CURRENT FILTERS
+  ========================================================= */
 
-  const handlePrintCollegeReports = () => {
-    const reportsToPrint = filteredReports; // print ALL filtered, not just page
+  const handlePrint = useCallback(() => {
+    if (typeof window === "undefined") return;
 
-    if (reportsToPrint.length === 0) {
-      alert("No reports to print for the current filters.");
-      return;
-    }
+    const printedBy = firstName || "Administrator";
 
-    const groupMap: Record<string, Report[]> = {};
-    reports.forEach((r) => {
-      const key = `${r.building}-${r.concern}`;
-      if (!groupMap[key]) groupMap[key] = [];
-      groupMap[key].push(r);
+    // statistics based on current filtered reports
+    const concernBaseCounts = new Map<string, number>();
+    const concernCounts = new Map<string, number>();
+    const buildingCounts = new Map<string, number>();
+
+    filteredReports.forEach((r) => {
+      // base concern
+      const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
+      concernBaseCounts.set(
+        baseConcern,
+        (concernBaseCounts.get(baseConcern) || 0) + 1
+      );
+
+      // detailed concern (with subConcern)
+      const concernLabel = formatConcern(r);
+      const concernKey = concernLabel || "Unspecified";
+      concernCounts.set(concernKey, (concernCounts.get(concernKey) || 0) + 1);
+
+      // building
+      const buildingKey = (r.building || "Unspecified").trim() || "Unspecified";
+      buildingCounts.set(
+        buildingKey,
+        (buildingCounts.get(buildingKey) || 0) + 1
+      );
     });
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+    const concernBaseStatsHtml =
+      [...concernBaseCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No concerns for current filters.</li>";
 
-    const filterSummary = `Building: ${buildingFilter}, Concern: ${concernFilter}, College: ${collegeFilter}, Status: ${statusFilter}`;
+    const concernStatsHtml =
+      [...concernCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No detailed concerns for current filters.</li>";
 
-    const pagesHtml = (() => {
-      let pages = "";
-      for (let i = 0; i < reportsToPrint.length; i += 4) {
-        const chunk = reportsToPrint.slice(i, i + 4);
-        pages += `
-          <div class="page">
-            ${chunk
-              .map((r) => {
-                const key = `${r.building}-${r.concern}`;
-                const group = groupMap[key] || [];
-                const similar = group.filter((x) => x._id !== r._id);
+    const buildingStatsHtml =
+      [...buildingCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No buildings for current filters.</li>";
 
-                const similarHtml =
-                  similar.length > 0
-                    ? `
-                      <div class="similar-block">
-                        <strong>${similar.length} similar ${
-                        similar.length === 1 ? "report" : "reports"
-                      }</strong>
-                      </div>`
-                    : "";
-
-                return `
-                  <div class="report">
-                    <h3>${r.heading || "Untitled Report"}</h3>
-
-                    <p><strong>Building:</strong> ${formatBuilding(r)}</p>
-                    <p><strong>Concern:</strong> ${formatConcern(r)}</p>
-                    <p><strong>College:</strong> ${
-                      r.college || "Unspecified"
-                    }</p>
-
-                    ${
-                      r.image
-                        ? `<img class="square-img" src="${API_BASE}${r.image}" />`
-                        : ""
-                    }
-
-                    ${similarHtml}
-
-                    <p><strong>Description:</strong><br>${
-                      r.description || ""
-                    }</p>
-                  </div>
-                `;
-              })
-              .join("")}
-          </div>
+    const rowsHtml = filteredReports
+      .map((r, idx) => {
+        const concernLabel = formatConcern(r);
+        const created = r.createdAt
+          ? new Date(r.createdAt).toLocaleString()
+          : "";
+        const safe = (v?: string) => (v ? String(v) : "");
+        return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${created}</td>
+            <td>${safe(r.status)}</td>
+            <td>${safe(r.building)}</td>
+            <td>${safe(concernLabel)}</td>
+            <td>${safe(r.college)}</td>
+            <td>${safe(r.floor)}</td>
+            <td>${safe(r.room)}</td>
+            <td>${safe(r.email)}</td>
+          </tr>
         `;
-      }
-      return pages;
-    })();
+      })
+      .join("");
 
     const html = `
+      <!doctype html>
       <html>
         <head>
-          <title>Filtered Reports</title>
+          <meta charset="utf-8" />
+          <title>BFMO Reports Analytics</title>
           <style>
             body {
-              font-family: Arial, sans-serif;
-              padding: 20px;
-              line-height: 1.5;
+              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+              font-size: 12px;
+              color: #111827;
+              padding: 16px;
             }
             h1 {
-              text-align: center;
-              margin-bottom: 10px;
+              font-size: 20px;
+              margin-bottom: 4px;
             }
-            .filters-summary {
-              text-align: center;
-              font-size: 12px;
-              color: #555;
-              margin-bottom: 20px;
+            h2 {
+              font-size: 16px;
+              margin-top: 16px;
+              margin-bottom: 4px;
             }
-            .page {
-              display: grid;
-              grid-template-columns: repeat(2, 1fr);
-              grid-template-rows: repeat(2, auto);
-              gap: 20px;
-              margin-bottom: 50px;
-              page-break-after: always;
-            }
-            .report {
-              border: 1px solid #000;
-              border-radius: 8px;
-              padding: 12px;
-              background: #fff;
-            }
-            .square-img {
-              width: 250px;
-              height: 120px;
-              object-fit: cover;
-              display: block;
-              margin: 10px auto;
-              border-radius: 6px;
-              border: 1px solid #999;
-            }
-            .similar-block {
+            h3 {
+              font-size: 14px;
               margin-top: 8px;
+              margin-bottom: 4px;
+            }
+            .meta {
               font-size: 12px;
-              color: #222;
+              color: #4b5563;
+              margin-bottom: 12px;
             }
-            .similar-block ul {
-              margin: 4px 0 0;
-              padding-left: 16px;
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 8px;
             }
-            @media print {
-              .page {
-                page-break-after: always;
-              }
-              .report {
-                page-break-inside: avoid;
-              }
+            th, td {
+              border: 1px solid #d1d5db;
+              padding: 4px 8px;
+              text-align: left;
+              vertical-align: top;
+            }
+            thead {
+              background: #f3f4f6;
+            }
+            ul {
+              margin: 4px 0 8px 16px;
+              padding: 0;
+            }
+            li {
+              margin: 2px 0;
             }
           </style>
         </head>
         <body>
-          <h1>Filtered Reports</h1>
-          <div class="filters-summary">${filterSummary}</div>
-          ${pagesHtml}
+          <h1>BFMO Reports - Analytics (Current Filters)</h1>
+          <div class="meta">
+            Generated at: ${new Date().toLocaleString()}<br />
+            Records shown: ${filteredReports.length}<br />
+            Printed by: ${printedBy}
+          </div>
+
+          <h2>Summary Statistics</h2>
+
+          <h3>By Concern (Base)</h3>
+          <ul>
+            ${concernBaseStatsHtml}
+          </ul>
+
+          <h3>By Concern (Detailed)</h3>
+          <ul>
+            ${concernStatsHtml}
+          </ul>
+
+          <h3>By Building</h3>
+          <ul>
+            ${buildingStatsHtml}
+          </ul>
+
+          <h2>Detailed Report</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Date Created</th>
+                <th>Status</th>
+                <th>Building</th>
+                <th>Concern</th>
+                <th>College</th>
+                <th>Floor</th>
+                <th>Room</th>
+                <th>Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                rowsHtml ||
+                '<tr><td colspan="9">No data for current filters.</td></tr>'
+              }
+            </tbody>
+          </table>
         </body>
       </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 300);
-  };
+    const printWin = window.open("", "_blank");
+    if (!printWin) return;
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.focus();
+    printWin.print();
+  }, [filteredReports, firstName]);
 
   /* RENDER */
 
@@ -823,16 +857,6 @@ export default function ReportPage() {
               Show duplicates
             </label>
           </div>
-
-          {filteredReports.length > 0 && (
-            <button
-              className="print-btn"
-              type="button"
-              onClick={handlePrintCollegeReports}
-            >
-              Print current filtered reports
-            </button>
-          )}
         </div>
 
         {filteredReports.length === 0 && !loadError && (
@@ -900,7 +924,8 @@ export default function ReportPage() {
 
                         <div className="report-info">
                           <p>
-                            <strong>Building:</strong> {formatBuilding(report)}
+                            <strong>Building:</strong>{" "}
+                            {formatBuilding(report)}
                           </p>
                           <p>
                             <strong>Concern:</strong> {formatConcern(report)}
@@ -1071,10 +1096,9 @@ export default function ReportPage() {
                     src={resolveImageUrl(selectedReport.image)}
                     alt="Report"
                     className="report-img"
-                   onError={(e) => {
-  (e.target as HTMLImageElement).src = defaultImg;
-}}
-
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultImg;
+                    }}
                   />
                 </div>
 
@@ -1102,9 +1126,7 @@ export default function ReportPage() {
                     <p>
                       <strong>Submitted:</strong>{" "}
                       {selectedReport.createdAt &&
-                        new Date(
-                          selectedReport.createdAt
-                        ).toLocaleString()}{" "}
+                        new Date(selectedReport.createdAt).toLocaleString()}{" "}
                       {selectedReport.createdAt &&
                         `(${getRelativeTime(selectedReport.createdAt)})`}
                     </p>

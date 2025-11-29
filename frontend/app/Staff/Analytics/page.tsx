@@ -74,6 +74,30 @@ interface List {
 
 type StatusKey = "pending" | "waiting" | "progress" | "resolved" | "archived";
 
+interface ConcernChartDatum {
+  name: string; // subconcern, for example "Lights"
+  base: string; // base concern, for example "Civil"
+  fullLabel: string; // original "Civil : Lights"
+  value: number;
+}
+
+const getConcernBaseFromLabel = (
+  fullLabel: string
+): { base: string; sub: string } => {
+  const [baseRaw, subRaw] = fullLabel.split(" : ");
+  const base = (baseRaw || "Unspecified").trim();
+  const sub = (subRaw || base).trim(); // if no sub, just reuse base
+  return { base, sub };
+};
+
+const getConcernColorFromBase = (base: string): string => {
+  const b = base.toLowerCase();
+  if (b === "civil") return "#3b82f6"; // blue
+  if (b === "mechanical") return "#22c55e"; // green
+  if (b === "electrical") return "#fbbf24"; // yellow
+  return "#9ca3af"; // gray for others
+};
+
 /* Helpers */
 
 const formatConcernLabel = (report: Report) => {
@@ -116,6 +140,11 @@ const STATUS_COLORS: Record<StatusKey, string> = {
   progress: "#6366f1", // indigo
   resolved: "#22c55e", // green
   archived: "#9ca3af", // gray
+};
+
+const getBaseConcernFromReport = (r: Report): string => {
+  const base = (r.concern || "Unspecified").trim();
+  return base || "Unspecified";
 };
 
 const normalizeStatusFilterLabel = (raw?: string): string | null => {
@@ -173,7 +202,7 @@ const Analytics: FC = () => {
   };
 
   /* =========================================================
-     DATA
+    DATA
   ========================================================= */
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -261,7 +290,7 @@ const Analytics: FC = () => {
   }, [canView]);
 
   /* =========================================================
-     FILTERS
+    FILTERS
   ========================================================= */
 
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
@@ -339,8 +368,8 @@ const Analytics: FC = () => {
         return false;
       }
 
-      const concernLabel = formatConcernLabel(r);
-      if (selectedConcerns.size && !selectedConcerns.has(concernLabel)) {
+      const baseConcern = getBaseConcernFromReport(r);
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
         return false;
       }
 
@@ -382,8 +411,8 @@ const Analytics: FC = () => {
         return;
       }
 
-      const concernLabel = formatConcernLabel(r);
-      if (selectedConcerns.size && !selectedConcerns.has(concernLabel)) {
+      const baseConcern = getBaseConcernFromReport(r);
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
         return;
       }
 
@@ -423,8 +452,8 @@ const Analytics: FC = () => {
         return;
       }
 
-      const concernLabel = formatConcernLabel(r);
-      if (selectedConcerns.size && !selectedConcerns.has(concernLabel)) {
+      const baseConcern = getBaseConcernFromReport(r);
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
         return;
       }
 
@@ -457,8 +486,8 @@ const Analytics: FC = () => {
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
 
     reports.forEach((r) => {
-      const concernLabel = formatConcernLabel(r);
-      if (!concernLabel) return;
+      const baseConcern = getBaseConcernFromReport(r);
+      if (!baseConcern) return;
 
       const stLabel = normalizeStatusFilterLabel(r.status);
       if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
@@ -479,10 +508,27 @@ const Analytics: FC = () => {
         if (toTS && ts > toTS) return;
       }
 
-      s.add(concernLabel);
+      s.add(baseConcern);
     });
 
-    return [...s].sort();
+    // Custom sort so Civil, Mechanical, Electrical stay grouped in this order
+    const CONCERN_PRIORITY: Record<string, number> = {
+      Civil: 1,
+      Mechanical: 2,
+      Electrical: 3,
+    };
+
+    return [...s].sort((a, b) => {
+      const aPri = CONCERN_PRIORITY[a] ?? 999;
+      const bPri = CONCERN_PRIORITY[b] ?? 999;
+
+      if (aPri !== bPri) {
+        return aPri - bPri;
+      }
+
+      // Same base concern - sort alphabetically
+      return a.localeCompare(b);
+    });
   }, [
     reports,
     selectedStatuses,
@@ -509,8 +555,8 @@ const Analytics: FC = () => {
         return;
       }
 
-      const concernLabel = formatConcernLabel(r);
-      if (selectedConcerns.size && !selectedConcerns.has(concernLabel)) {
+      const baseConcern = getBaseConcernFromReport(r);
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
         return;
       }
 
@@ -551,7 +597,7 @@ const Analytics: FC = () => {
   ]);
 
   /* =========================================================
-     AGGREGATES FOR CHARTS
+    AGGREGATES FOR CHARTS
   ========================================================= */
   const statusCounts = useMemo(() => {
     const map: Record<StatusKey, number> = {
@@ -613,10 +659,48 @@ const Analytics: FC = () => {
     () => agg(filtered, "building"),
     [filtered, agg]
   );
-  const concernData = useMemo(
-    () => agg(filtered, formatConcernLabel),
-    [filtered, agg]
-  );
+
+  const concernData = useMemo<ConcernChartDatum[]>(() => {
+    // Map key: "base||sub"
+    const m = new Map<string, ConcernChartDatum>();
+
+    filtered.forEach((r) => {
+      const full = formatConcernLabel(r); // example "Civil : Lights"
+      if (!full) return;
+
+      const { base, sub } = getConcernBaseFromLabel(full);
+      const key = `${base}||${sub}`;
+
+      const existing = m.get(key);
+      if (existing) {
+        existing.value += 1;
+      } else {
+        m.set(key, {
+          name: sub, // this will be the x axis label
+          base, // used for color and legend
+          fullLabel: full,
+          value: 1,
+        });
+      }
+    });
+
+    const BASE_PRIORITY: Record<string, number> = {
+      Civil: 1,
+      Mechanical: 2,
+      Electrical: 3,
+    };
+
+    return [...m.values()].sort((a, b) => {
+      const aPri = BASE_PRIORITY[a.base] ?? 999;
+      const bPri = BASE_PRIORITY[b.base] ?? 999;
+
+      if (aPri !== bPri) return aPri - bPri;
+
+      // same base, sort by sub name
+      return a.name.localeCompare(b.name);
+    });
+  }, [filtered]);
+
   const collegeData = useMemo(
     () => agg(filtered, "college"),
     [filtered, agg]
@@ -625,17 +709,26 @@ const Analytics: FC = () => {
   const total = filtered.length;
 
   /* =========================================================
-     PRINT AS TABLE (with statistics)
+    PRINT AS TABLE (with statistics)
   ========================================================= */
 
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
 
     // statistics based on current filters
+    const concernBaseCounts = new Map<string, number>();
     const concernCounts = new Map<string, number>();
     const buildingCounts = new Map<string, number>();
 
     filtered.forEach((r) => {
+      // base concern
+      const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
+      concernBaseCounts.set(
+        baseConcern,
+        (concernBaseCounts.get(baseConcern) || 0) + 1
+      );
+
+      // detailed concern (with subConcern)
       const concernLabel = formatConcernLabel(r);
       const concernKey = concernLabel || "Unspecified";
       concernCounts.set(
@@ -643,6 +736,7 @@ const Analytics: FC = () => {
         (concernCounts.get(concernKey) || 0) + 1
       );
 
+      // building
       const buildingKey =
         (r.building || "Unspecified").trim() || "Unspecified";
       buildingCounts.set(
@@ -651,11 +745,17 @@ const Analytics: FC = () => {
       );
     });
 
+    const concernBaseStatsHtml =
+      [...concernBaseCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No concerns for current filters.</li>";
+
     const concernStatsHtml =
       [...concernCounts.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No concerns for current filters.</li>";
+        .join("") || "<li>No detailed concerns for current filters.</li>";
 
     const buildingStatsHtml =
       [...buildingCounts.entries()]
@@ -750,7 +850,12 @@ const Analytics: FC = () => {
 
           <h2>Summary Statistics</h2>
 
-          <h3>By Concern</h3>
+          <h3>By Concern (Base)</h3>
+          <ul>
+            ${concernBaseStatsHtml}
+          </ul>
+
+          <h3>By Concern (Detailed)</h3>
           <ul>
             ${concernStatsHtml}
           </ul>
@@ -796,7 +901,7 @@ const Analytics: FC = () => {
   }, [filtered]);
 
   /* =========================================================
-     LISTS WITH PROGRESS SIDE PANEL
+    LISTS WITH PROGRESS SIDE PANEL
   ========================================================= */
   const [listsOpen, setListsOpen] = useState<boolean>(false);
 
@@ -964,37 +1069,37 @@ const Analytics: FC = () => {
             </div>
           </div>
 
-            <div className="header-actions">
-              <button
-                className="pa-btn"
-                onClick={toggleFiltersOpen}
-                aria-expanded={filtersOpen}
-                aria-controls="filters-panel"
-                title={filtersOpen ? "Hide filters" : "Show filters"}
-              >
-                {filtersOpen ? "Hide Filters" : "Show Filters"}
-                {activeFilterCount > 0 && (
-                  <span className="badge" style={{ marginLeft: 8 }}>
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
+          <div className="header-actions">
+            <button
+              className="pa-btn"
+              onClick={toggleFiltersOpen}
+              aria-expanded={filtersOpen}
+              aria-controls="filters-panel"
+              title={filtersOpen ? "Hide filters" : "Show filters"}
+            >
+              {filtersOpen ? "Hide Filters" : "Show Filters"}
+              {activeFilterCount > 0 && (
+                <span className="badge" style={{ marginLeft: 8 }}>
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
 
-              <button
-                className="pa-btn"
-                type="button"
-                onClick={() => setListsOpen(true)}
-              >
-                Open Lists Panel
-              </button>
+            <button
+              className="pa-btn"
+              type="button"
+              onClick={() => setListsOpen(true)}
+            >
+              Open Lists Panel
+            </button>
 
-              <button className="analytics-btn" onClick={handleReports}>
-                To Reports
-              </button>
+            <button className="analytics-btn" onClick={handleReports}>
+              To Reports
+            </button>
 
-              <button className="printreports-btn" onClick={handlePrint}>
-                Print Analytics
-              </button>
+            <button className="printreports-btn" onClick={handlePrint}>
+              Print Analytics
+            </button>
           </div>
         </header>
 
@@ -1143,44 +1248,6 @@ const Analytics: FC = () => {
           </section>
         )}
 
-        <div className="header-stats">
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#0ea5e9" }} />
-              <span>Total</span>
-              <strong>{reports.length}</strong>
-            </div>
-
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#22c55e" }} />
-              <span>Resolved</span>
-              <strong>{statusCounts.resolved}</strong>
-            </div>
-
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#fbbf24" }} />
-              <span>Pending</span>
-              <strong>{statusCounts.pending}</strong>
-            </div>
-
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#60a5fa" }} />
-              <span>Waiting</span>
-              <strong>{statusCounts.waiting}</strong>
-            </div>
-
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#6366f1" }} />
-              <span>In Progress</span>
-              <strong>{statusCounts.progress}</strong>
-            </div>
-
-            <div className="stat-chip">
-              <span className="stat-dot" style={{ background: "#9ca3af" }} />
-              <span>Archived</span>
-              <strong>{statusCounts.archived}</strong>
-            </div>
-        </div>
-
         {/* 2x2 Grid of resizable charts */}
         <div className="analytics-grid">
           {/* Status Overview */}
@@ -1202,12 +1269,75 @@ const Analytics: FC = () => {
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                  />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <p className="note">Total filtered: {total}</p>
+            <div className="header-stats">
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#0ea5e9" }}
+                />
+                <span>Total</span>
+                <strong>{reports.length}</strong>
+              </div>
+
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#22c55e" }}
+                />
+                <span>Resolved</span>
+                <strong>{statusCounts.resolved}</strong>
+              </div>
+
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#fbbf24" }}
+                />
+                <span>Pending</span>
+                <strong>{statusCounts.pending}</strong>
+              </div>
+
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#60a5fa" }}
+                />
+                <span>Waiting</span>
+                <strong>{statusCounts.waiting}</strong>
+              </div>
+
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#6366f1" }}
+                />
+                <span>In Progress</span>
+                <strong>{statusCounts.progress}</strong>
+              </div>
+
+              <div className="stat-chip">
+                <span
+                  className="stat-dot"
+                  style={{ background: "#9ca3af" }}
+                />
+                <span>Archived</span>
+                <strong>{statusCounts.archived}</strong>
+              </div>
+            </div>
           </div>
 
           {/* Reports by Building */}
@@ -1219,7 +1349,16 @@ const Analytics: FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                  />
                   <Legend />
                   <Bar dataKey="value" fill="#22c55e" />
                 </BarChart>
@@ -1234,11 +1373,79 @@ const Analytics: FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={concernData}>
                   <CartesianGrid strokeDasharray="3 3" />
+                  {/* bottom label now shows only subconcern, for example "Lights" */}
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" fill="#6366f1" />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                    // show base and sub nicely in the tooltip
+                    labelFormatter={(_, payload) => {
+                      const p = (payload &&
+                        payload[0]?.payload) as ConcernChartDatum | undefined;
+                      if (!p) return "";
+                      // Example: "Civil - Lights"
+                      return `${p.base} - ${p.name}`;
+                    }}
+                    formatter={(value) => [`${value}`, "Reports"]}
+                  />
+                  {/* custom legend that shows base concerns with their colors */}
+                  <Legend
+                    content={() => {
+                      const bases = ["Civil", "Mechanical", "Electrical"];
+                      return (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 8,
+                          }}
+                        >
+                          {bases
+                            .filter((base) =>
+                              concernData.some((d) => d.base === base)
+                            )
+                            .map((base) => (
+                              <div
+                                key={base}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: 999,
+                                    backgroundColor:
+                                      getConcernColorFromBase(base),
+                                  }}
+                                />
+                                <span>{base}</span>
+                              </div>
+                            ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="value">
+                    {concernData.map((entry) => (
+                      <Cell
+                        key={`${entry.base}-${entry.name}`}
+                        fill={getConcernColorFromBase(entry.base)}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1253,7 +1460,16 @@ const Analytics: FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                  />
                   <Legend />
                   <Bar dataKey="value" fill="#fbbf24" />
                 </BarChart>
@@ -1361,7 +1577,8 @@ const Analytics: FC = () => {
                           placeholder="New task name"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              const v = (e.currentTarget.value || "").trim();
+                              const v =
+                                (e.currentTarget.value || "").trim();
                               if (v) {
                                 addTask(list.id, v);
                                 (e.currentTarget as HTMLInputElement).value =

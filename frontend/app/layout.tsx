@@ -8,6 +8,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./ThemeProvider";
 import ThemeToggle from "./ThemeToggle";
+import HeaderNav from "./HeaderNav"; // import the client header nav
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,11 +48,12 @@ export default function RootLayout({
                 </h1>
               </div>
 
+              {/* MIDDLE SECTION – role based buttons */}
+              <HeaderNav />
+
               {/* RIGHT SECTION */}
               <div className="flex items-center gap-3">
-                {/* Dark mode toggle */}
                 <ThemeToggle />
-
                 <SignedIn>
                   <UserButton />
                 </SignedIn>
