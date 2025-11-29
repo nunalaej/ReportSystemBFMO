@@ -1,9 +1,18 @@
 "use client";
 
-import { FC, useMemo } from "react";
+import React, { FC, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import "@/app/style/nav.css";
+
+// Simple image icon for Activity Logs
+const HistoryIcon: FC = () => (
+  <img
+    src="/icon.svg"          // change this path if your icon is different
+    alt="Activity Logs"
+    className="nav-icon"     // optional class, style it in nav.css
+  />
+);
 
 interface HeaderNavProps {}
 
@@ -23,44 +32,42 @@ const HeaderNav: FC<HeaderNavProps> = () => {
       r = rawRole.toLowerCase();
     }
 
-    return r; // "admin", "staff", or something else
+    return r;
   }, [isLoaded, isSignedIn, user]);
 
-  const gotoReports = () => {
-    router.push("/Admin/Reports");
-  };
+  const gotoReports = () => router.push("/Admin/Reports");
+  const gotoAnalytics = () => router.push("/Admin/Analytics");
+  const gotoAdminEdit = () => router.push("/Admin/Edit");
+  const gotoActivityLogs = () => router.push("/Logs"); // Logs page
 
-  const gotoAnalytics = () => {
-    router.push("/Admin/Analytics");
-  };
+  if (!isLoaded || !isSignedIn) return <div />;
 
-  const gotoAdminEdit = () => {
-    router.push("/Admin/Edit");
-  };
-
-  // While loading user, or not signed in, no middle nav
-  if (!isLoaded || !isSignedIn) {
-    return <div />;
-  }
-
-  // Only admin and staff see the nav
-  if (role !== "admin" && role !== "staff") {
-    return <div />;
-  }
+  if (role !== "admin" && role !== "staff") return <div />;
 
   return (
     <nav className="input">
       <button className="value" onClick={gotoReports}>
         Reports
       </button>
+
       <button className="value" onClick={gotoAnalytics}>
         Analytics
       </button>
+
       {role === "admin" && (
         <button className="value" onClick={gotoAdminEdit}>
           Admin Edit
         </button>
       )}
+
+      <button
+        className="value"
+        onClick={gotoActivityLogs}
+        title="Activity Logs"
+      >
+        <HistoryIcon />
+        <span style={{ marginLeft: "0.35rem" }}>Logs</span>
+      </button>
     </nav>
   );
 };

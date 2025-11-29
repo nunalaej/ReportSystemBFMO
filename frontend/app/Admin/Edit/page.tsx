@@ -1,1662 +1,950 @@
 "use client";
 
-import "@/app/Admin/style/analytics.css";
-
-import React, {
-  FC,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import "../style/admin-edit.css";
+
+type BuildingMeta = {
+  id: string;
+  name: string;
+  floors: number;
+  roomsPerFloor: number;
+  hasRooms?: boolean; // new
+  singleLocationLabel?: string; // new, for kiosks/positions
+};
+
+type ConcernMeta = {
+  id: string;
+  label: string;
+  subconcerns: string[];
+};
+
+type CollegeEntry = {
+  college: string;
+  count: number;
+};
+
+const DEFAULT_BUILDINGS: BuildingMeta[] = [
+  {
+    id: "ayuntamiento",
+    name: "Ayuntamiento",
+    floors: 4,
+    roomsPerFloor: 20,
+    hasRooms: false,
+  },
+  { id: "jfh", name: "JFH", floors: 4, roomsPerFloor: 10, hasRooms: true },
+  { id: "ictc", name: "ICTC", floors: 2, roomsPerFloor: 13, hasRooms: true },
+  { id: "pch", name: "PCH", floors: 3, roomsPerFloor: 10, hasRooms: true },
+  {
+    id: "food-square",
+    name: "Food Square",
+    floors: 1,
+    roomsPerFloor: 20,
+    hasRooms: false,
+  },
+  { id: "cos", name: "COS", floors: 1, roomsPerFloor: 10, hasRooms: true },
+  { id: "cbaa", name: "CBAA", floors: 4, roomsPerFloor: 10, hasRooms: true },
+  { id: "cthm", name: "CTHM", floors: 4, roomsPerFloor: 10, hasRooms: true },
+  { id: "gmh", name: "GMH", floors: 2, roomsPerFloor: 6, hasRooms: true },
+  { id: "ceat", name: "CEAT", floors: 4, roomsPerFloor: 10, hasRooms: true },
+  {
+    id: "other",
+    name: "Other",
+    floors: 1,
+    roomsPerFloor: 1,
+    hasRooms: false,
+  },
+];
+
+const DEFAULT_CONCERNS: ConcernMeta[] = [
+  {
+    id: "electrical",
+    label: "Electrical",
+    subconcerns: ["Lights", "Aircons", "Wires", "Outlets", "Switches", "Other"],
+  },
+  {
+    id: "civil",
+    label: "Civil",
+    subconcerns: ["Walls", "Ceilings", "Cracks", "Doors", "Windows", "Other"],
+  },
+  {
+    id: "mechanical",
+    label: "Mechanical",
+    subconcerns: ["TV", "Projectors", "Fans", "Elevators", "Other"],
+  },
+  {
+    id: "safety-hazard",
+    label: "Safety Hazard",
+    subconcerns: ["Spikes", "Open Wires", "Blocked Exits", "Wet Floor", "Other"],
+  },
+  {
+    id: "other",
+    label: "Other",
+    subconcerns: ["Other"],
+  },
+];
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
-    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
-  "http://localhost:3000";
+    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "http://localhost:3000/"
+  "";
 
-/* ===== Types ===== */
+const META_URL = `${API_BASE}/api/meta`;
 
-interface Comment {
-  text?: string;
-  comment?: string;
-  at?: string;
-  by?: string;
+const norm = (v: unknown) =>
+  v == null ? "" : String(v).trim().toLowerCase();
+
+function Panel(props: {
+  title?: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const { title, subtitle, actions, children } = props;
+  return (
+    <section className="admin-edit__panel">
+      <header className="admin-edit__panel-head">
+        <div>
+          {title && <h3 className="admin-edit__panel-title">{title}</h3>}
+          {subtitle && (
+            <p className="admin-edit__panel-subtitle">{subtitle}</p>
+          )}
+        </div>
+        {actions && (
+          <div className="admin-edit__panel-actions">{actions}</div>
+        )}
+      </header>
+      <div className="admin-edit__panel-body">{children}</div>
+    </section>
+  );
 }
 
-interface Report {
-  _id?: string;
-  email?: string;
-  heading?: string;
-  description?: string;
-  concern?: string;
-  subConcern?: string;
-  otherConcern?: string;
-  building?: string;
-  otherBuilding?: string;
-  college?: string;
-  floor?: string;
-  room?: string;
-  otherRoom?: string;
-  image?: string;
-  status?: string;
-  createdAt?: string;
-  comments?: Comment[];
-}
-
-interface Task {
-  id: string;
-  text: string;
-  done: boolean;
-}
-
-interface List {
-  id: string;
-  title: string;
-  tasks: Task[];
-  collapsed: boolean;
-}
-
-type StatusKey = "pending" | "waiting" | "progress" | "resolved" | "archived";
-
-interface ConcernChartDatum {
-  name: string; // subconcern, for example "Lights"
-  base: string; // base concern, for example "Civil"
-  fullLabel: string; // original "Civil : Lights"
-  value: number;
-}
-
-const getConcernBaseFromLabel = (
-  fullLabel: string
-): { base: string; sub: string } => {
-  const [baseRaw, subRaw] = fullLabel.split(" : ");
-  const base = (baseRaw || "Unspecified").trim();
-  const sub = (subRaw || base).trim(); // if no sub, just reuse base
-  return { base, sub };
-};
-
-const getConcernColorFromBase = (base: string): string => {
-  const b = base.toLowerCase();
-  if (b === "civil") return "#3b82f6"; // blue
-  if (b === "mechanical") return "#22c55e"; // green
-  if (b === "electrical") return "#fbbf24"; // yellow
-  return "#9ca3af"; // gray for others
-};
-
-/* Helpers */
-
-const formatConcernLabel = (report: Report) => {
-  const base = report.concern || "Unspecified";
-  const sub = report.subConcern || report.otherConcern;
-  return sub ? `${base} : ${sub}` : base;
-};
-
-// Match the statuses used in Reports page and backend
-const STATUSES: string[] = [
-  "Pending",
-  "Waiting for Materials",
-  "In Progress",
-  "Resolved",
-  "Archived",
-];
-
-// Labels shown in chart/legend per internal key
-const STATUS_LABELS: Record<StatusKey, string> = {
-  pending: "Pending",
-  waiting: "Waiting",
-  progress: "In Progress",
-  resolved: "Resolved",
-  archived: "Archived",
-};
-
-// Labels used in the Status filter chips per internal key
-const STATUS_TO_FILTER_LABEL: Record<StatusKey, string> = {
-  pending: "Pending",
-  waiting: "Waiting for Materials",
-  progress: "In Progress",
-  resolved: "Resolved",
-  archived: "Archived",
-};
-
-// Colors for light and dark friendly palette
-const STATUS_COLORS: Record<StatusKey, string> = {
-  pending: "#fbbf24", // amber
-  waiting: "#60a5fa", // sky
-  progress: "#6366f1", // indigo
-  resolved: "#22c55e", // green
-  archived: "#9ca3af", // gray
-};
-
-const getBaseConcernFromReport = (r: Report): string => {
-  const base = (r.concern || "Unspecified").trim();
-  return base || "Unspecified";
-};
-
-const normalizeStatusFilterLabel = (raw?: string): string | null => {
-  const s = (raw || "").trim().toLowerCase();
-  if (!s) return null;
-  if (s === "pending") return "Pending";
-  if (s === "waiting for materials" || s === "waiting")
-    return "Waiting for Materials";
-  if (s === "in progress") return "In Progress";
-  if (s === "resolved") return "Resolved";
-  if (s === "archived") return "Archived";
-  return null;
-};
-
-const Analytics: FC = () => {
+export default function AdminEditPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
 
-  // only true if user is loaded AND role is admin
-  const [canView, setCanView] = useState(false);
+  const [buildings, setBuildings] = useState<BuildingMeta[]>(DEFAULT_BUILDINGS);
+  const [concerns, setConcerns] = useState<ConcernMeta[]>(DEFAULT_CONCERNS);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [saveMsg, setSaveMsg] = useState("");
+  const [searchBuilding, setSearchBuilding] = useState("");
+  const [searchConcern, setSearchConcern] = useState("");
 
-  /* AUTH GUARD: only admins can view this page */
+  const role = useMemo(() => {
+    if (!isLoaded || !isSignedIn || !user) return "guest";
+
+    const rawRole = (user.publicMetadata as any)?.role;
+    let r = "student";
+
+    if (Array.isArray(rawRole) && rawRole.length > 0) {
+      r = String(rawRole[0]).toLowerCase();
+    } else if (typeof rawRole === "string") {
+      r = rawRole.toLowerCase();
+    }
+
+    return r;
+  }, [isLoaded, isSignedIn, user]);
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    // Not signed in -> go to landing
     if (!isSignedIn || !user) {
       router.replace("/");
       return;
     }
 
-    // role could be "admin" OR ["admin"]
-    const rawRole = (user.publicMetadata as any)?.role;
-    let role = "student";
-
-    if (Array.isArray(rawRole) && rawRole.length > 0) {
-      role = String(rawRole[0]).toLowerCase();
-    } else if (typeof rawRole === "string") {
-      role = rawRole.toLowerCase();
-    }
-
     if (role !== "admin") {
-      // Non admin -> send to student dashboard
-      router.replace("/Student/Dashboard");
-      return;
+      router.replace("/");
     }
+  }, [isLoaded, isSignedIn, user, role, router]);
 
-    // User is admin -> allow rendering and data fetch
-    setCanView(true);
-  }, [isLoaded, isSignedIn, user, router]);
-
-  const handleReports = () => {
-    router.push("/Admin/Reports");
-  };
-
-  /* =========================================================
-    DATA
-  ========================================================= */
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [loadErr, setLoadErr] = useState<string>("");
-
-  // fetch from API, fallback to tiny demo when API is down
+  // load meta
   useEffect(() => {
-    if (!canView) return;
-
     let alive = true;
-    (async () => {
+
+    const loadMeta = async () => {
       try {
-        setLoadErr("");
-        const res = await fetch(`${API_BASE}/api/reports`);
-        if (!res.ok) throw new Error("Failed to fetch reports");
-        const data = await res.json();
+        setLoading(true);
+        setError("");
 
+        const res = await fetch(META_URL, { cache: "no-store" });
+        if (!res.ok) {
+          const raw = await res.text().catch(() => "");
+          console.error("Meta load failed:", res.status, raw);
+          throw new Error("Failed to load options from server.");
+        }
+
+        const data = await res.json().catch(() => null);
+        if (!data || !alive) return;
+
+        let incomingBuildings: BuildingMeta[] = DEFAULT_BUILDINGS;
+
+        if (Array.isArray(data.buildings) && data.buildings.length > 0) {
+          if (typeof data.buildings[0] === "string") {
+            incomingBuildings = (data.buildings as string[]).map((name, idx) => {
+              const label = String(name || "").trim();
+              const id =
+                norm(label).replace(/\s+/g, "-") ||
+                `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+              return {
+                id,
+                name: label || "Unnamed",
+                floors: 1,
+                roomsPerFloor: 1,
+                hasRooms: true,
+              };
+            });
+          } else {
+            incomingBuildings = (data.buildings as any[]).map((b, idx) => {
+              const rawName = String(b.name || "").trim();
+              const id =
+                String(b.id || "").trim() ||
+                norm(rawName).replace(/\s+/g, "-") ||
+                `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+              const hasRooms =
+                b.hasRooms === false ? false : true;
+
+              const floors =
+                typeof b.floors === "number" && b.floors > 0
+                  ? Math.round(b.floors)
+                  : 1;
+
+              const roomsPerFloor =
+                typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
+                  ? Math.round(b.roomsPerFloor)
+                  : 1;
+
+              const singleLocationLabel =
+                typeof b.singleLocationLabel === "string"
+                  ? String(b.singleLocationLabel).trim()
+                  : "";
+
+              return {
+                id,
+                name: rawName || "Unnamed",
+                floors,
+                roomsPerFloor,
+                hasRooms,
+                singleLocationLabel,
+              };
+            });
+          }
+        }
+
+        let incomingConcerns: ConcernMeta[] = DEFAULT_CONCERNS;
+
+        if (Array.isArray(data.concerns) && data.concerns.length > 0) {
+          incomingConcerns = (data.concerns as any[]).map((c, idx) => {
+            const label = String(c.label || "").trim();
+            const id =
+              String(c.id || "").trim() ||
+              norm(label).replace(/\s+/g, "-") ||
+              `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+            const subs = Array.isArray(c.subconcerns)
+              ? c.subconcerns.map((s: any) => String(s || "").trim())
+              : [];
+
+            return {
+              id,
+              label: label || "Unnamed concern",
+              subconcerns: subs.filter((s) => s.length > 0),
+            };
+          });
+        }
+
+        setBuildings(incomingBuildings);
+        setConcerns(incomingConcerns);
+      } catch (err: any) {
+        console.error(err);
         if (!alive) return;
-
-        const list: Report[] = Array.isArray(data)
-          ? data
-          : Array.isArray(data.reports)
-          ? data.reports
-          : [];
-        setReports(list);
-      } catch (e) {
-        console.error(e);
-        if (!alive) return;
-        setLoadErr("Could not load reports, using demo data");
-
-        const now = new Date().toISOString();
-        setReports([
-          {
-            status: "Pending",
-            building: "Building A",
-            concern: "Electrical",
-            subConcern: "Lights",
-            college: "CIT",
-            createdAt: now,
-          },
-          {
-            status: "In Progress",
-            building: "Building B",
-            concern: "Plumbing",
-            college: "COE",
-            createdAt: now,
-          },
-          {
-            status: "Resolved",
-            building: "Building A",
-            concern: "HVAC",
-            college: "CIT",
-            createdAt: now,
-          },
-          {
-            status: "Pending",
-            building: "Building C",
-            concern: "Electrical",
-            subConcern: "Outlets",
-            college: "COE",
-            createdAt: now,
-          },
-          {
-            status: "Resolved",
-            building: "Building B",
-            concern: "Carpentry",
-            college: "CLA",
-            createdAt: now,
-          },
-          {
-            status: "In Progress",
-            building: "Building C",
-            concern: "HVAC",
-            college: "CBA",
-            createdAt: now,
-          },
-        ]);
+        setError(
+          err?.message ||
+            "Could not load buildings and concerns. Using defaults."
+        );
+        setBuildings(DEFAULT_BUILDINGS);
+        setConcerns(DEFAULT_CONCERNS);
       } finally {
         if (alive) setLoading(false);
       }
-    })();
+    };
+
+    loadMeta();
+
     return () => {
       alive = false;
     };
-  }, [canView]);
+  }, []);
 
-  /* =========================================================
-    FILTERS
-  ========================================================= */
+  // save meta
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+    setSaveMsg("");
 
-  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
-    () => new Set(STATUSES)
-  );
-  const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [selectedConcerns, setSelectedConcerns] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [selectedColleges, setSelectedColleges] = useState<Set<string>>(
-    () => new Set()
-  );
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
+    const cleanBuildings: BuildingMeta[] = buildings
+      .map((b, idx) => {
+        const name = String(b.name || "").trim();
+        if (!name) return null;
 
-  const FILTERS_OPEN_KEY = "analytics_filters_open_v1";
-  const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem(FILTERS_OPEN_KEY);
-    return saved === null ? true : saved === "1";
-  });
+        const id =
+          String(b.id || "").trim() ||
+          norm(name).replace(/\s+/g, "-") ||
+          `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-  const toggleFiltersOpen = () => {
-    setFiltersOpen((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(FILTERS_OPEN_KEY, next ? "1" : "0");
-      } catch {
-        // ignore
+        const hasRooms = b.hasRooms === false ? false : true;
+
+        const floors =
+          typeof b.floors === "number" && b.floors > 0
+            ? Math.round(b.floors)
+            : 1;
+
+        const roomsPerFloor =
+          typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
+            ? Math.round(b.roomsPerFloor)
+            : 1;
+
+        const singleLocationLabel = String(
+          b.singleLocationLabel || ""
+        ).trim();
+
+        return {
+          id,
+          name,
+          floors,
+          roomsPerFloor,
+          hasRooms,
+          singleLocationLabel,
+        };
+      })
+      .filter(Boolean) as BuildingMeta[];
+
+    const cleanConcerns: ConcernMeta[] = concerns
+      .map((c, idx) => {
+        const label = String(c.label || "").trim();
+        if (!label) return null;
+
+        const id =
+          String(c.id || "").trim() ||
+          norm(label).replace(/\s+/g, "-") ||
+          `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+        const subs = Array.isArray(c.subconcerns) ? c.subconcerns : [];
+        const cleanSubs = subs
+          .map((s) => String(s || "").trim())
+          .filter((s) => s.length > 0)
+          .sort((a, b) => a.localeCompare(b));
+
+        return {
+          id,
+          label,
+          subconcerns: cleanSubs,
+        };
+      })
+      .filter(Boolean) as ConcernMeta[];
+
+    const payload = {
+      buildings: cleanBuildings,
+      concerns: cleanConcerns,
+    };
+
+    try {
+      const res = await fetch(META_URL, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const raw = await res.text().catch(() => "");
+        console.error("Meta save failed:", res.status, raw);
+        throw new Error(raw || "Failed to save changes.");
       }
+
+      const data = await res.json().catch(() => null);
+
+      if (data?.buildings && data?.concerns) {
+        setBuildings(
+          (data.buildings as any[]).map((b: any, idx: number) => {
+            const name = String(b.name || "").trim();
+            const id =
+              String(b.id || "").trim() ||
+              norm(name).replace(/\s+/g, "-") ||
+              `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+            const hasRooms =
+              b.hasRooms === false ? false : true;
+
+            const floors =
+              typeof b.floors === "number" && b.floors > 0
+                ? Math.round(b.floors)
+                : 1;
+            const roomsPerFloor =
+              typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
+                ? Math.round(b.roomsPerFloor)
+                : 1;
+
+            const singleLocationLabel =
+              typeof b.singleLocationLabel === "string"
+                ? String(b.singleLocationLabel).trim()
+                : "";
+
+            return {
+              id,
+              name: name || "Unnamed",
+              floors,
+              roomsPerFloor,
+              hasRooms,
+              singleLocationLabel,
+            };
+          })
+        );
+
+        setConcerns(
+          (data.concerns as any[]).map((c: any, idx: number) => {
+            const label = String(c.label || "").trim();
+            const id =
+              String(c.id || "").trim() ||
+              norm(label).replace(/\s+/g, "-") ||
+              `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+            const subs = Array.isArray(c.subconcerns)
+              ? c.subconcerns.map((s: any) => String(s || "").trim())
+              : [];
+            return {
+              id,
+              label: label || "Unnamed concern",
+              subconcerns: subs.filter((s) => s.length > 0),
+            };
+          })
+        );
+      }
+
+      setSaveMsg("Changes saved successfully.");
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // building handlers
+  const handleBuildingChange = (index: number, value: string) => {
+    setBuildings((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      next[index] = {
+        ...current,
+        name: value,
+      };
       return next;
     });
   };
 
-  const toggleSet =
-    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
-    (value: string) => {
-      setter((prev) => {
-        const n = new Set(prev);
-        if (n.has(value)) n.delete(value);
-        else n.add(value);
-        return n;
-      });
-    };
-
-  const clearAllFilters = () => {
-    setSelectedStatuses(new Set(STATUSES));
-    setSelectedBuildings(new Set());
-    setSelectedConcerns(new Set());
-    setSelectedColleges(new Set());
-    setDateFrom("");
-    setDateTo("");
+  const handleBuildingFloorsChange = (index: number, value: string) => {
+    const num = parseInt(value, 10);
+    setBuildings((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      next[index] = {
+        ...current,
+        floors: Number.isNaN(num) || num <= 0 ? 1 : num,
+      };
+      return next;
+    });
   };
 
-  const setLastDays = (days: number) => {
-    const today = new Date();
-    const from = new Date();
-    from.setDate(today.getDate() - days + 1);
-    setDateFrom(from.toISOString().slice(0, 10));
-    setDateTo(today.toISOString().slice(0, 10));
+  const handleBuildingRoomsChange = (index: number, value: string) => {
+    const num = parseInt(value, 10);
+    setBuildings((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      next[index] = {
+        ...current,
+        roomsPerFloor: Number.isNaN(num) || num <= 0 ? 1 : num,
+      };
+      return next;
+    });
   };
 
-  // Main filtered array (applies all filters)
-  const filtered = useMemo(() => {
-    const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
-    return reports.filter((r) => {
-      const st = (r.status || "").trim();
-      if (!selectedStatuses.has(st)) return false;
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return false;
-      }
-
-      const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return false;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return false;
-      }
-
-      if ((fromTS || toTS) && r.createdAt) {
-        const ts = new Date(r.createdAt).getTime();
-        if (fromTS && ts < fromTS) return false;
-        if (toTS && ts > toTS) return false;
-      }
-      return true;
+  const handleBuildingHasRoomsToggle = (index: number) => {
+    setBuildings((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      next[index] = {
+        ...current,
+        hasRooms: current.hasRooms === false ? true : false,
+      };
+      return next;
     });
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  };
 
-  // Available options for each filter, depending on the other filters
-  // If an option is not connected to any report, it disappears
-
-  const availableStatusFilters = useMemo(() => {
-    const s = new Set<string>();
-    const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
-    reports.forEach((r) => {
-      const stLabel = normalizeStatusFilterLabel(r.status);
-      if (!stLabel) return;
-
-      // apply building, concern, college, date filters, but ignore status filter
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
-      const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
-      if ((fromTS || toTS) && r.createdAt) {
-        const ts = new Date(r.createdAt).getTime();
-        if (fromTS && ts < fromTS) return;
-        if (toTS && ts > toTS) return;
-      }
-
-      s.add(stLabel);
+  const handleBuildingPositionChange = (index: number, value: string) => {
+    setBuildings((prev) => {
+      const next = [...prev];
+      const current = next[index];
+      next[index] = {
+        ...current,
+        singleLocationLabel: value,
+      };
+      return next;
     });
+  };
 
-    return STATUSES.filter((st) => s.has(st));
-  }, [
-    reports,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const availableBuildings = useMemo(() => {
-    const s = new Set<string>();
-    const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
-    reports.forEach((r) => {
-      if (!r.building) return;
-
-      const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
-      const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
-      if ((fromTS || toTS) && r.createdAt) {
-        const ts = new Date(r.createdAt).getTime();
-        if (fromTS && ts < fromTS) return;
-        if (toTS && ts > toTS) return;
-      }
-
-      s.add(r.building);
-    });
-
-    return [...s].sort();
-  }, [
-    reports,
-    selectedStatuses,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const availableConcerns = useMemo(() => {
-    const s = new Set<string>();
-    const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
-    reports.forEach((r) => {
-      const baseConcern = getBaseConcernFromReport(r);
-      if (!baseConcern) return;
-
-      const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
-      if ((fromTS || toTS) && r.createdAt) {
-        const ts = new Date(r.createdAt).getTime();
-        if (fromTS && ts < fromTS) return;
-        if (toTS && ts > toTS) return;
-      }
-
-      s.add(baseConcern);
-    });
-
-    // Custom sort so Civil, Mechanical, Electrical stay grouped in this order
-    const CONCERN_PRIORITY: Record<string, number> = {
-      Civil: 1,
-      Mechanical: 2,
-      Electrical: 3,
-    };
-
-    return [...s].sort((a, b) => {
-      const aPri = CONCERN_PRIORITY[a] ?? 999;
-      const bPri = CONCERN_PRIORITY[b] ?? 999;
-
-      if (aPri !== bPri) {
-        return aPri - bPri;
-      }
-
-      // Same base concern - sort alphabetically
-      return a.localeCompare(b);
-    });
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const availableColleges = useMemo(() => {
-    const s = new Set<string>();
-    const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
-    const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
-    reports.forEach((r) => {
-      if (!(r.college || "").trim()) return;
-
-      const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
-      const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
-      if ((fromTS || toTS) && r.createdAt) {
-        const ts = new Date(r.createdAt).getTime();
-        if (fromTS && ts < fromTS) return;
-        if (toTS && ts > toTS) return;
-      }
-
-      s.add(r.college as string);
-    });
-
-    return [...s].sort();
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    dateFrom,
-    dateTo,
-  ]);
-
-  const activeFilterCount = useMemo(() => {
-    let c = 0;
-    if (selectedStatuses.size !== STATUSES.length) c++;
-    if (selectedBuildings.size) c++;
-    if (selectedConcerns.size) c++;
-    if (selectedColleges.size) c++;
-    if (dateFrom || dateTo) c++;
-    return c;
-  }, [
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
-
-  /* =========================================================
-    AGGREGATES FOR CHARTS
-  ========================================================= */
-  const statusCounts = useMemo(() => {
-    const map: Record<StatusKey, number> = {
-      pending: 0,
-      waiting: 0,
-      progress: 0,
-      resolved: 0,
-      archived: 0,
-    };
-    filtered.forEach((r) => {
-      const s = (r.status || "").trim().toLowerCase();
-      if (s === "pending") map.pending++;
-      else if (s === "waiting for materials" || s === "waiting")
-        map.waiting++;
-      else if (s === "in progress") map.progress++;
-      else if (s === "resolved") map.resolved++;
-      else if (s === "archived") map.archived++;
-    });
-    return map;
-  }, [filtered]);
-
-  const statusPieData = useMemo(
-    () =>
-      (Object.keys(statusCounts) as StatusKey[])
-        .filter((key) => {
-          const filterLabel = STATUS_TO_FILTER_LABEL[key];
-          return selectedStatuses.has(filterLabel);
-        })
-        .map((key) => ({
-          name: STATUS_LABELS[key],
-          value: statusCounts[key],
-          color: STATUS_COLORS[key],
-        }))
-        .filter((entry) => entry.value > 0),
-    [statusCounts, selectedStatuses]
-  );
-
-  const agg = useCallback(
-    (arr: Report[], keyOrFn: keyof Report | ((r: Report) => string)) => {
-      const getKey =
-        typeof keyOrFn === "function"
-          ? keyOrFn
-          : (r: Report) => (r[keyOrFn] as string) || "Unspecified";
-
-      const m = new Map<string, number>();
-      arr.forEach((r) => {
-        const raw = getKey(r);
-        const k = raw || "Unspecified";
-        m.set(k, (m.get(k) || 0) + 1);
-      });
-      return [...m.entries()]
-        .map(([name, value]) => ({ name, value }))
-        .sort((a, b) => b.value - a.value);
-    },
-    []
-  );
-
-  const buildingData = useMemo(
-    () => agg(filtered, "building"),
-    [filtered, agg]
-  );
-
-  const concernData = useMemo<ConcernChartDatum[]>(() => {
-    // Map key: "base||sub"
-    const m = new Map<string, ConcernChartDatum>();
-
-    filtered.forEach((r) => {
-      const full = formatConcernLabel(r); // example "Civil : Lights"
-      if (!full) return;
-
-      const { base, sub } = getConcernBaseFromLabel(full);
-      const key = `${base}||${sub}`;
-
-      const existing = m.get(key);
-      if (existing) {
-        existing.value += 1;
-      } else {
-        m.set(key, {
-          name: sub, // this will be the x axis label
-          base, // used for color and legend
-          fullLabel: full,
-          value: 1,
-        });
-      }
-    });
-
-    const BASE_PRIORITY: Record<string, number> = {
-      Civil: 1,
-      Mechanical: 2,
-      Electrical: 3,
-    };
-
-    return [...m.values()].sort((a, b) => {
-      const aPri = BASE_PRIORITY[a.base] ?? 999;
-      const bPri = BASE_PRIORITY[b.base] ?? 999;
-
-      if (aPri !== bPri) return aPri - bPri;
-
-      // same base, sort by sub name
-      return a.name.localeCompare(b.name);
-    });
-  }, [filtered]);
-
-  const collegeData = useMemo(
-    () => agg(filtered, "college"),
-    [filtered, agg]
-  );
-
-  const total = filtered.length;
-
-  /* =========================================================
-    PRINT AS TABLE (with statistics)
-  ========================================================= */
-
-  const handlePrint = useCallback(() => {
-    if (typeof window === "undefined") return;
-
-    // statistics based on current filters
-    const concernBaseCounts = new Map<string, number>();
-    const concernCounts = new Map<string, number>();
-    const buildingCounts = new Map<string, number>();
-
-    filtered.forEach((r) => {
-      // base concern
-      const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
-      concernBaseCounts.set(
-        baseConcern,
-        (concernBaseCounts.get(baseConcern) || 0) + 1
-      );
-
-      // detailed concern (with subConcern)
-      const concernLabel = formatConcernLabel(r);
-      const concernKey = concernLabel || "Unspecified";
-      concernCounts.set(
-        concernKey,
-        (concernCounts.get(concernKey) || 0) + 1
-      );
-
-      // building
-      const buildingKey =
-        (r.building || "Unspecified").trim() || "Unspecified";
-      buildingCounts.set(
-        buildingKey,
-        (buildingCounts.get(buildingKey) || 0) + 1
-      );
-    });
-
-    const concernBaseStatsHtml =
-      [...concernBaseCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No concerns for current filters.</li>";
-
-    const concernStatsHtml =
-      [...concernCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No detailed concerns for current filters.</li>";
-
-    const buildingStatsHtml =
-      [...buildingCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No buildings for current filters.</li>";
-
-    const rowsHtml = filtered
-      .map((r, idx) => {
-        const concernLabel = formatConcernLabel(r);
-        const created = r.createdAt
-          ? new Date(r.createdAt).toLocaleString()
-          : "";
-        const safe = (v?: string) => (v ? String(v) : "");
-        return `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${created}</td>
-            <td>${safe(r.status)}</td>
-            <td>${safe(r.building)}</td>
-            <td>${safe(concernLabel)}</td>
-            <td>${safe(r.college)}</td>
-            <td>${safe(r.floor)}</td>
-            <td>${safe(r.room)}</td>
-            <td>${safe(r.email)}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>BFMO Analytics Report</title>
-          <style>
-            body {
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-              font-size: 12px;
-              color: #111827;
-              padding: 16px;
-            }
-            h1 {
-              font-size: 20px;
-              margin-bottom: 4px;
-            }
-            h2 {
-              font-size: 16px;
-              margin-top: 16px;
-              margin-bottom: 4px;
-            }
-            h3 {
-              font-size: 14px;
-              margin-top: 8px;
-              margin-bottom: 4px;
-            }
-            .meta {
-              font-size: 12px;
-              color: #4b5563;
-              margin-bottom: 12px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 8px;
-            }
-            th, td {
-              border: 1px solid #d1d5db;
-              padding: 4px 8px;
-              text-align: left;
-              vertical-align: top;
-            }
-            thead {
-              background: #f3f4f6;
-            }
-            ul {
-              margin: 4px 0 8px 16px;
-              padding: 0;
-            }
-            li {
-              margin: 2px 0;
-            }
-          </style>
-        </head>
-        <body>
-          <h1>BFMO Analytics - Tabular Report</h1>
-          <div class="meta">
-            Generated at: ${new Date().toLocaleString()}<br />
-            Records shown: ${filtered.length}
-          </div>
-
-          <h2>Summary Statistics</h2>
-
-          <h3>By Concern (Base)</h3>
-          <ul>
-            ${concernBaseStatsHtml}
-          </ul>
-
-          <h3>By Concern (Detailed)</h3>
-          <ul>
-            ${concernStatsHtml}
-          </ul>
-
-          <h3>By Building</h3>
-          <ul>
-            ${buildingStatsHtml}
-          </ul>
-
-          <h2>Detailed Report</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Date Created</th>
-                <th>Status</th>
-                <th>Building</th>
-                <th>Concern</th>
-                <th>College</th>
-                <th>Floor</th>
-                <th>Room</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${
-                rowsHtml ||
-                '<tr><td colspan="9">No data for current filters.</td></tr>'
-              }
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
-
-    const printWin = window.open("", "_blank");
-    if (!printWin) return;
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-    printWin.focus();
-    printWin.print();
-  }, [filtered]);
-
-  /* =========================================================
-    LISTS WITH PROGRESS SIDE PANEL
-  ========================================================= */
-  const [listsOpen, setListsOpen] = useState<boolean>(false);
-
-  const STORAGE_KEY = "todoLists_v1";
-  const uid = useCallback(
-    () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-    []
-  );
-
-  const defaultLists = useCallback((): List[] => {
-    return [
-      {
-        id: uid(),
-        title: "Sample BFMO Checklist",
-        tasks: [
-          { id: uid(), text: "Review unresolved reports", done: false },
-          { id: uid(), text: "Coordinate with maintenance team", done: false },
-          { id: uid(), text: "Prepare weekly summary", done: false },
-        ],
-        collapsed: false,
-      },
-    ];
-  }, [uid]);
-
-  const loadLocal = useCallback((): List[] | null => {
-    try {
-      if (typeof window === "undefined") return null;
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw) as List[];
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const [lists, setLists] = useState<List[]>(
-    () => loadLocal() || defaultLists()
-  );
-
-  useEffect(() => {
-    try {
-      if (typeof window === "undefined") return;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
-    } catch {
-      // ignore
-    }
-  }, [lists]);
-
-  const computeProgress = useCallback((list: List) => {
-    if (!list.tasks || list.tasks.length === 0) return 0;
-    const done = list.tasks.filter((t) => t.done).length;
-    return Math.round((done / list.tasks.length) * 100);
-  }, []);
-
-  const createList = (title: string) =>
-    setLists((prev) => [
-      { id: uid(), title: title || "Untitled", tasks: [], collapsed: false },
+  const handleAddBuilding = () => {
+    setBuildings((prev) => [
       ...prev,
+      {
+        id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: "",
+        floors: 1,
+        roomsPerFloor: 1,
+        hasRooms: true,
+        singleLocationLabel: "",
+      },
     ]);
+  };
 
-  const deleteList = (listId: string) =>
-    setLists((prev) => prev.filter((l) => l.id !== listId));
+  const handleRemoveBuilding = (index: number) => {
+    setBuildings((prev) => prev.filter((_, i) => i !== index));
+  };
 
-  const toggleCollapse = (listId: string) =>
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId ? { ...l, collapsed: !l.collapsed } : l
-      )
+  // concern handlers
+  const handleConcernLabelChange = (index: number, value: string) => {
+    setConcerns((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, label: value } : c))
     );
+  };
 
-  const addTask = (listId: string, text: string) => {
-    if (!text) return;
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? {
-              ...l,
-              tasks: [...l.tasks, { id: uid(), text: text.trim(), done: false }],
-            }
-          : l
+  const handleAddConcern = () => {
+    setConcerns((prev) => [
+      ...prev,
+      {
+        id: `concern-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        label: "",
+        subconcerns: [""],
+      },
+    ]);
+  };
+
+  const handleRemoveConcern = (index: number) => {
+    setConcerns((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubconcernChange = (
+    concernIndex: number,
+    subIndex: number,
+    value: string
+  ) => {
+    setConcerns((prev) =>
+      prev.map((c, ci) => {
+        if (ci !== concernIndex) return c;
+        const subs = Array.isArray(c.subconcerns) ? [...c.subconcerns] : [];
+        subs[subIndex] = value;
+        return { ...c, subconcerns: subs };
+      })
+    );
+  };
+
+  const handleAddSubconcern = (concernIndex: number) => {
+    setConcerns((prev) =>
+      prev.map((c, ci) =>
+        ci === concernIndex
+          ? { ...c, subconcerns: [...(c.subconcerns || []), ""] }
+          : c
       )
     );
   };
 
-  const toggleTask = (listId: string, taskId: string) => {
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? {
-              ...l,
-              tasks: l.tasks.map((t) =>
-                t.id === taskId ? { ...t, done: !t.done } : t
-              ),
-            }
-          : l
-      )
+  const handleRemoveSubconcern = (concernIndex: number, subIndex: number) => {
+    setConcerns((prev) =>
+      prev.map((c, ci) => {
+        if (ci !== concernIndex) return c;
+        const subs = Array.isArray(c.subconcerns) ? [...c.subconcerns] : [];
+        subs.splice(subIndex, 1);
+        return { ...c, subconcerns: subs };
+      })
     );
   };
 
-  const deleteTask = (listId: string, taskId: string) => {
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) }
-          : l
-      )
-    );
-  };
+  const buildingRows = useMemo(() => {
+    const term = norm(searchBuilding);
+    return buildings
+      .map((b, index) => ({ index, building: b }))
+      .filter(({ building }) => norm(building.name).includes(term))
+      .sort((a, b) => a.building.name.localeCompare(b.building.name));
+  }, [buildings, searchBuilding]);
 
-  const saveToServer = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/lists/sync`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lists }),
-      });
-      if (!res.ok) throw new Error("Sync failed");
-      alert("Lists saved to server");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save lists to server");
-    }
-  }, [lists]);
+  const concernRows = useMemo(() => {
+    const term = norm(searchConcern);
+    return concerns
+      .map((c, index) => ({ index, concern: c }))
+      .filter(({ concern }) => norm(concern.label).includes(term))
+      .sort((a, b) => a.concern.label.localeCompare(b.concern.label));
+  }, [concerns, searchConcern]);
 
-  const loadFromServer = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/lists`);
-      if (!res.ok) throw new Error("Load failed");
-      const data = await res.json();
-      if (Array.isArray(data) && data.length) setLists(data as List[]);
-      else alert("No lists found on server");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to load lists from server");
-    }
-  }, []);
-
-  /* RENDER */
-
-  if (!isLoaded || !canView) {
+  if (!isLoaded || !isSignedIn) {
     return (
-      <div className="analytics-wrapper">
-        <div className="analytics-container">
-          <p className="note">Checking your permissions...</p>
-        </div>
+      <div className="admin-edit__wrapper">
+        <p>Checking your permissions…</p>
+      </div>
+    );
+  }
+
+  if (role !== "admin") {
+    return (
+      <div className="admin-edit__wrapper">
+        <p>You do not have access to the admin configuration page.</p>
       </div>
     );
   }
 
   return (
-    <div className="analytics-wrapper">
-      <div className="analytics-container">
-        {/* Top bar */}
-        <header className="analytics-header">
-          <div>
-            <div className="analytics-title">
-              <h1>Analytics Dashboard</h1>
-              <p className="subtitle">Insights from BFMO Report System</p>
-              {loadErr ? <div className="note">{loadErr}</div> : null}
-              {!loading && (
-                <span className="note">
-                  Showing {filtered.length} of {reports.length} reports
-                </span>
-              )}
-            </div>
+    <div className="admin-edit admin-edit__wrapper">
+      <main className="admin-edit__layout">
+        <header className="admin-edit__page-head">
+          <div className="admin-edit__heading">
+            <span className="admin-edit__badge">Admin configuration</span>
+            <h1 className="admin-edit__page-title">
+              Buildings, concerns, and subconcerns
+            </h1>
+            <p className="admin-edit__page-subtitle">
+              Manage buildings and their floor and room counts, or mark them as
+              specific positions, plus concerns and subconcerns used in the
+              report form.
+            </p>
           </div>
 
-          <div className="header-actions">
+          <div className="admin-edit__actions">
             <button
-              className="pa-btn"
-              onClick={toggleFiltersOpen}
-              aria-expanded={filtersOpen}
-              aria-controls="filters-panel"
-              title={filtersOpen ? "Hide filters" : "Show filters"}
-            >
-              {filtersOpen ? "Hide Filters" : "Show Filters"}
-              {activeFilterCount > 0 && (
-                <span className="badge" style={{ marginLeft: 8 }}>
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              className="pa-btn"
               type="button"
-              onClick={() => setListsOpen(true)}
+              className="btn btn-secondary"
+              onClick={() => {
+                setBuildings(DEFAULT_BUILDINGS);
+                setConcerns(DEFAULT_CONCERNS);
+                setSaveMsg("");
+                setError("");
+              }}
+              disabled={saving}
             >
-              Open Lists Panel
+              Reset to defaults
             </button>
-
-            <button className="analytics-btn" onClick={handleReports}>
-              To Reports
-            </button>
-
-            <button className="printreports-btn" onClick={handlePrint}>
-              Print Analytics
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={saving || loading}
+            >
+              {saving ? "Saving..." : "Save changes"}
             </button>
           </div>
         </header>
 
-        {/* Filters */}
-        {filtersOpen && (
-          <section
-            id="filters-panel"
-            className="filters card"
-            aria-label="Filters"
-          >
-            <div className="filters-row">
-              <div className="filter-block">
-                <h4>Status</h4>
-                <div className="chips">
-                  {availableStatusFilters.map((s) => (
-                    <label
-                      key={s}
-                      className={`chip ${
-                        selectedStatuses.has(s) ? "is-on" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedStatuses.has(s)}
-                        onChange={() => toggleSet(setSelectedStatuses)(s)}
-                      />
-                      {s}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filter-block">
-                <h4>Building</h4>
-                <div className="chips scroll">
-                  {availableBuildings.map((b) => (
-                    <label
-                      key={b}
-                      className={`chip ${
-                        selectedBuildings.has(b) ? "is-on" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedBuildings.has(b)}
-                        onChange={() => toggleSet(setSelectedBuildings)(b)}
-                      />
-                      {b}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filter-block">
-                <h4>Concern</h4>
-                <div className="chips scroll">
-                  {availableConcerns.map((c) => (
-                    <label
-                      key={c}
-                      className={`chip ${
-                        selectedConcerns.has(c) ? "is-on" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedConcerns.has(c)}
-                        onChange={() => toggleSet(setSelectedConcerns)(c)}
-                      />
-                      {c}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filter-block">
-                <h4>College</h4>
-                <div className="chips scroll">
-                  {availableColleges.map((col) => (
-                    <label
-                      key={col}
-                      className={`chip ${
-                        selectedColleges.has(col) ? "is-on" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedColleges.has(col)}
-                        onChange={() => toggleSet(setSelectedColleges)(col)}
-                      />
-                      {col}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="filter-block">
-                <h4>Date</h4>
-                <div className="dates">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                  />
-                  <span>to</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                  />
-                </div>
-
-                <div className="quick-dates">
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => setLastDays(7)}
-                  >
-                    Last 7 days
-                  </button>
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => setLastDays(30)}
-                  >
-                    Last 30 days
-                  </button>
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => {
-                      setDateFrom("");
-                      setDateTo("");
-                    }}
-                  >
-                    All time
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="filters-actions">
-              <button className="pa-btn" onClick={clearAllFilters}>
-                Clear filters
-              </button>
-            </div>
-          </section>
+        {error && (
+          <div className="admin-edit__alert admin-edit__alert--error">
+            {error}
+          </div>
         )}
 
-        {/* 2x2 Grid of resizable charts */}
-        <div className="analytics-grid">
-          {/* Status Overview */}
-          <div className="card analytics-card">
-            <h3>Status Overview</h3>
-            <div className="chart-wrap resizable">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusPieData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius="80%"
-                    labelLine={false}
-                    label={false}
-                    dataKey="value"
+        {saveMsg && (
+          <div className="admin-edit__alert admin-edit__alert--success">
+            {saveMsg}
+          </div>
+        )}
+
+        {loading ? (
+          <p className="admin-edit__loading">Loading options…</p>
+        ) : (
+          <div className="admin-edit__grid">
+            <Panel
+              title="Buildings"
+              subtitle="These fill the building dropdown. Choose if a building has floors and rooms, or if it is a single position or area."
+              actions={
+                <>
+                  <input
+                    type="text"
+                    className="admin-edit__search"
+                    placeholder="Search buildings"
+                    value={searchBuilding}
+                    onChange={(e) => setSearchBuilding(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddBuilding}
                   >
-                    {statusPieData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
-                    labelStyle={{ color: "#000000" }}
-                    itemStyle={{ color: "#000000" }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="header-stats">
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#0ea5e9" }}
-                />
-                <span>Total</span>
-                <strong>{reports.length}</strong>
-              </div>
+                    + Add building
+                  </button>
+                </>
+              }
+            >
+              {buildingRows.length === 0 && (
+                <p className="admin-edit__empty">
+                  No buildings match your search.
+                </p>
+              )}
 
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#22c55e" }}
-                />
-                <span>Resolved</span>
-                <strong>{statusCounts.resolved}</strong>
-              </div>
+              <div className="admin-edit__list">
+                {buildingRows.map(({ index, building }) => {
+                  const hasRooms = building.hasRooms !== false;
+                  const totalRooms =
+                    hasRooms
+                      ? (building.floors || 0) * (building.roomsPerFloor || 0)
+                      : 0;
 
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#fbbf24" }}
-                />
-                <span>Pending</span>
-                <strong>{statusCounts.pending}</strong>
-              </div>
-
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#60a5fa" }}
-                />
-                <span>Waiting</span>
-                <strong>{statusCounts.waiting}</strong>
-              </div>
-
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#6366f1" }}
-                />
-                <span>In Progress</span>
-                <strong>{statusCounts.progress}</strong>
-              </div>
-
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#9ca3af" }}
-                />
-                <span>Archived</span>
-                <strong>{statusCounts.archived}</strong>
-              </div>
-            </div>
-          </div>
-
-          {/* Reports by Building */}
-          <div className="card analytics-card">
-            <h3>Reports by Building</h3>
-            <div className="chart-wrap resizable">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={buildingData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={false} axisLine={false} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
-                    labelStyle={{ color: "#000000" }}
-                    itemStyle={{ color: "#000000" }}
-                  />
-                  <Legend />
-                  <Bar dataKey="value" fill="#22c55e" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Reports by Concern */}
-          <div className="card analytics-card">
-            <h3>Reports by Concern</h3>
-            <div className="chart-wrap resizable">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={concernData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  {/* bottom label now shows only subconcern, for example "Lights" */}
-                  <XAxis dataKey="name" tick={false} axisLine={false} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
-                    labelStyle={{ color: "#000000" }}
-                    itemStyle={{ color: "#000000" }}
-                    // show base and sub nicely in the tooltip
-                    labelFormatter={(_, payload) => {
-                      const p = (payload &&
-                        payload[0]?.payload) as ConcernChartDatum | undefined;
-                      if (!p) return "";
-                      // Example: "Civil - Lights"
-                      return `${p.name}`;
-                    }}
-                    formatter={(value) => [`${value}`, "Reports"]}
-                  />
-                  {/* custom legend that shows base concerns with their colors */}
-                  <Legend
-                    content={() => {
-                      const bases = ["Civil", "Mechanical", "Electrical"];
-                      return (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            marginTop: 8,
-                          }}
-                        >
-                          {bases
-                            .filter((base) =>
-                              concernData.some((d) => d.base === base)
-                            )
-                            .map((base) => (
-                              <div
-                                key={base}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                  fontSize: 12,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 999,
-                                    backgroundColor:
-                                      getConcernColorFromBase(base),
-                                  }}
-                                />
-                                <span>{base}</span>
-                              </div>
-                            ))}
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="value">
-                    {concernData.map((entry) => (
-                      <Cell
-                        key={`${entry.base}-${entry.name}`}
-                        fill={getConcernColorFromBase(entry.base)}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Reports by College */}
-          <div className="card analytics-card">
-            <h3>Reports by College</h3>
-            <div className="chart-wrap resizable">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={collegeData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={false} axisLine={false} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
-                    labelStyle={{ color: "#000000" }}
-                    itemStyle={{ color: "#000000" }}
-                  />
-                  <Legend />
-                  <Bar dataKey="value" fill="#fbbf24" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Side Panel: Lists with Progress */}
-      <div
-        className={`sidepanel ${listsOpen ? "is-open" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Lists with Progress"
-      >
-        <div className="sidepanel-head">
-          <h3>Lists with Progress</h3>
-          <button
-            className="sidepanel-close"
-            onClick={() => setListsOpen(false)}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="lists-controls sticky">
-          <button
-            className="pa-btn"
-            onClick={() => {
-              const title = prompt("List title:");
-              if (title && title.trim()) createList(title.trim());
-            }}
-          >
-            + Add List
-          </button>
-          <button className="pa-btn" onClick={saveToServer}>
-            Save to Server
-          </button>
-          <button className="pa-btn" onClick={loadFromServer}>
-            Load from Server
-          </button>
-        </div>
-
-        <div className="lists-grid panel">
-          {lists.map((list) => {
-            const pct = computeProgress(list);
-            return (
-              <section key={list.id} className="pa-card list-panel">
-                <div className="pa-card__glow" />
-                <div className="pa-card__base" />
-                <div className="pa-card__content">
-                  <div className="list-header">
-                    <div className="list-left">
-                      <div className="list-title-row">
-                        <h3 className="list-title">{list.title}</h3>
-                        <button
-                          className="small-btn collapse"
-                          onClick={() => toggleCollapse(list.id)}
-                        >
-                          {list.collapsed ? "Expand" : "Panel"}
-                        </button>
-                      </div>
-
-                      <div className="progress-wrap">
-                        <div className="muted">{pct}%</div>
-                        <div className="progress-bar small">
-                          <div
-                            className="progress-fill"
-                            style={{ transform: `scaleX(${pct / 100})` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="list-actions">
-                      <button
-                        className="small-btn"
-                        onClick={() => {
-                          const text = prompt("Task name:");
-                          if (text && text.trim())
-                            addTask(list.id, text.trim());
-                        }}
-                      >
-                        + Task
-                      </button>
-                      <button
-                        className="small-btn"
-                        onClick={() => {
-                          if (confirm("Delete this list?"))
-                            deleteList(list.id);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {!list.collapsed && (
-                    <div className="list-body">
-                      <div className="add-inline">
+                  return (
+                    <div
+                      key={building.id || index}
+                      className="admin-edit__list-row"
+                    >
+                      <div className="admin-edit__field-group admin-edit__field-group-wide">
+                        <label className="admin-edit__label">
+                          Building name
+                        </label>
                         <input
-                          className="input"
-                          placeholder="New task name"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              const v =
-                                (e.currentTarget.value || "").trim();
-                              if (v) {
-                                addTask(list.id, v);
-                                (e.currentTarget as HTMLInputElement).value =
-                                  "";
-                              }
-                            }
-                          }}
+                          type="text"
+                          className="admin-edit__input"
+                          value={building.name}
+                          placeholder="Building name"
+                          onChange={(e) =>
+                            handleBuildingChange(index, e.target.value)
+                          }
                         />
-                        <button
-                          className="small-btn"
-                          onClick={(e) => {
-                            const input =
-                              e.currentTarget
-                                .previousElementSibling as HTMLInputElement | null;
-                            if (input && input.value.trim()) {
-                              addTask(list.id, input.value.trim());
-                              input.value = "";
-                            }
-                          }}
-                        >
-                          Add
-                        </button>
                       </div>
 
-                      <div className="tasks-wrap">
-                        {!list.tasks || list.tasks.length === 0 ? (
-                          <div className="muted">No tasks yet.</div>
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">
+                          Floors
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="admin-edit__input admin-edit__input-small"
+                          value={building.floors}
+                          onChange={(e) =>
+                            handleBuildingFloorsChange(index, e.target.value)
+                          }
+                          disabled={!hasRooms}
+                        />
+                      </div>
+
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">
+                          Rooms / floor
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          className="admin-edit__input admin-edit__input-small"
+                          value={building.roomsPerFloor}
+                          onChange={(e) =>
+                            handleBuildingRoomsChange(index, e.target.value)
+                          }
+                          disabled={!hasRooms}
+                        />
+                      </div>
+
+                      <div className="admin-edit__field-group admin-edit__field-summary">
+                        <span className="admin-edit__summary-label">
+                          Room setup
+                        </span>
+
+                        <label className="admin-edit__switch">
+                          <input
+                            type="checkbox"
+                            checked={hasRooms}
+                            onChange={() =>
+                              handleBuildingHasRoomsToggle(index)
+                            }
+                          />
+                          <span className="admin-edit__switch-pill">
+                            <span className="admin-edit__switch-knob" />
+                          </span>
+                          <span className="admin-edit__switch-text">
+                            {hasRooms
+                              ? "Has floors and rooms"
+                              : "Specific position only"}
+                          </span>
+                        </label>
+
+                        {hasRooms ? (
+                          <>
+                            <span className="admin-edit__summary-label">
+                              Approx. total rooms
+                            </span>
+                            <span className="admin-edit__summary-value">
+                              {totalRooms}
+                            </span>
+                          </>
                         ) : (
-                          list.tasks.map((task) => (
-                            <div key={task.id} className="task-row">
-                              <input
-                                type="checkbox"
-                                checked={!!task.done}
-                                onChange={() =>
-                                  toggleTask(list.id, task.id)
-                                }
-                              />
-                              <label
-                                style={{
-                                  textDecoration: task.done
-                                    ? "line-through"
-                                    : "none",
-                                }}
-                              >
-                                {task.text}
-                              </label>
-                              <button
-                                className="small-btn"
-                                title="Delete task"
-                                onClick={() => {
-                                  if (confirm("Delete task?"))
-                                    deleteTask(list.id, task.id);
-                                }}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))
+                          <div className="admin-edit__field-position">
+                            <label className="admin-edit__label">
+                              Position or area label
+                            </label>
+                            <input
+                              type="text"
+                              className="admin-edit__input"
+                              placeholder="Example: Kiosk, Guard post, Open area"
+                              value={building.singleLocationLabel || ""}
+                              onChange={(e) =>
+                                handleBuildingPositionChange(
+                                  index,
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </div>
                         )}
                       </div>
                     </div>
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </div>
+                  );
+                })}
+              </div>
+            </Panel>
 
-      {listsOpen && (
-        <div
-          className="sidepanel-backdrop"
-          onClick={() => setListsOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+            <Panel
+              title="Concerns and subconcerns"
+              subtitle="These fill the concern and subconcern dropdowns in the report form."
+              actions={
+                <>
+                  <input
+                    type="text"
+                    className="admin-edit__search"
+                    placeholder="Search concerns"
+                    value={searchConcern}
+                    onChange={(e) => setSearchConcern(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddConcern}
+                  >
+                    + Add concern
+                  </button>
+                </>
+              }
+            >
+              {concernRows.length === 0 && (
+                <p className="admin-edit__empty">
+                  No concerns match your search.
+                </p>
+              )}
+
+              <div className="admin-edit__concern-list">
+                {concernRows.map(({ index, concern }) => (
+                  <div
+                    key={concern.id || index}
+                    className="admin-edit__concern-card"
+                  >
+                    <div className="admin-edit__concern-head">
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">
+                          Concern label
+                        </label>
+                        <input
+                          type="text"
+                          className="admin-edit__input"
+                          value={concern.label}
+                          placeholder="Example: Electrical"
+                          onChange={(e) =>
+                            handleConcernLabelChange(index, e.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">
+                          Concern ID
+                          <span className="admin-edit__label-hint">
+                            {" "}
+                            (generated automatically)
+                          </span>
+                        </label>
+                        <input
+                          type="text"
+                          className="admin-edit__input"
+                          value={
+                            concern.id ||
+                            norm(concern.label).replace(/\s+/g, "-")
+                          }
+                          readOnly
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => handleRemoveConcern(index)}
+                      >
+                        Remove concern
+                      </button>
+                    </div>
+
+                    <div className="admin-edit__subconcerns">
+                      <div className="admin-edit__subconcerns-head">
+                        <h4>Subconcerns</h4>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleAddSubconcern(index)}
+                        >
+                          + Add subconcern
+                        </button>
+                      </div>
+
+                      {(!concern.subconcerns ||
+                        concern.subconcerns.length === 0) && (
+                        <p className="admin-edit__empty">
+                          No subconcerns yet for this concern.
+                        </p>
+                      )}
+
+                      {Array.isArray(concern.subconcerns) &&
+                        [...concern.subconcerns]
+                          .map((s, sIndex) => ({ s, sIndex }))
+                          .sort((a, b) =>
+                            (a.s || "").localeCompare(b.s || "")
+                          )
+                          .map(({ s, sIndex }) => (
+                            <div
+                              key={sIndex}
+                              className="admin-edit__list-row admin-edit__list-row--compact"
+                            >
+                              <input
+                                type="text"
+                                className="admin-edit__input"
+                                value={s}
+                                placeholder="Example: Light not working"
+                                onChange={(e) =>
+                                  handleSubconcernChange(
+                                    index,
+                                    sIndex,
+                                    e.target.value
+                                  )
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-ghost"
+                                onClick={() =>
+                                  handleRemoveSubconcern(index, sIndex)
+                                }
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        )}
+      </main>
     </div>
   );
-};
-
-export default Analytics;
+}

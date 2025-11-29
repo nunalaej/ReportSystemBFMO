@@ -1124,3 +1124,12 @@ html:not(dark) .status-row-label {
   background: #6b7280;
   transform: translateY(-1px);
 }
+
+.log-list {
+    color:#000000;
+}
+
+html:not(dark) .log-list{
+
+    color:#000000
+}

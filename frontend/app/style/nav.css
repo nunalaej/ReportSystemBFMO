@@ -102,8 +102,8 @@ html:not(.dark) .value::before {
   opacity: 1;
 }
 
-/* ICON SIZE (if ever you add icons) */
-.value svg {
-  width: 15px;
-  height: 15px;
+.nav-icon {
+  width: 25px;
+  height: 25px;
+  display: inline-block;
 }

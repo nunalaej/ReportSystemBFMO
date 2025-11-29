@@ -4,6 +4,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+import Meta from "./models/Meta.js";
+
 
 const app = express();
 
@@ -65,6 +67,76 @@ app.get("/", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+
+/* -------------------------------
+   META
+--------------------------------*/
+import Meta from "./models/Meta.js";
+
+// GET /api/meta
+app.get("/api/meta", async (req, res) => {
+  try {
+    let meta = await Meta.findOne();
+    if (!meta) {
+      // If nothing yet, seed with defaults so AdminEdit loads ok
+      meta = await Meta.create({
+        buildings: [],   // AdminEdit has its own defaults
+        concerns: [],
+      });
+    }
+
+    res.json({
+      success: true,
+      buildings: meta.buildings,
+      concerns: meta.concerns,
+    });
+  } catch (err) {
+    console.error("GET /api/meta error", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load meta.",
+    });
+  }
+});
+
+// PUT /api/meta
+app.put("/api/meta", async (req, res) => {
+  try {
+    const { buildings, concerns } = req.body || {};
+
+    if (!Array.isArray(buildings) || !Array.isArray(concerns)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payload. Expect { buildings: [], concerns: [] }",
+      });
+    }
+
+    const update = {
+      buildings,
+      concerns,
+    };
+
+    const meta = await Meta.findOneAndUpdate({}, update, {
+      new: true,
+      upsert: true,
+    });
+
+    res.json({
+      success: true,
+      buildings: meta.buildings,
+      concerns: meta.concerns,
+    });
+  } catch (err) {
+    console.error("PUT /api/meta error", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to save meta.",
+    });
+  }
+});
+
+
 
 /* -------------------------------
    404 HANDLER (optional)
