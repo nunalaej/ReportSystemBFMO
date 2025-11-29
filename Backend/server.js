@@ -4,8 +4,6 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
-import Meta from "./models/Meta.js";
-
 
 const app = express();
 
@@ -72,7 +70,7 @@ app.get("/", (req, res) => {
 /* -------------------------------
    META
 --------------------------------*/
-import Meta from "./models/Meta.js";
+import Meta from "./api/meta.js";
 
 // GET /api/meta
 app.get("/api/meta", async (req, res) => {
