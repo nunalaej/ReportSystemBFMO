@@ -1,10 +1,37 @@
-/* PAGE BACKGROUND – clean, minimal */
+/* PAGE BACKGROUND - default (light) */
 .dashboard-container {
   min-height: 100vh;
   color: #111827;
-  background: linear-gradient(to bottom, #f9fafb 0%, #f3f4f6 40%, #ffffff 100%);
+  background: linear-gradient(
+    to bottom,
+    #f9fafb 0%,
+    #f3f4f6 40%,
+    #ffffff 100%
+  );
   display: flex;
   flex-direction: column;
+}
+
+/* Explicit light override (when ThemeProvider sets html.light) */
+html.light .dashboard-container {
+  color: #111827;
+  background: linear-gradient(
+    to bottom,
+    #f9fafb 0%,
+    #f3f4f6 40%,
+    #ffffff 100%
+  );
+}
+
+/* Dark mode background + text */
+html.dark .dashboard-container {
+  color: #e5e7eb;
+  background: radial-gradient(
+    circle at top,
+    #111827 0,
+    #020617 45%,
+    #000000 100%
+  );
 }
 
 /* MAIN LAYOUT */
@@ -41,6 +68,19 @@
   font-size: 0.98rem;
 }
 
+/* Dark mode typography tweaks */
+html.dark .dashboard-eyebrow {
+  color: #22c55e;
+}
+
+html.dark .dashboard-welcome h2 {
+  color: #e5e7eb;
+}
+
+html.dark .dashboard-description {
+  color: #cbd5f5;
+}
+
 /* SECTION TITLE */
 .dashboard-section {
   display: flex;
@@ -55,6 +95,10 @@
   color: #16a34a;
 }
 
+html.dark .dashboard-section-title {
+  color: #22c55e;
+}
+
 /* CARD GRID */
 .dashboard-cards {
   display: flex;
@@ -62,7 +106,7 @@
   gap: 24px;
 }
 
-/* CARD – minimal variant of card1 */
+/* CARD - light mode base */
 .card1 {
   position: relative;
   display: block;
@@ -94,12 +138,12 @@
   pointer-events: none;
 }
 
-/* remove the heavy glow – just a slightly stronger shadow on hover */
+/* remove the heavy glow - just a slightly stronger shadow on hover */
 .card1::after {
   content: none;
 }
 
-/* Hover state */
+/* Hover state (light) */
 .card1:hover {
   transform: translateY(-4px) scale(1.01);
   border-color: #16a34a;
@@ -152,4 +196,132 @@
   line-height: 1.5;
   color: #4b5563;
   max-width: 19rem;
+}
+
+/* ======================= */
+/* DARK MODE CARD OVERRIDES */
+/* ======================= */
+
+html.dark .card1 {
+  background: #020617;
+  border-color: #1f2937;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.6);
+}
+
+html.dark .card1::before {
+  border-top-color: #22c55e;
+}
+
+html.dark .card1:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: #22c55e;
+  background-color: #022c22;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+}
+
+html.dark .card-inner {
+  color: #e5e7eb;
+}
+
+html.dark .card-title {
+  color: #f9fafb;
+}
+
+html.dark .card-text {
+  color: #cbd5f5;
+}
+
+html.dark .card-icon-badge {
+  background: #022c22;
+  border-color: #15803d;
+}
+
+html.dark .card-icon {
+  color: #bbf7d0;
+}
+
+/* ========================= */
+/* RESPONSIVE - MOBILE FIRST */
+/* ========================= */
+
+@media (max-width: 768px) {
+  .dashboard-main {
+    padding: 24px 16px 40px;
+  }
+
+  .dashboard-welcome {
+    margin-bottom: 24px;
+  }
+
+  .dashboard-welcome h2 {
+    font-size: 1.6rem;
+    line-height: 1.2;
+  }
+
+  .dashboard-description {
+    font-size: 0.9rem;
+    max-width: 100%;
+  }
+
+  .dashboard-cards {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card1 {
+    width: 100%;
+    height: auto;
+    min-height: 180px;
+  }
+
+  .card-inner {
+    padding: 18px 16px;
+    align-items: flex-start;
+  }
+
+  .card-title {
+    font-size: 1rem;
+  }
+
+  .card-text {
+    font-size: 0.88rem;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-main {
+    padding: 20px 14px 32px;
+  }
+
+  .dashboard-welcome h2 {
+    font-size: 1.4rem;
+  }
+
+  .dashboard-eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+  }
+
+  .card-inner {
+    padding: 16px 14px;
+    gap: 10px;
+  }
+
+  .card-icon-badge {
+    width: 40px;
+    height: 40px;
+  }
+
+  .card-icon {
+    font-size: 20px;
+  }
+
+  .card-title {
+    font-size: 0.95rem;
+  }
+
+  .card-text {
+    font-size: 0.86rem;
+  }
 }

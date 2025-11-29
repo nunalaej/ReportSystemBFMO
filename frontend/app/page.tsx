@@ -7,7 +7,6 @@ import {
   SignedIn,
   SignedOut,
   SignInButton,
-  SignUpButton,
   UserButton,
   useUser,
 } from "@clerk/nextjs";
@@ -15,17 +14,31 @@ import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [lightMode, setLightMode] = useState(false);
-  const { isLoaded, isSignedIn } = useUser();
+
+  // ⬅ now also grab `user`
+  const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
 
-  // If already signed in, always go straight to Student Dashboard
+  // Redirect based on role once Clerk is ready
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !isSignedIn || !user) return;
 
-    if (isSignedIn) {
+    // role might be "admin" or ["admin"]
+    const rawRole = (user.publicMetadata as any)?.role;
+    let role: string =
+      Array.isArray(rawRole) && rawRole.length > 0 ? rawRole[0] : rawRole;
+
+    role = typeof role === "string" ? role.toLowerCase() : "";
+
+    if (role === "admin") {
+      router.replace("/Admin");
+    } else if (role === "staff") {
+      router.replace("/Staff");
+    } else {
+      // default → student
       router.replace("/Student/Dashboard");
     }
-  }, [isLoaded, isSignedIn, router]);
+  }, [isLoaded, isSignedIn, user, router]);
 
   const isLoadingUser = !isLoaded;
 
@@ -78,17 +91,13 @@ export default function Home() {
 
         {/* BODY */}
         <section className="create-scope__panel-body">
-          {/* Intro text */}
           <div style={{ marginBottom: 20 }}>
-            <p
-              className="welcome"
-            >
+            <p className="welcome">
               Welcome to the online reporting portal for maintenance concerns at
               DLSU-D. Please use your DLSU-D Account to Login
             </p>
           </div>
 
-          {/* Loading state while Clerk is resolving session */}
           {isLoadingUser && (
             <div
               className="create-scope__message create-scope__message.is-info"
@@ -98,19 +107,19 @@ export default function Home() {
             </div>
           )}
 
-          {/* Morphing login buttons */}
           <div className="login-tabs-morph">
             <SignedOut>
               <SignInButton
                 mode="modal"
-                fallbackRedirectUrl="/Student/Dashboard"
-                signUpFallbackRedirectUrl="/Student/Dashboard"
+                // after sign in we always come back here,
+                // then the useEffect above redirects based on role
+                fallbackRedirectUrl="/"
+                signUpFallbackRedirectUrl="/"
               >
                 <button type="button" className="neonButton">
                   <span className="buttonLabel">Sign In</span>
                 </button>
               </SignInButton>
-
             </SignedOut>
 
             <SignedIn>
@@ -118,7 +127,6 @@ export default function Home() {
             </SignedIn>
           </div>
 
-          {/* Footer links */}
           <div className="login-footer">
             <a href="#" className="login-footer-link">
               Help

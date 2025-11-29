@@ -13,6 +13,7 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { useTheme } from "@/app/ThemeProvider";
 
 /* Types */
 interface PanelProps {
@@ -81,7 +82,7 @@ function Panel({ title, subtitle, actions, children }: PanelProps) {
 const norm = (v: unknown): string =>
   v == null ? "" : String(v).trim().toLowerCase();
 
-// derive floor from room string like "102" -> "1" (fallback)
+// derive floor from room string like "102" -> "1" fallback
 const deriveFloorFromRoom = (roomValue: unknown): string => {
   if (!roomValue) return "";
   const num = parseInt(String(roomValue), 10);
@@ -151,7 +152,7 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
 /**
  * API base for reports and meta:
  * - If NEXT_PUBLIC_API_BASE is set it will call that backend, for example
- *     https://your-backend.onrender.com
+ *   https://your-backend.onrender.com
  * - If not set it will use Next routes on the same domain like /api/meta
  */
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
@@ -173,6 +174,8 @@ const collegeOptions: string[] = [
 export default function Create() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const light = theme === "light";
 
   const [formData, setFormData] = useState<FormDataState>({
     email: "",
@@ -201,7 +204,6 @@ export default function Create() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [sidebarOverlayOpen, setSidebarOverlayOpen] =
     useState<boolean>(false);
-  const [light, setLight] = useState<boolean>(false);
 
   const [specificRoom, setSpecificRoom] = useState<boolean>(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
@@ -597,7 +599,7 @@ export default function Create() {
   // Logout
   const logout = () => {
     localStorage.removeItem("currentUser");
-    router.push("/login");
+    router.push("/");
   };
 
   /* Derived summary and validation */
@@ -942,7 +944,7 @@ export default function Create() {
                   id="lightMode"
                   type="checkbox"
                   checked={light}
-                  onChange={() => setLight((v) => !v)}
+                  onChange={toggleTheme}
                 />
                 <span className="create-scope__slider" />
                 <span className="create-scope__switch-label">
@@ -976,14 +978,6 @@ export default function Create() {
                 <span></span>
                 <span></span>
               </label>
-
-              <div className="create-scope__topbar-brand">
-                <img
-                  src="https://upload.wikimedia.org/wikipedia/en/8/8c/DLSU-Dasmari%C3%B1as_Seal.png"
-                  alt="DLSU-D Logo"
-                />
-                <span>BFMO Reporting</span>
-              </div>
             </div>
           </header>
 
@@ -992,13 +986,6 @@ export default function Create() {
             subtitle="Fill the form and attach a photo if available."
             actions={
               <div className="create-scope__toolbar">
-                <button
-                  type="button"
-                  className="create-scope__ghost-btn"
-                  onClick={() => setLight((v) => !v)}
-                >
-                  {light ? "Dark" : "Light"}
-                </button>
                 <button
                   type="button"
                   className="create-scope__reset-btn"
