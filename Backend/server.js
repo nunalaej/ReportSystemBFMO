@@ -4,7 +4,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
-const Meta = require("./api/meta.js")
+const Meta = require("./api/meta.js");        // Mongoose model
+const reportsRouter = require("./api/reports"); // still a router
 
 const app = express();
 
@@ -29,10 +30,6 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 /* -------------------------------
    ROUTES
 --------------------------------*/
-const metaRouter = require("./api/meta");
-const reportsRouter = require("./api/reports");
-
-app.use("/api/meta", metaRouter);
 app.use("/api/reports", reportsRouter);
 
 /* -------------------------------

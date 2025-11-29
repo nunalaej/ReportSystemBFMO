@@ -87,10 +87,13 @@ const DEFAULT_CONCERNS: ConcernMeta[] = [
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
-    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "http://localhost:3000/"
-  "";
+    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
+  "http://localhost:3000";
 
 const META_URL = `${API_BASE}/api/meta`;
+
+
+
 
 const norm = (v: unknown) =>
   v == null ? "" : String(v).trim().toLowerCase();

@@ -1,54 +1,32 @@
 // Backend/api/meta.js
-const express = require("express");
-const router = express.Router();
+const mongoose = require("mongoose");
 
-const BUILDINGS = [
-  "Ayuntamiento",
-  "JFH",
-  "ICTC",
-  "PCH",
-  "Food Square",
-  "COS",
-  "CBAA",
-  "CTHM",
-  "GMH",
-  "CEAT",
-  "Other",
-];
+// Concern schema (matches what you already have)
+const concernSchema = new mongoose.Schema(
+  {
+    id: { type: String },
+    label: { type: String },
+    subconcerns: { type: [String], default: [] },
+  },
+  { _id: false }
+);
 
-const CONCERNS = [
+// Meta schema pointing to your Buildings&Concern collection
+const metaSchema = new mongoose.Schema(
   {
-    id: "electrical",
-    label: "Electrical",
-    subconcerns: ["Lights", "Aircons", "Wires", "Outlets", "Switches", "Other"],
-  },
-  {
-    id: "civil",
-    label: "Civil",
-    subconcerns: ["Walls", "Ceilings", "Cracks", "Doors", "Windows", "Other"],
-  },
-  {
-    id: "mechanical",
-    label: "Mechanical",
-    subconcerns: ["TV", "Projectors", "Fans", "Elevators", "Other"],
-  },
-  {
-    id: "safety-hazard",
-    label: "Safety Hazard",
-    subconcerns: ["Spikes", "Open Wires", "Blocked Exits", "Wet Floor", "Other"],
-  },
-  {
-    id: "other",
-    label: "Other",
-    subconcerns: ["Other"],
-  },
-];
+    // use Mixed so it works with existing string array
+    // and with future building objects from the Edit page
+    buildings: { type: [mongoose.Schema.Types.Mixed], default: [] },
 
-router.get("/", (req, res) => {
-  res.json({
-    buildings: BUILDINGS,
-    concerns: CONCERNS,
-  });
-});
+    concerns: { type: [concernSchema], default: [] },
+  },
+  {
+    collection: "Buildings&Concern", // <-- THIS uses your existing collection
+    timestamps: true,
+  }
+);
 
-module.exports = router;
+// Model name can be anything; collection is controlled above
+const Meta = mongoose.model("BuildingsAndConcern", metaSchema);
+
+module.exports = Meta;
