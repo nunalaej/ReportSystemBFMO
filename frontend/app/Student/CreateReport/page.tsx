@@ -29,8 +29,14 @@ interface ConcernMeta {
   subconcerns?: string[];
 }
 
+/** Raw building item from /api/meta
+ *  Can be a simple string (old format)
+ *  or an object with a name field (new format from AdminEdit).
+ */
+type BuildingMetaRaw = string | { id?: string; name?: string };
+
 interface MetaState {
-  buildings: string[];
+  buildings: BuildingMetaRaw[];
   concerns: ConcernMeta[];
 }
 
@@ -270,12 +276,12 @@ export default function Create() {
 
         if (!alive) return;
 
-        const incomingBuildings =
+        const incomingBuildings: BuildingMetaRaw[] =
           Array.isArray(data.buildings) && data.buildings.length
-            ? (data.buildings as string[])
+            ? (data.buildings as BuildingMetaRaw[])
             : FALLBACK_BUILDINGS;
 
-        const incomingConcerns =
+        const incomingConcerns: ConcernMeta[] =
           Array.isArray(data.concerns) && data.concerns.length
             ? (data.concerns as ConcernMeta[])
             : FALLBACK_CONCERNS;
@@ -336,16 +342,20 @@ export default function Create() {
     fetchReports();
   }, []);
 
-  // dynamic options from meta
+  // dynamic options from meta: always convert to building names
   const buildingOptions = useMemo(() => {
-    const list = meta.buildings
-      .slice()
-      .filter((b) => b && String(b).trim().length > 0);
+    const list = (meta.buildings || [])
+      .map((b) =>
+        typeof b === "string"
+          ? b
+          : String((b as { name?: string }).name || "").trim()
+      )
+      .filter((name) => name && name.trim().length > 0);
 
     const others = list.filter((x) => norm(x) === "other");
     const normal = list.filter((x) => norm(x) !== "other");
 
-    normal.sort((a, b) => String(a).localeCompare(String(b)));
+    normal.sort((a, b) => a.localeCompare(b));
 
     return [...normal, ...others];
   }, [meta.buildings]);
@@ -607,7 +617,7 @@ export default function Create() {
   const needsOtherConcern = formData.concern === "Other";
   const needsOtherBuilding = formData.building === "Other";
 
-  // multi-floor buildings (non ICTC, non COS)
+  // multi floor buildings (non ICTC, non COS)
   const needsRoomDropdown = !isIctc && !isCos && specificRoom && hasRoom;
   const needsOtherRoom =
     !isIctc && specificRoom && !hasRoom && !!formData.building;
@@ -911,12 +921,14 @@ export default function Create() {
                       </>
                     )}
 
-                  {specificRoom && formData.building !== "ICTC" && !hasRoom && (
-                    <>
-                      <div>Spot</div>
-                      <div>{formData.otherRoom || "-"}</div>
-                    </>
-                  )}
+                  {specificRoom &&
+                    formData.building !== "ICTC" &&
+                    !hasRoom && (
+                      <>
+                        <div>Spot</div>
+                        <div>{formData.otherRoom || "-"}</div>
+                      </>
+                    )}
 
                   <div>College</div>
                   <div>{formData.college || "-"}</div>
@@ -1239,10 +1251,10 @@ export default function Create() {
                         });
                       }}
                     />
-                    <span className="create-scope__slider" />
-                    <span className="create-scope__switch-label">
-                      Is there a specific location / spot / room?
-                    </span>
+                  <span className="create-scope__slider" />
+                  <span className="create-scope__switch-label">
+                    Is there a specific location / spot / room?
+                  </span>
                   </label>
                 </div>
               </div>
