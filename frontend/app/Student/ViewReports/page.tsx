@@ -36,6 +36,7 @@ type Report = {
   room?: string;
   otherRoom?: string;
   image?: string;
+  ImageFile?:string;
   status?: string;
   createdAt?: string;
   comments?: Comment[];
@@ -332,18 +333,16 @@ export default function ReportPage() {
                         >
                           <div className="report-img-container">
                             <img
-                              src={
-                                report.image
-                                  ? `${API_BASE}${report.image}`
-                                  : defaultImg
-                              }
-                              alt="Report"
-                              className="report-img"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  defaultImg;
-                              }}
-                            />
+  src={
+    report.ImageFile || report.image || defaultImg
+  }
+  alt="Report"
+  className="report-img"
+  onError={(e) => {
+    (e.target as HTMLImageElement).src = defaultImg;
+  }}
+/>
+
                           </div>
                           <div className="report-body">
                             <div className="report-header-row">
@@ -506,19 +505,19 @@ export default function ReportPage() {
                       </div>
 
                       <div className="details-image-wrapper">
-                        <img
-                          src={
-                            selectedReport.image
-                              ? `${API_BASE}${selectedReport.image}`
-                              : defaultImg
-                          }
-                          alt="Report"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              defaultImg;
-                          }}
-                        />
-                      </div>
+  <img
+    src={
+      selectedReport.ImageFile ||
+      selectedReport.image ||
+      defaultImg
+    }
+    alt="Report"
+    onError={(e) => {
+      (e.target as HTMLImageElement).src = defaultImg;
+    }}
+  />
+</div>
+
 
                       <div className="comments-section comments-section--static">
                         <h3>Comments</h3>
