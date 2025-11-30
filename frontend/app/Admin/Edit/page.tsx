@@ -10,8 +10,8 @@ type BuildingMeta = {
   name: string;
   floors: number;
   roomsPerFloor: number;
-  hasRooms?: boolean; // new
-  singleLocationLabel?: string; // new, for kiosks/positions
+  hasRooms?: boolean;
+  singleLocationLabel?: string;
 };
 
 type ConcernMeta = {
@@ -90,10 +90,7 @@ const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
   "http://localhost:3000";
 
-const META_URL = `${API_BASE}/api/meta`;
-
-
-
+const META_URL = `${API_BASE.replace(/\/+$/, "")}/api/meta`;
 
 const norm = (v: unknown) =>
   v == null ? "" : String(v).trim().toLowerCase();
@@ -172,7 +169,9 @@ export default function AdminEditPage() {
         setLoading(true);
         setError("");
 
-        const res = await fetch(META_URL, { cache: "no-store" });
+        const res = await fetch(`${META_URL}?ts=${Date.now()}`, {
+          cache: "no-store",
+        });
         if (!res.ok) {
           const raw = await res.text().catch(() => "");
           console.error("Meta load failed:", res.status, raw);
@@ -207,8 +206,7 @@ export default function AdminEditPage() {
                 norm(rawName).replace(/\s+/g, "-") ||
                 `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-              const hasRooms =
-                b.hasRooms === false ? false : true;
+              const hasRooms = b.hasRooms === false ? false : true;
 
               const floors =
                 typeof b.floors === "number" && b.floors > 0
@@ -248,15 +246,14 @@ export default function AdminEditPage() {
               `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
             const subs: string[] = Array.isArray(c.subconcerns)
-  ? c.subconcerns.map((s: unknown) => String(s || "").trim())
-  : [];
+              ? c.subconcerns.map((s: unknown) => String(s || "").trim())
+              : [];
 
-return {
-  id,
-  label: label || "Unnamed concern",
-  subconcerns: subs.filter((s: string) => s.length > 0),
-};
-
+            return {
+              id,
+              label: label || "Unnamed concern",
+              subconcerns: subs.filter((s: string) => s.length > 0),
+            };
           });
         }
 
@@ -283,8 +280,8 @@ return {
     };
   }, []);
 
-  // save meta
-  const handleSave = async () => {
+  // scope controls which success message we show
+  const handleSave = async (scope?: "building" | "concern") => {
     setSaving(true);
     setError("");
     setSaveMsg("");
@@ -379,8 +376,7 @@ return {
               norm(name).replace(/\s+/g, "-") ||
               `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-            const hasRooms =
-              b.hasRooms === false ? false : true;
+            const hasRooms = b.hasRooms === false ? false : true;
 
             const floors =
               typeof b.floors === "number" && b.floors > 0
@@ -414,21 +410,26 @@ return {
               String(c.id || "").trim() ||
               norm(label).replace(/\s+/g, "-") ||
               `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-const subs: string[] = Array.isArray(c.subconcerns)
-  ? c.subconcerns.map((s: unknown) => String(s || "").trim())
-  : [];
+            const subs: string[] = Array.isArray(c.subconcerns)
+              ? c.subconcerns.map((s: unknown) => String(s || "").trim())
+              : [];
 
-return {
-  id,
-  label: label || "Unnamed concern",
-  subconcerns: subs.filter((s: string) => s.length > 0),
-};
-
+            return {
+              id,
+              label: label || "Unnamed concern",
+              subconcerns: subs.filter((s: string) => s.length > 0),
+            };
           })
         );
       }
 
-      setSaveMsg("Changes saved successfully.");
+      if (scope === "building") {
+        setSaveMsg("Building changes saved.");
+      } else if (scope === "concern") {
+        setSaveMsg("Concern changes saved.");
+      } else {
+        setSaveMsg("All changes saved.");
+      }
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Failed to save changes.");
@@ -613,7 +614,6 @@ return {
       <main className="admin-edit__layout">
         <header className="admin-edit__page-head">
           <div className="admin-edit__heading">
-            <span className="admin-edit__badge">Admin configuration</span>
             <h1 className="admin-edit__page-title">
               Buildings, concerns, and subconcerns
             </h1>
@@ -641,10 +641,10 @@ return {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={saving || loading}
             >
-              {saving ? "Saving..." : "Save changes"}
+              {saving ? "Saving..." : "Save all changes"}
             </button>
           </div>
         </header>
@@ -684,6 +684,14 @@ return {
                   >
                     + Add building
                   </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSave("building")}
+                    disabled={saving || loading}
+                  >
+                    Save buildings
+                  </button>
                 </>
               }
             >
@@ -722,9 +730,7 @@ return {
                       </div>
 
                       <div className="admin-edit__field-group">
-                        <label className="admin-edit__label">
-                          Floors
-                        </label>
+                        <label className="admin-edit__label">Floors</label>
                         <input
                           type="number"
                           min={1}
@@ -805,6 +811,14 @@ return {
                           </div>
                         )}
                       </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => handleRemoveBuilding(index)}
+                      >
+                        Remove building
+                      </button>
                     </div>
                   );
                 })}
@@ -829,6 +843,14 @@ return {
                     onClick={handleAddConcern}
                   >
                     + Add concern
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSave("concern")}
+                    disabled={saving || loading}
+                  >
+                    Save concerns
                   </button>
                 </>
               }
