@@ -42,7 +42,7 @@ const ReportSchema = new mongoose.Schema(
       ],
     },
 
-    imageURL: { type: String, default: "" },
+    ImageFile: { type: String, default: "" },
 
     // IMPORTANT: this must exist for $push to work
     comments: {

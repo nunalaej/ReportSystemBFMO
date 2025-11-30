@@ -442,7 +442,7 @@ export default function ReportPage() {
     setCurrentPage(1);
   };
 
-  const resolveImageUrl = (path?: string) => {
+  const resolveImageFile = (path?: string) => {
     if (!path) return defaultImg;
 
     // already a full URL (Cloudinary, etc.)
@@ -1068,7 +1068,7 @@ export default function ReportPage() {
               <div className="modal-content">
                 <div className="modal-img-wrapper">
                   <img
-                    src={resolveImageUrl(selectedReport.image)}
+                    src={resolveImageFile(selectedReport.image)}
                     alt="Report"
                     className="report-img"
                    onError={(e) => {

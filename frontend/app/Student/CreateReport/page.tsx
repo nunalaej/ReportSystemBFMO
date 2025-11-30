@@ -50,7 +50,7 @@ interface FormDataState {
   college: string;
   floor: string;
   room: string;
-  ImageURL: File | null;
+  ImageFile: File | null;
   otherConcern: string;
   otherBuilding: string;
   otherRoom: string;
@@ -231,7 +231,7 @@ export default function Create() {
     college: "",
     floor: "",
     room: "",
-    ImageURL: null,
+    ImageFile: null,
     otherConcern: "",
     otherBuilding: "",
     otherRoom: "",
@@ -537,7 +537,7 @@ export default function Create() {
 
     if (target.files && target.files[0]) {
       const f = target.files[0];
-      setFormData((prev) => ({ ...prev, ImageURL: f }));
+      setFormData((prev) => ({ ...prev, ImageFile: f }));
       setPreview(URL.createObjectURL(f));
     } else {
       setFormData((prev) => {
@@ -571,7 +571,7 @@ export default function Create() {
     e.currentTarget.classList.remove("is-dragover");
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      setFormData((prev) => ({ ...prev, ImageURL: file }));
+      setFormData((prev) => ({ ...prev, ImageFile: file }));
       setPreview(URL.createObjectURL(file));
     }
   };
@@ -605,70 +605,90 @@ export default function Create() {
   }, [formData]);
 
   const performSubmit = async () => {
-    setSubmitting(true);
-    setIsConfirming(false);
-    showMsg("info", "Submitting report...");
-    try {
-      const data = new FormData();
-      (
-        Object.entries(formData) as [
-          keyof FormDataState,
-          FormDataState[keyof FormDataState]
-        ][]
-      ).forEach(([k, v]) => {
-        if (v !== null && v !== undefined && v !== "") {
-          data.append(k, v as Blob | string);
-        }
-      });
+  setSubmitting(true);
+  setIsConfirming(false);
+  showMsg("info", "Submitting report...");
+  try {
+    const data = new FormData();
 
-      const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
+    // Text fields
+    data.append("email", formData.email);
+    data.append("heading", formData.heading);
+    data.append("description", formData.description);
+    data.append("concern", formData.concern);
+    data.append("subConcern", formData.subConcern);
+    data.append("building", formData.building);
+    data.append("college", formData.college);
+    data.append("floor", formData.floor);
+    data.append("room", formData.room);
+    data.append("otherConcern", formData.otherConcern);
+    data.append("otherBuilding", formData.otherBuilding);
+    data.append("otherRoom", formData.otherRoom);
 
-      const res = await fetch(submitUrl, {
-        method: "POST",
-        body: data,
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.error("Submit error status:", res.status, text);
-        throw new Error(text || `Submit failed with status ${res.status}`);
-      }
-
-      const result = await res.json();
-
-      if (result.success) {
-        if (result.report && typeof result.report === "object") {
-          setExistingReports((prev) => [...prev, result.report as Report]);
-        }
-
-        showMsg("success", "Report submitted successfully.");
-        setFormData({
-          email: currentUserEmail || "",
-          heading: "",
-          description: "",
-          concern: "",
-          subConcern: "",
-          building: "",
-          college: "",
-          floor: "",
-          room: "",
-          ImageURL: null,
-          otherConcern: "",
-          otherBuilding: "",
-          otherRoom: "",
-        });
-        setPreview(null);
-        setSpecificRoom(false);
-      } else {
-        showMsg("error", result.message || "Submission failed.");
-      }
-    } catch (err) {
-      console.error("Submit error:", err);
-      showMsg("error", "Network error while submitting report.");
-    } finally {
-      setSubmitting(false);
+    // File field – MUST match multer.single("ImageFile")
+    if (formData.ImageFile) {
+      data.append("ImageFile", formData.ImageFile);
     }
-  };
+
+    const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
+
+    const res = await fetch(submitUrl, {
+      method: "POST",
+      body: data,
+    });
+
+    const raw = await res.text().catch(() => "");
+
+    if (!res.ok) {
+      console.error("Submit error status:", res.status, raw);
+      showMsg(
+        "error",
+        raw || `Submission failed with status ${res.status}`
+      );
+      return;
+    }
+
+    let result: any = {};
+    try {
+      result = raw ? JSON.parse(raw) : {};
+    } catch {
+      // ignore parse error, we already logged raw
+    }
+
+    if (result.success) {
+      if (result.report && typeof result.report === "object") {
+        setExistingReports((prev) => [...prev, result.report as Report]);
+      }
+
+      showMsg("success", "Report submitted successfully.");
+      setFormData({
+        email: currentUserEmail || "",
+        heading: "",
+        description: "",
+        concern: "",
+        subConcern: "",
+        building: "",
+        college: "",
+        floor: "",
+        room: "",
+        ImageFile: null,
+        otherConcern: "",
+        otherBuilding: "",
+        otherRoom: "",
+      });
+      setPreview(null);
+      setSpecificRoom(false);
+    } else {
+      showMsg("error", result.message || "Submission failed.");
+    }
+  } catch (err) {
+    console.error("Submit error:", err);
+    showMsg("error", "Network error while submitting report.");
+  } finally {
+    setSubmitting(false);
+  }
+};
+
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -862,7 +882,7 @@ export default function Create() {
     }
 
     if (formData.college) parts.push(`College: ${formData.college}`);
-    parts.push(`Photo attached: ${formData.ImageURL ? "Yes" : "No"}`);
+    parts.push(`Photo attached: ${formData.ImageFile ? "Yes" : "No"}`);
     return parts.join("\n");
   }, [
     formData.heading,
@@ -875,7 +895,7 @@ export default function Create() {
     formData.room,
     formData.otherRoom,
     formData.college,
-    formData.ImageURL,
+    formData.ImageFile,
     needsOtherConcern,
     needsOtherBuilding,
     specificRoom,
@@ -1047,7 +1067,7 @@ export default function Create() {
                   <div>College</div>
                   <div>{formData.college || "-"}</div>
                   <div>Photo</div>
-                  <div>{formData.ImageURL ? "Attached" : "None"}</div>
+                  <div>{formData.ImageFile ? "Attached" : "None"}</div>
                 </div>
 
                 <Panel>
@@ -1120,7 +1140,7 @@ export default function Create() {
                       college: "",
                       floor: "",
                       room: "",
-                      ImageURL: null,
+                      ImageFile: null,
                       otherConcern: "",
                       otherBuilding: "",
                       otherRoom: "",
@@ -1570,7 +1590,7 @@ export default function Create() {
                     type="file"
                     accept="image/*"
                     onChange={handleChange}
-                    name="ImageURL"
+                    name="ImageFile"
                   />
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">

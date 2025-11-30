@@ -48,8 +48,18 @@ router.get("/:id", async (req, res) => {
    CREATE REPORT
    /api/reports  (POST)
 ============================================================ */
-router.post("/", upload.single("ImageURL"), async (req, res) => {
+router.post("/", upload.single("ImageFile"), async (req, res) => {
   try {
+    console.log("BODY:", req.body);
+    console.log(
+      "FILE:",
+      req.file && {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+      }
+    );
+
     const {
       email,
       heading,
@@ -65,9 +75,8 @@ router.post("/", upload.single("ImageURL"), async (req, res) => {
       otherRoom,
     } = req.body;
 
-    let imageURL = ""; // <-- match the schema field name
+    let ImageFile = "";
 
-    // If there is an attached file, upload it to Cloudinary
     if (req.file) {
       const uploaded = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -80,7 +89,8 @@ router.post("/", upload.single("ImageURL"), async (req, res) => {
         stream.end(req.file.buffer);
       });
 
-      imageURL = uploaded.secure_url;
+      ImageFile = uploaded.secure_url;
+      console.log("Cloudinary uploaded URL:", ImageFile);
     }
 
     const report = await Report.create({
@@ -96,7 +106,7 @@ router.post("/", upload.single("ImageURL"), async (req, res) => {
       otherConcern,
       otherBuilding,
       otherRoom,
-      imageURL, // <-- save here
+      ImageFile,
     });
 
     return res.status(201).json({
@@ -108,6 +118,7 @@ router.post("/", upload.single("ImageURL"), async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create report.",
+      error: err.message, // <--- expose reason to frontend
     });
   }
 });

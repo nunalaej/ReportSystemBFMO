@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
     const room = (formData.get("room") as string) || "";
     const otherRoom = (formData.get("otherRoom") as string) || "";
 
-    const file = formData.get("ImageURL") as File | null;
+    const file = formData.get("ImageFile") as File | null;
 
-    let imageUrl: string | null = null;
+    let ImageFile: string | null = null;
 
     // Optional - save image locally (works in dev; in Vercel this is temporary)
     if (file && file.size > 0) {
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       const filePath = path.join(uploadsDir, filename);
 
       await fs.writeFile(filePath, buffer);
-      imageUrl = `/uploads/${filename}`;
+      ImageFile = `/uploads/${filename}`;
     }
 
     const report = await Report.create({
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       college,
       room,
       otherRoom,
-      image: imageUrl,
+      image: ImageFile,
     });
 
     return NextResponse.json({ success: true, report });
