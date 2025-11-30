@@ -14,6 +14,10 @@ const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
   "";
 
+// Cloudinary - only the cloud name is needed on the frontend
+const CLOUDINARY_CLOUD_NAME =
+  process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
+
 type Comment = {
   text?: string;
   comment?: string;
@@ -35,8 +39,8 @@ type Report = {
   floor?: string;
   room?: string;
   otherRoom?: string;
-  image?: string;
-  ImageFile?: string;
+  image?: string; // can be Cloudinary URL or public_id
+  ImageFile?: string; // legacy field from backend
   status?: string;
   createdAt?: string;
   comments?: Comment[];
@@ -136,6 +140,42 @@ const REPORTS_PER_PAGE = 12;
 // helper to compute the "similar group" key
 const getGroupKey = (r: Report) =>
   `${(r.building || "").trim()}-${(r.concern || "").trim()}`;
+
+/**
+ * Resolve the correct image URL.
+ * Priority:
+ * 1. Already full URL (Cloudinary secure_url or other) -> use as is
+ * 2. If we have a Cloudinary cloud name and it looks like a public_id -> build Cloudinary URL
+ * 3. Else treat it as a path from the backend and prepend API_BASE
+ */
+const resolveImageFile = (raw?: string) => {
+  if (!raw) return defaultImg;
+
+  const src = raw.trim();
+  if (!src) return defaultImg;
+
+  // Case 1: already full URL (Cloudinary secure_url or any http/https)
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    return src;
+  }
+
+  // Case 2: Cloudinary public_id and we know the cloud name
+  // Example public_id: "bfmo/uploads/xyz123"
+  if (CLOUDINARY_CLOUD_NAME) {
+    // simple heuristic: if it has no leading slash, treat it as public_id
+    const publicId = src.replace(/^\/+/, "");
+    return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${publicId}`;
+  }
+
+  // Case 3: fallback to backend static file
+  if (!API_BASE) return defaultImg;
+
+  if (src.startsWith("/")) {
+    return `${API_BASE}${src}`;
+  }
+
+  return `${API_BASE}/${src}`;
+};
 
 export default function ReportPage() {
   const router = useRouter();
@@ -446,62 +486,49 @@ export default function ReportPage() {
     setCurrentPage(1);
   };
 
-  const resolveImageFile = (path?: string) => {
-    if (!path) return defaultImg;
-
-    // already a full URL (Cloudinary, etc.)
-    if (path.startsWith("http://") || path.startsWith("https://")) {
-      return path;
-    }
-
-    // relative path served by your backend
-    return `${API_BASE}${path}`;
-  };
-
   // helper: send the full updated comments array for THIS report to the backend
   const syncComments = async (updatedComments: Comment[]) => {
-  if (!selectedReport) return;
+    if (!selectedReport) return;
 
-  try {
-    setSaving(true);
+    try {
+      setSaving(true);
 
-    const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // keep current status
-        status: selectedReport.status || "Pending",
-        // replace the comments with the updated list
-        comments: updatedComments,
-        overwriteComments: true,
-      }),
-    });
+      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // keep current status
+          status: selectedReport.status || "Pending",
+          // replace the comments with the updated list
+          comments: updatedComments,
+          overwriteComments: true,
+        }),
+      });
 
-    const data = await res.json().catch(() => null);
+      const data = await res.json().catch(() => null);
 
-    if (!res.ok || !data?.success) {
-      throw new Error(data?.message || "Failed to update comments");
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to update comments");
+      }
+
+      const updated = data.report as Report;
+
+      // update list in state
+      setReports((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+
+      // update modal
+      setSelectedReport(updated);
+      setEditingIndex(null);
+      setEditingText("");
+    } catch (err: any) {
+      console.error("Error syncing comments:", err);
+      alert(err.message || "There was a problem updating the comments.");
+    } finally {
+      setSaving(false);
     }
-
-    const updated = data.report as Report;
-
-    // update list in state
-    setReports((prev) =>
-      prev.map((r) => (r._id === updated._id ? updated : r))
-    );
-
-    // update modal
-    setSelectedReport(updated);
-    setEditingIndex(null);
-    setEditingText("");
-  } catch (err: any) {
-    console.error("Error syncing comments:", err);
-    alert(err.message || "There was a problem updating the comments.");
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   /* UPDATE STATUS / COMMENTS
      when saving, update ALL reports with same building + concern
@@ -1026,6 +1053,9 @@ export default function ReportPage() {
 
                 {getReportsByGroup(selectedGroup).map((report) => {
                   const statusKey = getStatusClassKey(report.status);
+                  const imageSrc = resolveImageFile(
+                    report.image || report.ImageFile
+                  );
 
                   return (
                     <div
@@ -1035,11 +1065,7 @@ export default function ReportPage() {
                     >
                       <div className="report-img-container">
                         <img
-                          src={
-                            report.ImageFile
-                              ? `${API_BASE}${report.ImageFile}`
-                              : defaultImg
-                          }
+                          src={imageSrc}
                           alt="Report"
                           className="report-img"
                           onError={(e) => {
@@ -1095,6 +1121,9 @@ export default function ReportPage() {
                     const key = getGroupKey(report);
                     const duplicates = (duplicateCounts[key] || 1) - 1;
                     const statusKey = getStatusClassKey(report.status);
+                    const imageSrc = resolveImageFile(
+                      report.image || report.ImageFile
+                    );
 
                     return (
                       <div
@@ -1103,18 +1132,14 @@ export default function ReportPage() {
                         onClick={() => handleCardClick(report)}
                       >
                         <div className="report-img-container">
-                        <img
-                          src={
-                            report.ImageFile
-                              ? `${API_BASE}${report.ImageFile}`
-                              : defaultImg
-                          }
-                          alt="Report"
-                          className="report-img"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = defaultImg;
-                          }}
-                        />
+                          <img
+                            src={imageSrc}
+                            alt="Report"
+                            className="report-img"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = defaultImg;
+                            }}
+                          />
                         </div>
                         <div className="report-body">
                           <div className="report-header-row">
@@ -1234,7 +1259,9 @@ export default function ReportPage() {
               <div className="modal-content">
                 <div className="modal-img-wrapper">
                   <img
-                    src={resolveImageFile(selectedReport.image)}
+                    src={resolveImageFile(
+                      selectedReport.image || selectedReport.ImageFile
+                    )}
                     alt="Report"
                     className="report-img"
                     onError={(e) => {
@@ -1415,7 +1442,6 @@ export default function ReportPage() {
                         disabled={saving}
                         type="button"
                       >
-                        
                         {saving && statusValue !== "Archived"
                           ? "Saving..."
                           : "Save changes"}
