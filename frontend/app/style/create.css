@@ -595,18 +595,24 @@
 .create-scope__btn:active {
   transform: translateY(1px);
 }
-.create-scope__btn.is-disabled {
-  opacity: 0.6;
+
+/* DISABLED STATE: grey and not clickable */
+.create-scope__btn:disabled,
+.create-scope__btn[disabled] {
+  background-color: #6a6a6a !important;
+  border-color: #6a6a6a !important;
   cursor: not-allowed;
+  opacity: 0.6;
 }
+
 .create-scope__btn--ghost {
   background: transparent;
   color: var(--text);
   border: 1px solid var(--outline);
 }
 .create-scope__btn--primary {
-  background: #008563 !important;
-  background-color: #008563 !important;
+  background: #008653 !important;
+  background-color: #008653 !important;
   border-color: #008563 !important;
 }
 
@@ -665,21 +671,6 @@
   border: 1px solid var(--outline);
   max-height: 320px;
   object-fit: cover;
-}
-
-/* Remove native / custom arrow from selects */
-.create-scope select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-
-  /* keep background plain, no arrow */
-  background-image: none;
-  background-position: 0 0;
-  background-repeat: no-repeat;
-
-  /* optional: reduce right padding since arrow is gone */
-  padding-right: 14px;
 }
 
 /* For older Edge / IE */
@@ -943,4 +934,140 @@
   color: var(--error);
   margin-left: 2px;
   font-weight: 700;
+}
+
+.view-reports-btn {
+  background: #008653;
+  color: white;
+  cursor:pointer;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: 0.2s ease;
+}
+
+.view-reports-btn:hover {
+  background: #16a34a;
+  transform: translateY(-2px);
+}
+
+/* Modal card base */
+.card {
+  width: 300px;
+  height: 220px;
+  background-color: rgb(255, 255, 255);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 30px;
+  gap: 13px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 2px 2px 20px rgba(0, 0, 0, 0.062);
+}
+
+#cookieSvg {
+  width: 50px;
+}
+
+#cookieSvg g path {
+  fill: rgb(97, 81, 81);
+}
+
+.cookieHeading {
+  font-size: 1.2em;
+  font-weight: 800;
+  color: rgb(26, 26, 26);
+}
+
+.cookieDescription {
+  text-align: center;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: rgb(99, 99, 99);
+}
+
+.cookieDescription a {
+  --tw-text-opacity: 1;
+  color: rgb(59 130 246);
+}
+
+.cookieDescription a:hover {
+  -webkit-text-decoration-line: underline;
+  text-decoration-line: underline;
+}
+
+.buttonContainer {
+  display: flex;
+  gap: 20px;
+  flex-direction: row;
+}
+
+.acceptButton {
+  width: 80px;
+  height: 30px;
+  background-color: #008653;
+  transition-duration: .2s;
+  border: none;
+  color: rgb(241, 241, 241);
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 20px;
+  box-shadow: 0 4px 6px -1px #008653, 0 2px 4px -1px #977ef3;
+  transition: all .6s ease;
+}
+
+.declineButton {
+  width: 80px;
+  height: 30px;
+  background-color: #dadada;
+  transition-duration: .2s;
+  color: rgb(46, 46, 46);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 20px;
+  box-shadow: 0 4px 6px -1px #bebdbd, 0 2px 4px -1px #bebdbd;
+  transition: all .6s ease;
+}
+
+.declineButton:hover {
+  background-color: #ebebeb;
+  box-shadow: 0 10px 15px -3px #bebdbd, 0 4px 6px -2px #bebdbd;
+  transition-duration: .2s;
+}
+
+.acceptButton:hover {
+  background-color: #00cb7d;
+  box-shadow: 0 10px 15px -3px #008653, 0 4px 6px -2px #977ef3;
+  transition-duration: .2s;
+}
+
+/* Fullscreen overlay for the confirmation modal */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* above everything in the page */
+}
+
+/* Make sure the modal card looks good inside the overlay */
+.confirm-overlay .card {
+  width: 320px;
+  max-width: 90vw;
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 20px 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
 }

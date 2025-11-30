@@ -266,10 +266,17 @@ export default function ReportPage() {
     <>
       <div className="report-wrapper">
         <div className="header">
-          <div>
-            <h1>My reports</h1>
-          </div>
-        </div>
+  <div className="header-left">
+    <h1>My reports</h1>
+  </div>
+
+  <div className="header-right">
+    <a href="/Student/CreateReport" className="create-report-btn">
+      + Create Report
+    </a>
+  </div>
+</div>
+
 
         {!isLoaded && <p>Loading your account...</p>}
 
@@ -303,8 +310,6 @@ export default function ReportPage() {
               <div className="reports-two-column">
                 {/* LEFT: list of reports */}
                 <div className="reports-list-column">
-                  <h2 className="column-title">Your reports</h2>
-
                   <div className="reports-list">
                     {paginatedReports.map((report) => {
                       const statusKey = getStatusClassKey(report.status);

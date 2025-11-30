@@ -30,8 +30,8 @@ interface ConcernMeta {
 }
 
 /** Raw building item from /api/meta
- *  Can be a simple string (old format)
- *  or an object with a name field (new format from AdminEdit).
+ * Can be a simple string (old format)
+ * or an object with a name field (new format from AdminEdit).
  */
 type BuildingMetaRaw = string | { id?: string; name?: string };
 
@@ -62,6 +62,8 @@ interface Report {
   subConcern?: string;
   otherConcern?: string;
   status?: string;
+  room?: string;
+  otherRoom?: string;
 }
 
 /* Reusable Panel */
@@ -157,9 +159,9 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
 
 /**
  * API base for reports and meta:
- * - If NEXT_PUBLIC_API_BASE is set it will call that backend, for example
+ * If NEXT_PUBLIC_API_BASE is set it will call that backend, for example
  *   https://your-backend.onrender.com
- * - If not set it will use Next routes on the same domain like /api/meta
+ * If not set it will use Next routes on the same domain like /api/meta
  */
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
@@ -176,6 +178,42 @@ const collegeOptions: string[] = [
   "CCJE",
   "Staff",
 ];
+
+/* Profanity detection */
+
+const profanityPatterns: RegExp[] = [
+  /potangina/i,
+  /p0t4ng1na/i,
+  /shit/i,
+  /sh\*t/i,
+  /sht/i,
+  /fuck/i,
+  /fck/i,
+  /f\*ck/i,
+  /gago/i,
+  /gag0/i,
+  /yawa/i,
+  /y4wa/i,
+  /pakyu/i,
+];
+
+const normalizeLeet = (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/0/g, "o")
+    .replace(/1/g, "i")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/5/g, "s")
+    .replace(/7/g, "t");
+};
+
+const containsProfanity = (text: string | undefined | null): boolean => {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  const leet = normalizeLeet(text);
+  return profanityPatterns.some((re) => re.test(lower) || re.test(leet));
+};
 
 export default function Create() {
   const { user, isLoaded } = useUser();
@@ -222,6 +260,9 @@ export default function Create() {
   });
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError, setMetaError] = useState<string>("");
+
+  const [hasProfanity, setHasProfanity] = useState<boolean>(false);
+  const [isConfirming, setIsConfirming] = useState<boolean>(false);
 
   // remember sidebar collapse state on desktop
   useEffect(() => {
@@ -400,18 +441,19 @@ export default function Create() {
     Other: null,
   };
 
-  // Floor options
+  // Floor options (always include Other)
   const floorOptions: string[] = [
     "First Floor",
     "Second Floor",
     "Third Floor",
     "Fourth Floor",
+    "Other",
   ];
 
   // Floor options that should be visible given building
   const visibleFloorOptions = useMemo(() => {
     if (formData.building === "ICTC") {
-      return ["First Floor", "Second Floor"];
+      return ["First Floor", "Second Floor", "Other"];
     }
     return floorOptions;
   }, [formData.building]);
@@ -470,6 +512,14 @@ export default function Create() {
     return floorRooms.filter((r) => setAll.has(r));
   }, [allRoomsForBuilding, specificRoom, formData.floor, isCos]);
 
+  // Same rooms but always include "Other"
+  const availableRoomsWithOther = useMemo(() => {
+    if (!availableRooms) return null;
+    const set = new Set(availableRooms);
+    set.add("Other");
+    return Array.from(set);
+  }, [availableRooms]);
+
   useEffect(() => {
     if (isIctc) {
       return;
@@ -490,32 +540,28 @@ export default function Create() {
       setFormData((prev) => ({ ...prev, imageFile: f }));
       setPreview(URL.createObjectURL(f));
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-      if (name === "concern") {
-        setFormData((prev) => ({
-          ...prev,
-          concern: value,
-          subConcern: "",
-          otherConcern: "",
-        }));
-      }
-      if (name === "building") {
-        setFormData((prev) => ({
-          ...prev,
-          building: value,
-          otherBuilding: "",
-          floor: "",
-          room: "",
-          otherRoom: "",
-        }));
-      }
-      if (name === "floor") {
-        setFormData((prev) => ({
-          ...prev,
-          floor: value,
-          room: "",
-        }));
-      }
+      setFormData((prev) => {
+        const next: FormDataState = { ...prev, [name]: value } as FormDataState;
+
+        if (name === "concern") {
+          next.concern = value;
+          next.subConcern = "";
+          next.otherConcern = "";
+        }
+        if (name === "building") {
+          next.building = value;
+          next.otherBuilding = "";
+          next.floor = "";
+          next.room = "";
+          next.otherRoom = "";
+        }
+        if (name === "floor") {
+          next.floor = value;
+          next.room = "";
+        }
+
+        return next;
+      });
     }
   };
 
@@ -540,9 +586,27 @@ export default function Create() {
     e.currentTarget.classList.remove("is-dragover");
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const checkProfanityInForm = (state: FormDataState) => {
+    const fieldsToCheck = [
+      state.heading,
+      state.description,
+      state.otherConcern,
+      state.otherBuilding,
+      state.otherRoom,
+      state.room,
+    ];
+    const found = fieldsToCheck.some((text) => containsProfanity(text));
+    setHasProfanity(found);
+  };
+
+  // run profanity scan whenever form changes
+  useEffect(() => {
+    checkProfanityInForm(formData);
+  }, [formData]);
+
+  const performSubmit = async () => {
     setSubmitting(true);
+    setIsConfirming(false);
     showMsg("info", "Submitting report...");
     try {
       const data = new FormData();
@@ -606,10 +670,30 @@ export default function Create() {
     }
   };
 
-  // Logout
-  const logout = () => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (hasProfanity) {
+      showMsg(
+        "error",
+        "Your report contains foul or inappropriate language. Please remove it before submitting."
+      );
+      return;
+    }
+
+    // if there are similar reports, open modal confirmation
+    if (similarReportsCount > 0) {
+      setIsConfirming(true);
+      return;
+    }
+
+    // no similar reports, go ahead
+    void performSubmit();
+  };
+
+  const viewreports = () => {
     localStorage.removeItem("currentUser");
-    router.push("/");
+    router.push("/Student/ViewReports");
   };
 
   /* Derived summary and validation */
@@ -683,12 +767,22 @@ export default function Create() {
     return "";
   }, [specificRoom, hasRoom, formData.floor, formData.room, isIctc, isCos]);
 
-  // Similar reports count by building + concern + subConcern/otherConcern
+  // Similar reports count by same building, concern and location logic
   const similarReportsCount = useMemo(() => {
     if (!formData.building || !formData.concern) return 0;
 
     const building = norm(formData.building);
     const concern = norm(formData.concern);
+    const isSpecific = specificRoom;
+
+    // Location for the current report
+    let currentLocation = "";
+    if (isSpecific) {
+      if (formData.room) currentLocation = norm(formData.room);
+      else if (formData.otherRoom) currentLocation = norm(formData.otherRoom);
+      if (!currentLocation) return 0;
+    }
+
     const curSub = norm(formData.subConcern);
     const curOther = norm(formData.otherConcern);
 
@@ -699,7 +793,19 @@ export default function Create() {
       if (norm(r.building) !== building) return false;
       if (norm(r.concern) !== concern) return false;
 
-      if (concern === norm("Other")) {
+      const repLocation = norm(r.room || r.otherRoom);
+
+      if (isSpecific) {
+        // Specific room is on, match only same room or spot
+        if (!repLocation) return false;
+        if (repLocation !== currentLocation) return false;
+      } else {
+        // Specific room is off, match only reports that also have no location
+        if (repLocation) return false;
+      }
+
+      // Match further by sub concern or other concern if provided
+      if (concern === norm("other")) {
         if (curOther) {
           const repOther = norm(r.otherConcern);
           if (repOther !== curOther) return false;
@@ -717,6 +823,9 @@ export default function Create() {
     formData.concern,
     formData.subConcern,
     formData.otherConcern,
+    formData.room,
+    formData.otherRoom,
+    specificRoom,
   ]);
 
   const summaryText = useMemo(() => {
@@ -785,7 +894,7 @@ export default function Create() {
     }
   };
 
-  // ICTC second floor rooms list
+  // ICTC second floor rooms list, always includes Other
   const ictcSecondFloorRooms = useMemo(() => {
     if (!isIctc || formData.floor !== "Second Floor") return [];
     const rooms: string[] = [];
@@ -828,11 +937,11 @@ export default function Create() {
                     ? `${similarReportsCount} similar ${
                         similarReportsCount === 1 ? "report" : "reports"
                       }`
-                    : "Select building and concern"}
+                    : "Set building and concern"}
                 </div>
 
                 <div>Attach clear photo</div>
-                <div>Optional</div>
+                <div>Recommended</div>
                 <div>Include room number</div>
                 <div>If applicable</div>
               </div>
@@ -865,8 +974,12 @@ export default function Create() {
                 </div>
                 <div className="create-scope__summary-row">
                   <span>Ready to submit</span>
-                  <strong className={readyToSubmit ? "is-ok" : "is-warn"}>
-                    {readyToSubmit ? "Yes" : "No"}
+                  <strong
+                    className={
+                      readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"
+                    }
+                  >
+                    {readyToSubmit && !hasProfanity ? "Yes" : "No"}
                   </strong>
                 </div>
 
@@ -923,7 +1036,8 @@ export default function Create() {
 
                   {specificRoom &&
                     formData.building !== "ICTC" &&
-                    !hasRoom && (
+                    !hasRoom &&
+                    !!formData.building && (
                       <>
                         <div>Spot</div>
                         <div>{formData.otherRoom || "-"}</div>
@@ -948,21 +1062,6 @@ export default function Create() {
                   </div>
                 </Panel>
               </div>
-            </Panel>
-
-            <Panel title="Theme">
-              <label className="create-scope__switch">
-                <input
-                  id="lightMode"
-                  type="checkbox"
-                  checked={light}
-                  onChange={toggleTheme}
-                />
-                <span className="create-scope__slider" />
-                <span className="create-scope__switch-label">
-                  Use light mode
-                </span>
-              </label>
             </Panel>
           </div>
         </aside>
@@ -1000,6 +1099,15 @@ export default function Create() {
               <div className="create-scope__toolbar">
                 <button
                   type="button"
+                  className="view-reports-btn"
+                  onClick={viewreports}
+                  title="View Reports"
+                >
+                  View Reports
+                </button>
+
+                <button
+                  type="button"
                   className="create-scope__reset-btn"
                   onClick={() => {
                     setFormData({
@@ -1019,19 +1127,11 @@ export default function Create() {
                     });
                     setPreview(null);
                     setSpecificRoom(false);
+                    setIsConfirming(false);
                     showMsg("info", "Form cleared.");
                   }}
                 >
                   Reset
-                </button>
-
-                <button
-                  type="button"
-                  className="create-scope__logout-btn"
-                  onClick={logout}
-                  title="Logout"
-                >
-                  Logout
                 </button>
               </div>
             }
@@ -1251,10 +1351,10 @@ export default function Create() {
                         });
                       }}
                     />
-                  <span className="create-scope__slider" />
-                  <span className="create-scope__switch-label">
-                    Is there a specific location / spot / room?
-                  </span>
+                    <span className="create-scope__slider" />
+                    <span className="create-scope__switch-label">
+                      Is there a specific location / spot / room?
+                    </span>
                   </label>
                 </div>
               </div>
@@ -1337,6 +1437,23 @@ export default function Create() {
                       </select>
                     </div>
                   )}
+
+                  {formData.floor === "Other" && (
+                    <div className="create-scope__group">
+                      <label htmlFor="room">
+                        Room or area{requiredStar(formData.room)}
+                      </label>
+                      <input
+                        id="room"
+                        type="text"
+                        name="room"
+                        placeholder="Enter room or specific area"
+                        value={formData.room}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -1354,7 +1471,7 @@ export default function Create() {
                     required
                   >
                     <option value="">Select room</option>
-                    {availableRooms?.map((r) => (
+                    {availableRoomsWithOther?.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -1407,7 +1524,7 @@ export default function Create() {
                             : "Select floor first"}
                         </option>
                         {formData.floor &&
-                          availableRooms?.map((r) => (
+                          availableRoomsWithOther?.map((r) => (
                             <option key={r} value={r}>
                               {r}
                             </option>
@@ -1442,7 +1559,7 @@ export default function Create() {
 
               {/* Dropzone */}
               <div className="create-scope__group">
-                <label>Attach an image optional</label>
+                <label>Attach an image (Recommended)</label>
                 <label
                   className="create-scope__dropzone"
                   onDrop={onDrop}
@@ -1478,10 +1595,17 @@ export default function Create() {
                 )}
               </div>
 
+              {hasProfanity && (
+                <p className="create-scope__hint create-scope__hint--error">
+                  Profanity or foul words were detected in your text. Please
+                  remove them before submitting.
+                </p>
+              )}
+
               <button
                 className="create-scope__btn create-scope__btn--primary create-scope__w-full"
                 type="submit"
-                disabled={submitting || !readyToSubmit}
+                disabled={submitting || !readyToSubmit || hasProfanity}
               >
                 {submitting ? "Submitting..." : "Submit report"}
               </button>
@@ -1489,6 +1613,45 @@ export default function Create() {
           </Panel>
         </main>
       </div>
+
+      {/* Confirmation modal */}
+      {isConfirming && similarReportsCount > 0 && (
+        <div className="confirm-overlay">
+          <div className="card">
+            <p className="cookieHeading">Are you sure?</p>
+            <p className="cookieDescription">
+              There&apos;s {similarReportsCount} similar report
+              {similarReportsCount === 1 ? "" : "s"} about the same building,
+              room, and concern.
+              <br />
+              Are you sure you want to submit this report?
+            </p>
+
+            <div className="buttonContainer">
+              <button
+                type="button"
+                className="acceptButton"
+                onClick={() => void performSubmit()}
+              >
+                Submit
+              </button>
+              <button
+                type="button"
+                className="declineButton"
+                onClick={() => {
+                  setIsConfirming(false);
+                  showMsg(
+                    "info",
+                    "Submission cancelled. You can adjust your report and try again."
+                  );
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

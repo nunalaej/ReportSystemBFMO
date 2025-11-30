@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import "../style/admin-edit.css";
@@ -120,6 +125,83 @@ function Panel(props: {
   );
 }
 
+// Normalize buildings coming from DB (dbOnly or preferDefaults mode)
+function normalizeBuildingsFromDb(raw: unknown[]): BuildingMeta[] {
+  return raw.map((b, idx) => {
+    if (typeof b === "string") {
+      const label = String(b || "").trim();
+      const id =
+        norm(label).replace(/\s+/g, "-") ||
+        `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+      return {
+        id,
+        name: label || "Unnamed",
+        floors: 1,
+        roomsPerFloor: 1,
+        hasRooms: true,
+        singleLocationLabel: "",
+      };
+    }
+
+    const obj = b as any;
+    const rawName = String(obj?.name || "").trim();
+    const id =
+      String(obj?.id || "").trim() ||
+      norm(rawName).replace(/\s+/g, "-") ||
+      `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const hasRooms =
+      obj?.hasRooms === false
+        ? false
+        : true;
+
+    const floors =
+      typeof obj?.floors === "number" && obj.floors > 0
+        ? Math.round(obj.floors)
+        : 1;
+
+    const roomsPerFloor =
+      typeof obj?.roomsPerFloor === "number" && obj.roomsPerFloor > 0
+        ? Math.round(obj.roomsPerFloor)
+        : 1;
+
+    const singleLocationLabel =
+      typeof obj?.singleLocationLabel === "string"
+        ? String(obj.singleLocationLabel).trim()
+        : "";
+
+    return {
+      id,
+      name: rawName || "Unnamed",
+      floors,
+      roomsPerFloor,
+      hasRooms,
+      singleLocationLabel,
+    };
+  });
+}
+
+function normalizeConcernsFromDb(raw: unknown[]): ConcernMeta[] {
+  return raw.map((c, idx) => {
+    const obj = c as any;
+    const label = String(obj?.label || "").trim();
+    const id =
+      String(obj?.id || "").trim() ||
+      norm(label).replace(/\s+/g, "-") ||
+      `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const subs: string[] = Array.isArray(obj?.subconcerns)
+      ? obj.subconcerns.map((s: unknown) => String(s || "").trim())
+      : [];
+
+    return {
+      id,
+      label: label || "Unnamed concern",
+      subconcerns: subs.filter((s: string) => s.length > 0),
+    };
+  });
+}
+
 export default function AdminEditPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
@@ -160,14 +242,15 @@ export default function AdminEditPage() {
     }
   }, [isLoaded, isSignedIn, user, role, router]);
 
-  // load meta
-  useEffect(() => {
-    let alive = true;
-
-    const loadMeta = async () => {
+  // mode:
+  // "preferDefaults" = use DB if available, else fall back to DEFAULT_* (for initial load)
+  // "dbOnly" = show exactly what DB has (can be empty), no default fallback
+  const loadMeta = useCallback(
+    async (mode: "preferDefaults" | "dbOnly" = "preferDefaults") => {
       try {
         setLoading(true);
         setError("");
+        setSaveMsg("");
 
         const res = await fetch(`${META_URL}?ts=${Date.now()}`, {
           cache: "no-store",
@@ -179,114 +262,72 @@ export default function AdminEditPage() {
         }
 
         const data = await res.json().catch(() => null);
-        if (!data || !alive) return;
-
-        let incomingBuildings: BuildingMeta[] = DEFAULT_BUILDINGS;
-
-        if (Array.isArray(data.buildings) && data.buildings.length > 0) {
-          if (typeof data.buildings[0] === "string") {
-            incomingBuildings = (data.buildings as string[]).map((name, idx) => {
-              const label = String(name || "").trim();
-              const id =
-                norm(label).replace(/\s+/g, "-") ||
-                `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-              return {
-                id,
-                name: label || "Unnamed",
-                floors: 1,
-                roomsPerFloor: 1,
-                hasRooms: true,
-              };
-            });
-          } else {
-            incomingBuildings = (data.buildings as any[]).map((b, idx) => {
-              const rawName = String(b.name || "").trim();
-              const id =
-                String(b.id || "").trim() ||
-                norm(rawName).replace(/\s+/g, "-") ||
-                `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
-              const hasRooms = b.hasRooms === false ? false : true;
-
-              const floors =
-                typeof b.floors === "number" && b.floors > 0
-                  ? Math.round(b.floors)
-                  : 1;
-
-              const roomsPerFloor =
-                typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
-                  ? Math.round(b.roomsPerFloor)
-                  : 1;
-
-              const singleLocationLabel =
-                typeof b.singleLocationLabel === "string"
-                  ? String(b.singleLocationLabel).trim()
-                  : "";
-
-              return {
-                id,
-                name: rawName || "Unnamed",
-                floors,
-                roomsPerFloor,
-                hasRooms,
-                singleLocationLabel,
-              };
-            });
-          }
+        if (!data) {
+          throw new Error("Server returned empty meta.");
         }
 
-        let incomingConcerns: ConcernMeta[] = DEFAULT_CONCERNS;
+        const rawBuildings = Array.isArray((data as any).buildings)
+          ? ((data as any).buildings as unknown[])
+          : [];
+        const rawConcerns = Array.isArray((data as any).concerns)
+          ? ((data as any).concerns as unknown[])
+          : [];
 
-        if (Array.isArray(data.concerns) && data.concerns.length > 0) {
-          incomingConcerns = (data.concerns as any[]).map((c, idx) => {
-            const label = String(c.label || "").trim();
-            const id =
-              String(c.id || "").trim() ||
-              norm(label).replace(/\s+/g, "-") ||
-              `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
+        let incomingBuildings: BuildingMeta[];
+        let incomingConcerns: ConcernMeta[];
 
-            const subs: string[] = Array.isArray(c.subconcerns)
-              ? c.subconcerns.map((s: unknown) => String(s || "").trim())
-              : [];
-
-            return {
-              id,
-              label: label || "Unnamed concern",
-              subconcerns: subs.filter((s: string) => s.length > 0),
-            };
-          });
+        if (mode === "preferDefaults") {
+          incomingBuildings =
+            rawBuildings.length > 0
+              ? normalizeBuildingsFromDb(rawBuildings)
+              : DEFAULT_BUILDINGS;
+          incomingConcerns =
+            rawConcerns.length > 0
+              ? normalizeConcernsFromDb(rawConcerns)
+              : DEFAULT_CONCERNS;
+        } else {
+          // dbOnly mode
+          incomingBuildings = normalizeBuildingsFromDb(rawBuildings);
+          incomingConcerns = normalizeConcernsFromDb(rawConcerns);
         }
 
         setBuildings(incomingBuildings);
         setConcerns(incomingConcerns);
       } catch (err: any) {
         console.error(err);
-        if (!alive) return;
-        setError(
-          err?.message ||
-            "Could not load buildings and concerns. Using defaults."
-        );
-        setBuildings(DEFAULT_BUILDINGS);
-        setConcerns(DEFAULT_CONCERNS);
+        if (mode === "preferDefaults") {
+          setError(
+            err?.message ||
+              "Could not load buildings and concerns. Using defaults."
+          );
+          setBuildings(DEFAULT_BUILDINGS);
+          setConcerns(DEFAULT_CONCERNS);
+        } else {
+          setError(
+            err?.message ||
+              "Could not load buildings and concerns from database."
+          );
+        }
       } finally {
-        if (alive) setLoading(false);
+        setLoading(false);
       }
-    };
+    },
+    []
+  );
 
-    loadMeta();
+  // initial load prefers DB but falls back to defaults
+  useEffect(() => {
+    loadMeta("preferDefaults");
+  }, [loadMeta]);
 
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // scope controls which success message we show
+  // save with enforced Other
   const handleSave = async (scope?: "building" | "concern") => {
     setSaving(true);
     setError("");
     setSaveMsg("");
 
-    const cleanBuildings: BuildingMeta[] = buildings
+    // clean buildings
+    let cleanBuildings: BuildingMeta[] = buildings
       .map((b, idx) => {
         const name = String(b.name || "").trim();
         if (!name) return null;
@@ -323,7 +364,32 @@ export default function AdminEditPage() {
       })
       .filter(Boolean) as BuildingMeta[];
 
-    const cleanConcerns: ConcernMeta[] = concerns
+    // ensure an Other building exists
+    const hasOtherBuilding = cleanBuildings.some(
+      (b) => norm(b.name) === "other"
+    );
+    if (!hasOtherBuilding) {
+      cleanBuildings.push({
+        id: "other",
+        name: "Other",
+        floors: 1,
+        roomsPerFloor: 1,
+        hasRooms: false,
+        singleLocationLabel: "",
+      });
+    }
+
+    // keep user order but move Other to the end
+    const otherBuildings = cleanBuildings.filter(
+      (b) => norm(b.name) === "other"
+    );
+    const normalBuildings = cleanBuildings.filter(
+      (b) => norm(b.name) !== "other"
+    );
+    cleanBuildings = [...normalBuildings, ...otherBuildings];
+
+    // clean concerns
+    let cleanConcerns: ConcernMeta[] = concerns
       .map((c, idx) => {
         const label = String(c.label || "").trim();
         if (!label) return null;
@@ -333,19 +399,62 @@ export default function AdminEditPage() {
           norm(label).replace(/\s+/g, "-") ||
           `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-        const subs = Array.isArray(c.subconcerns) ? c.subconcerns : [];
-        const cleanSubs = subs
+        let subs = Array.isArray(c.subconcerns) ? c.subconcerns : [];
+        subs = subs
           .map((s) => String(s || "").trim())
-          .filter((s) => s.length > 0)
-          .sort((a, b) => a.localeCompare(b));
+          .filter((s) => s.length > 0);
+
+        // ensure "Other" exists as last item
+        const hasOtherSub = subs.some((s) => norm(s) === "other");
+        if (!hasOtherSub) {
+          subs.push("Other");
+        } else {
+          // move existing "Other" to the end while keeping the rest order
+          const others = subs.filter((s) => norm(s) === "other");
+          const normalSubs = subs.filter((s) => norm(s) !== "other");
+          subs = [...normalSubs, ...others];
+        }
 
         return {
           id,
           label,
-          subconcerns: cleanSubs,
+          subconcerns: subs,
         };
       })
       .filter(Boolean) as ConcernMeta[];
+
+    // ensure there is an Other concern
+    let otherConcernIndex = cleanConcerns.findIndex(
+      (c) => norm(c.label) === "other"
+    );
+
+    if (otherConcernIndex === -1) {
+      cleanConcerns.push({
+        id: "other",
+        label: "Other",
+        subconcerns: ["Other"],
+      });
+    } else {
+      const oc = cleanConcerns[otherConcernIndex];
+      let subs = Array.isArray(oc.subconcerns) ? oc.subconcerns : [];
+      subs = subs
+        .map((s) => String(s || "").trim())
+        .filter((s) => s.length > 0);
+
+      const hasOtherSub = subs.some((s) => norm(s) === "other");
+      if (!hasOtherSub) {
+        subs.push("Other");
+      } else {
+        const others = subs.filter((s) => norm(s) === "other");
+        const normalSubs = subs.filter((s) => norm(s) !== "other");
+        subs = [...normalSubs, ...others];
+      }
+
+      cleanConcerns[otherConcernIndex] = {
+        ...oc,
+        subconcerns: subs,
+      };
+    }
 
     const payload = {
       buildings: cleanBuildings,
@@ -501,18 +610,17 @@ export default function AdminEditPage() {
     });
   };
 
+  // NEW: add building at the TOP so it stays visible until you save
   const handleAddBuilding = () => {
-    setBuildings((prev) => [
-      ...prev,
-      {
-        id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: "",
-        floors: 1,
-        roomsPerFloor: 1,
-        hasRooms: true,
-        singleLocationLabel: "",
-      },
-    ]);
+    const newBuilding: BuildingMeta = {
+      id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: "",
+      floors: 1,
+      roomsPerFloor: 1,
+      hasRooms: true,
+      singleLocationLabel: "",
+    };
+    setBuildings((prev) => [newBuilding, ...prev]);
   };
 
   const handleRemoveBuilding = (index: number) => {
@@ -526,15 +634,14 @@ export default function AdminEditPage() {
     );
   };
 
+  // NEW: add concern at the TOP so it stays visible until you save
   const handleAddConcern = () => {
-    setConcerns((prev) => [
-      ...prev,
-      {
-        id: `concern-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        label: "",
-        subconcerns: [""],
-      },
-    ]);
+    const newConcern: ConcernMeta = {
+      id: `concern-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      label: "",
+      subconcerns: [""],
+    };
+    setConcerns((prev) => [newConcern, ...prev]);
   };
 
   const handleRemoveConcern = (index: number) => {
@@ -581,22 +688,20 @@ export default function AdminEditPage() {
     const term = norm(searchBuilding);
     return buildings
       .map((b, index) => ({ index, building: b }))
-      .filter(({ building }) => norm(building.name).includes(term))
-      .sort((a, b) => a.building.name.localeCompare(b.building.name));
+      .filter(({ building }) => norm(building.name).includes(term));
   }, [buildings, searchBuilding]);
 
   const concernRows = useMemo(() => {
     const term = norm(searchConcern);
     return concerns
       .map((c, index) => ({ index, concern: c }))
-      .filter(({ concern }) => norm(concern.label).includes(term))
-      .sort((a, b) => a.concern.label.localeCompare(b.concern.label));
+      .filter(({ concern }) => norm(concern.label).includes(term));
   }, [concerns, searchConcern]);
 
   if (!isLoaded || !isSignedIn) {
     return (
       <div className="admin-edit__wrapper">
-        <p>Checking your permissions…</p>
+        <p>Checking your permissions...</p>
       </div>
     );
   }
@@ -634,9 +739,17 @@ export default function AdminEditPage() {
                 setSaveMsg("");
                 setError("");
               }}
-              disabled={saving}
+              disabled={saving || loading}
             >
-              Reset to defaults
+              Load defaults
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => loadMeta("dbOnly")}
+              disabled={saving || loading}
+            >
+              Load database
             </button>
             <button
               type="button"
@@ -662,7 +775,7 @@ export default function AdminEditPage() {
         )}
 
         {loading ? (
-          <p className="admin-edit__loading">Loading options…</p>
+          <p className="admin-edit__loading">Loading options...</p>
         ) : (
           <div className="admin-edit__grid">
             <Panel
@@ -931,40 +1044,35 @@ export default function AdminEditPage() {
                       )}
 
                       {Array.isArray(concern.subconcerns) &&
-                        [...concern.subconcerns]
-                          .map((s, sIndex) => ({ s, sIndex }))
-                          .sort((a, b) =>
-                            (a.s || "").localeCompare(b.s || "")
-                          )
-                          .map(({ s, sIndex }) => (
-                            <div
-                              key={sIndex}
-                              className="admin-edit__list-row admin-edit__list-row--compact"
+                        concern.subconcerns.map((s, sIndex) => (
+                          <div
+                            key={sIndex}
+                            className="admin-edit__list-row admin-edit__list-row--compact"
+                          >
+                            <input
+                              type="text"
+                              className="admin-edit__input"
+                              value={s}
+                              placeholder="Example: Light not working"
+                              onChange={(e) =>
+                                handleSubconcernChange(
+                                  index,
+                                  sIndex,
+                                  e.target.value
+                                )
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() =>
+                                handleRemoveSubconcern(index, sIndex)
+                              }
                             >
-                              <input
-                                type="text"
-                                className="admin-edit__input"
-                                value={s}
-                                placeholder="Example: Light not working"
-                                onChange={(e) =>
-                                  handleSubconcernChange(
-                                    index,
-                                    sIndex,
-                                    e.target.value
-                                  )
-                                }
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-ghost"
-                                onClick={() =>
-                                  handleRemoveSubconcern(index, sIndex)
-                                }
-                              >
-                                Remove
-                              </button>
-                            </div>
-                          ))}
+                              Remove
+                            </button>
+                          </div>
+                        ))}
                     </div>
                   </div>
                 ))}

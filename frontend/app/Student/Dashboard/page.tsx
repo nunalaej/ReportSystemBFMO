@@ -7,15 +7,25 @@ import "@/app/style/dashboard.css";
 
 export default function StudentDashboard() {
   const { user, isLoaded } = useUser();
-  const [firstName, setFirstName] = useState("");
+  const [firstName, setFirstName] = useState("Student");
 
   useEffect(() => {
     if (isLoaded && user) {
-      setFirstName(
-        user.firstName ||
-          user.primaryEmailAddress?.emailAddress?.split("@")[0] ||
-          "Student"
-      );
+      // Try Clerk firstName
+      if (user.firstName && user.firstName.trim() !== "") {
+        setFirstName(user.firstName);
+        return;
+      }
+
+      // Otherwise extract from email
+      const email =
+        user.primaryEmailAddress?.emailAddress ||
+        user.emailAddresses[0]?.emailAddress ||
+        "";
+
+      if (email.includes("@")) {
+        setFirstName(email.split("@")[0]);
+      }
     }
   }, [isLoaded, user]);
 
@@ -25,7 +35,7 @@ export default function StudentDashboard() {
         {/* Top welcome / intro */}
         <section className="dashboard-welcome">
           <p className="dashboard-eyebrow">Student Portal</p>
-          <h2>Hello, {firstName}</h2>
+          <h1 className="dashboard-title">Hello, {firstName}</h1>
           <p className="dashboard-description">
             This is your student dashboard. You can create and view your BFMO
             reports here.
@@ -34,7 +44,7 @@ export default function StudentDashboard() {
 
         {/* Card grid */}
         <section className="dashboard-section">
-          <h3 className="dashboard-section-title">Quick actions</h3>
+          <h2 className="dashboard-section-title">Quick actions</h2>
 
           <div className="dashboard-cards">
             {/* Create Report */}
@@ -43,7 +53,7 @@ export default function StudentDashboard() {
                 <div className="card-icon-badge">
                   <span className="card-icon">📝</span>
                 </div>
-                <h4 className="card-title">Create Report</h4>
+                <h3 className="card-title">Create Report</h3>
                 <p className="card-text">
                   Submit a new BFMO request or concern, including building,
                   room, and a clear description of the issue.
@@ -57,7 +67,7 @@ export default function StudentDashboard() {
                 <div className="card-icon-badge">
                   <span className="card-icon">📂</span>
                 </div>
-                <h4 className="card-title">My Reports</h4>
+                <h3 className="card-title">My Reports</h3>
                 <p className="card-text">
                   Track the status of your submitted reports and see which
                   issues are in progress or resolved.
