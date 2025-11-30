@@ -36,6 +36,7 @@ type Report = {
   room?: string;
   otherRoom?: string;
   image?: string;
+  ImageFile?: string;
   status?: string;
   createdAt?: string;
   comments?: Comment[];
@@ -1035,8 +1036,8 @@ export default function ReportPage() {
                       <div className="report-img-container">
                         <img
                           src={
-                            report.image
-                              ? `${API_BASE}${report.image}`
+                            report.ImageFile
+                              ? `${API_BASE}${report.ImageFile}`
                               : defaultImg
                           }
                           alt="Report"
@@ -1102,18 +1103,18 @@ export default function ReportPage() {
                         onClick={() => handleCardClick(report)}
                       >
                         <div className="report-img-container">
-                          <img
-                            src={
-                              report.image
-                                ? `${API_BASE}${report.image}`
-                                : defaultImg
-                            }
-                            alt="Report"
-                            className="report-img"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = defaultImg;
-                            }}
-                          />
+                        <img
+                          src={
+                            report.ImageFile
+                              ? `${API_BASE}${report.ImageFile}`
+                              : defaultImg
+                          }
+                          alt="Report"
+                          className="report-img"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = defaultImg;
+                          }}
+                        />
                         </div>
                         <div className="report-body">
                           <div className="report-header-row">
