@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const room = (formData.get("room") as string) || "";
     const otherRoom = (formData.get("otherRoom") as string) || "";
 
-    const file = formData.get("imageFile") as File | null;
+    const file = formData.get("ImageURL") as File | null;
 
     let imageUrl: string | null = null;
 

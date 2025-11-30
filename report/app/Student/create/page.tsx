@@ -43,7 +43,7 @@ interface FormDataState {
   college: string;
   floor: string;
   room: string;
-  imageFile: File | null;
+  ImageURL: File | null;
   otherConcern: string;
   otherBuilding: string;
   otherRoom: string;
@@ -184,7 +184,7 @@ export default function Create(): JSX.Element {
     college: "",
     floor: "",
     room: "",
-    imageFile: null,
+    ImageURL: null,
     otherConcern: "",
     otherBuilding: "",
     otherRoom: "",
@@ -475,7 +475,7 @@ export default function Create(): JSX.Element {
 
     if (target.files && target.files[0]) {
       const f = target.files[0];
-      setFormData((prev) => ({ ...prev, imageFile: f }));
+      setFormData((prev) => ({ ...prev, ImageURL: f }));
       setPreview(URL.createObjectURL(f));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
@@ -513,7 +513,7 @@ export default function Create(): JSX.Element {
     e.currentTarget.classList.remove("is-dragover");
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      setFormData((prev) => ({ ...prev, imageFile: file }));
+      setFormData((prev) => ({ ...prev, ImageURL: file }));
       setPreview(URL.createObjectURL(file));
     }
   };
@@ -576,7 +576,7 @@ export default function Create(): JSX.Element {
           college: "",
           floor: "",
           room: "",
-          imageFile: null,
+          ImageURL: null,
           otherConcern: "",
           otherBuilding: "",
           otherRoom: "",
@@ -741,7 +741,7 @@ export default function Create(): JSX.Element {
     }
 
     if (formData.college) parts.push(`College: ${formData.college}`);
-    parts.push(`Photo attached: ${formData.imageFile ? "Yes" : "No"}`);
+    parts.push(`Photo attached: ${formData.ImageURL ? "Yes" : "No"}`);
     return parts.join("\n");
   }, [
     formData.heading,
@@ -754,7 +754,7 @@ export default function Create(): JSX.Element {
     formData.room,
     formData.otherRoom,
     formData.college,
-    formData.imageFile,
+    formData.ImageURL,
     needsOtherConcern,
     needsOtherBuilding,
     specificRoom,
@@ -919,7 +919,7 @@ export default function Create(): JSX.Element {
                   <div>College</div>
                   <div>{formData.college || "-"}</div>
                   <div>Photo</div>
-                  <div>{formData.imageFile ? "Attached" : "None"}</div>
+                  <div>{formData.ImageURL ? "Attached" : "None"}</div>
                 </div>
 
                 <Panel>
@@ -1013,7 +1013,7 @@ export default function Create(): JSX.Element {
                       college: "",
                       floor: "",
                       room: "",
-                      imageFile: null,
+                      ImageURL: null,
                       otherConcern: "",
                       otherBuilding: "",
                       otherRoom: "",
@@ -1454,7 +1454,7 @@ export default function Create(): JSX.Element {
                     type="file"
                     accept="image/*"
                     onChange={handleChange}
-                    name="imageFile"
+                    name="ImageURL"
                   />
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">

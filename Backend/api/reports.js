@@ -48,7 +48,7 @@ router.get("/:id", async (req, res) => {
    CREATE REPORT
    /api/reports  (POST)
 ============================================================ */
-router.post("/", upload.single("imageFile"), async (req, res) => {
+router.post("/", upload.single("ImageURL"), async (req, res) => {
   try {
     const {
       email,
