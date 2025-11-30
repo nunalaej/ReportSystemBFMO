@@ -30,9 +30,6 @@ const ReportSchema = new mongoose.Schema(
     floor: { type: String, default: "" },
     room: { type: String, default: "" },
     otherRoom: { type: String, default: "" },
-
-    image: { type: String, default: "" },
-
     status: {
       type: String,
       default: "Pending",
@@ -44,6 +41,8 @@ const ReportSchema = new mongoose.Schema(
         "Archived",
       ],
     },
+
+    imageURL: { type: String, default: "" },
 
     // IMPORTANT: this must exist for $push to work
     comments: {
