@@ -1189,7 +1189,7 @@ html:not(dark) .log-list {
 
   .report-modal {
     border-radius: 20px;
-        max-width: 80%;
+        max-width: 90%;
         max-height: 90%;
   }
 
