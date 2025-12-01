@@ -12,6 +12,7 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* auto dark from OS, ThemeProvider will still manage html.light/html.dark */
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -19,24 +20,15 @@
   }
 }
 
+/* base body styles */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* FIXED TRANSPARENT HEADER LAYOUT */
-.layout {
-  background: transparent !important;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1rem;
-  height: 4rem;
-}
+/* ---------- BASE THEME DEFAULTS ---------- */
 
-
-/* Base theme defaults */
 html,
 body {
   background-color: #f9fafb;
@@ -56,14 +48,21 @@ html.dark body {
   color: #e5e7eb;
 }
 
-/* Header layout */
+/* ---------- HEADER LAYOUT (ONE SOURCE OF TRUTH) ---------- */
+
+/* Desktop and general header style */
 .layout {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  gap: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  height: 4rem;
   border-bottom: 1px solid #e5e7eb;
-  background-color: #ffffff;
+  background-color: #ffffff; /* light mode header bg */
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 /* Header in dark mode */
@@ -73,7 +72,20 @@ html.dark .layout {
   color: #e5e7eb;
 }
 
-/* Theme Switch */
+/* center nav stays centered on desktop */
+.header-nav-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+/* right side should not shrink to a new line */
+.header-right {
+  flex-shrink: 0;
+}
+
+/* ---------- THEME SWITCH ---------- */
+
 .switch {
   font-size: 17px;
   position: relative;
@@ -166,34 +178,23 @@ html.dark .layout {
   opacity: 1;
 }
 
-/* ==========================
-   HEADER (LAYOUT) MOBILE ENHANCEMENTS
-   ========================== */
+/* ---------- RESPONSIVE HEADER (MOBILE) ---------- */
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
+  /* hide the long title */
+  .site-title {
+    display: none;
+  }
+
+  /* hide middle nav to avoid wrapping */
+  .header-nav-wrapper {
+    display: none;
+  }
+
+  /* keep header solid bg, just tighter spacing */
   .layout {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
-  }
-
-  .layout > div {
-    min-width: 0;
-  }
-
-  /* Left logo + title */
-  .layout .flex.items-center.gap-3 {
-    flex: 1 1 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .layout {
-    padding: 0.4rem 0.6rem;
-  }
-
-  .layout img.w-10.h-10 {
-    width: 2rem;
-    height: 2rem;
+    padding: 0.5rem 1rem;
+    gap: 0.75rem;
+    height: 3.5rem;
   }
 }

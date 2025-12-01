@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import {
-  ClerkProvider,
-  SignedIn,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkProvider, SignedIn, UserButton } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./ThemeProvider";
@@ -43,7 +39,7 @@ export default function RootLayout({
                   alt="DLSU-D Logo"
                   className="w-10 h-10 object-contain"
                 />
-                <h1 className="text-base sm:text-lg font-semibold">
+                <h1 className="text-base sm:text-lg font-semibold site-title">
                   BFMO Report System
                 </h1>
               </div>

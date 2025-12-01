@@ -344,11 +344,14 @@ const Analytics: FC = () => {
   const [dateTo, setDateTo] = useState<string>("");
 
   const FILTERS_OPEN_KEY = "analytics_filters_open_v1";
-  const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
-    const saved = localStorage.getItem(FILTERS_OPEN_KEY);
-    return saved === null ? true : saved === "1";
-  });
+const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
+  if (typeof window === "undefined") return false; // SSR fallback
+
+  const saved = localStorage.getItem(FILTERS_OPEN_KEY);
+  // if nothing saved yet, start CLOSED
+  return saved === null ? false : saved === "1";
+});
+
 
   const toggleFiltersOpen = () => {
     setFiltersOpen((prev) => {

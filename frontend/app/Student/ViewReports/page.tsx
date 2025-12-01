@@ -36,7 +36,7 @@ type Report = {
   room?: string;
   otherRoom?: string;
   image?: string;
-  ImageFile?:string;
+  ImageFile?: string;
   status?: string;
   createdAt?: string;
   comments?: Comment[];
@@ -134,38 +134,35 @@ export default function ReportPage() {
   };
 
   useEffect(() => {
-  if (!isLoaded || !user) return;
+    if (!isLoaded || !user) return;
 
-  // READ ROLE FROM CLERK PUBLIC METADATA
-  const role = user.publicMetadata?.role;
+    // READ ROLE FROM CLERK PUBLIC METADATA
+    const role = user.publicMetadata?.role;
 
-  // 1. CHECK IF ADMIN → REDIRECT
-  if (role === "admin") {
-    router.push("/Admin/"); // CHANGE THIS PATH
-    return;
-  }
-  else if (role === "staff") {
-    router.push("/Staff/"); // CHANGE THIS PATH
-    return;
-  }
+    // 1. CHECK IF ADMIN → REDIRECT
+    if (role === "admin") {
+      router.push("/Admin/");
+      return;
+    } else if (role === "staff") {
+      router.push("/Staff/");
+      return;
+    }
 
+    // If normal user → continue loading their reports
+    const emailFromClerk =
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses[0]?.emailAddress ||
+      "";
 
-  // If normal user → continue loading their reports
-  const emailFromClerk =
-    user.primaryEmailAddress?.emailAddress ||
-    user.emailAddresses[0]?.emailAddress ||
-    "";
+    const usernameFromClerk =
+      user.username ||
+      (user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || "");
 
-  const usernameFromClerk =
-    user.username ||
-    (user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
-      : user.firstName || "");
-
-  setUserEmail(emailFromClerk);
-  setCurrentUserName(usernameFromClerk);
-}, [isLoaded, user]);
-
+    setUserEmail(emailFromClerk);
+    setCurrentUserName(usernameFromClerk);
+  }, [isLoaded, user, router]);
 
   /* FETCH REPORTS FOR THIS USER ONLY */
 
@@ -242,19 +239,12 @@ export default function ReportPage() {
     const classKey = getStatusClassKey(statusRaw);
     const status = statusRaw || "Pending";
 
-    return (
-      <span className={`status-pill status-${classKey}`}>
-        {status}
-      </span>
-    );
+    return <span className={`status-pill status-${classKey}`}>{status}</span>;
   };
 
   /* PAGINATION */
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(reports.length / REPORTS_PER_PAGE)
-  );
+  const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PER_PAGE));
   const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
   const paginatedReports = reports.slice(
     startIndex,
@@ -267,17 +257,16 @@ export default function ReportPage() {
     <>
       <div className="report-wrapper">
         <div className="header">
-  <div className="header-left">
-    <h1>My reports</h1>
-  </div>
+          <div className="header-left">
+            <h1>My reports</h1>
+          </div>
 
-  <div className="header-right">
-    <a href="/Student/CreateReport" className="create-report-btn">
-      + Create Report
-    </a>
-  </div>
-</div>
-
+          <div className="header-right">
+            <a href="/Student/CreateReport" className="create-report-btn">
+              + Create Report
+            </a>
+          </div>
+        </div>
 
         {!isLoaded && <p>Loading your account...</p>}
 
@@ -333,16 +322,15 @@ export default function ReportPage() {
                         >
                           <div className="report-img-container">
                             <img
-  src={
-    report.ImageFile || report.image || defaultImg
-  }
-  alt="Report"
-  className="report-img"
-  onError={(e) => {
-    (e.target as HTMLImageElement).src = defaultImg;
-  }}
-/>
-
+                              src={
+                                report.ImageFile || report.image || defaultImg
+                              }
+                              alt="Report"
+                              className="report-img"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = defaultImg;
+                              }}
+                            />
                           </div>
                           <div className="report-body">
                             <div className="report-header-row">
@@ -385,9 +373,7 @@ export default function ReportPage() {
                                   ).toLocaleDateString()
                                 : ""}
                               {report.createdAt &&
-                                ` (${getRelativeTime(
-                                  report.createdAt
-                                )})`}
+                                ` (${getRelativeTime(report.createdAt)})`}
                             </p>
 
                             {latestComment && (
@@ -504,20 +490,20 @@ export default function ReportPage() {
                         </p>
                       </div>
 
-                      <div className="details-image-wrapper">
-  <img
-    src={
-      selectedReport.ImageFile ||
-      selectedReport.image ||
-      defaultImg
-    }
-    alt="Report"
-    onError={(e) => {
-      (e.target as HTMLImageElement).src = defaultImg;
-    }}
-  />
-</div>
-
+                      {/* use the same modal-img-wrapper class so mobile CSS applies */}
+                      <div className="modal-img-wrapper">
+                        <img
+                          src={
+                            selectedReport.ImageFile ||
+                            selectedReport.image ||
+                            defaultImg
+                          }
+                          alt="Report"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = defaultImg;
+                          }}
+                        />
+                      </div>
 
                       <div className="comments-section comments-section--static">
                         <h3>Comments</h3>

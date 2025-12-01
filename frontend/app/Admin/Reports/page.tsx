@@ -160,9 +160,7 @@ const resolveImageFile = (raw?: string) => {
   }
 
   // Case 2: Cloudinary public_id and we know the cloud name
-  // Example public_id: "bfmo/uploads/xyz123"
   if (CLOUDINARY_CLOUD_NAME) {
-    // simple heuristic: if it has no leading slash, treat it as public_id
     const publicId = src.replace(/^\/+/, "");
     return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${publicId}`;
   }
@@ -207,6 +205,8 @@ export default function ReportPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
+
+  const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   /* AUTH GUARD: only admins can view this page */
 
@@ -461,12 +461,13 @@ export default function ReportPage() {
 
   /* CARD & MODAL HANDLERS */
 
-  const handleCardClick = (report: Report) => {
+    const handleCardClick = (report: Report) => {
     setSelectedReport(report);
     setStatusValue(report.status || "Pending");
     setCommentText("");
     setEditingIndex(null);
     setEditingText("");
+    setIsImageExpanded(false); // reset
   };
 
   const closeDetails = () => {
@@ -475,7 +476,9 @@ export default function ReportPage() {
     setCommentText("");
     setEditingIndex(null);
     setEditingText("");
+    setIsImageExpanded(false); // reset
   };
+
 
   const handleClearFilters = () => {
     setBuildingFilter("All Buildings");
@@ -535,79 +538,78 @@ export default function ReportPage() {
   */
 
   const handleSaveChanges = async () => {
-  if (!selectedReport) return;
+    if (!selectedReport) return;
 
-  const trimmed = commentText.trim();
+    const trimmed = commentText.trim();
 
-  try {
-    setSaving(true);
+    try {
+      setSaving(true);
 
-    // find all reports with the same building + concern
-    const groupKey = getGroupKey(selectedReport);
-    const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
+      // find all reports with the same building + concern
+      const groupKey = getGroupKey(selectedReport);
+      const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
-    const nowIso = new Date().toISOString();
+      const nowIso = new Date().toISOString();
 
-    const updatedReports = await Promise.all(
-      groupReports.map(async (r) => {
-        const existingComments = Array.isArray(r.comments) ? r.comments : [];
+      const updatedReports = await Promise.all(
+        groupReports.map(async (r) => {
+          const existingComments = Array.isArray(r.comments) ? r.comments : [];
 
-        // if there is a new comment, append it
-        let newComments = existingComments;
-        if (trimmed) {
-          const newComment: Comment = {
-            text: trimmed,
-            comment: trimmed,
-            by: "Admin",
-            at: nowIso,
-          };
-          newComments = [...existingComments, newComment];
-        }
+          // if there is a new comment, append it
+          let newComments = existingComments;
+          if (trimmed) {
+            const newComment: Comment = {
+              text: trimmed,
+              comment: trimmed,
+              by: "Admin",
+              at: nowIso,
+            };
+            newComments = [...existingComments, newComment];
+          }
 
-        const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            status: statusValue,
-            comments: newComments,
-            overwriteComments: true,
-          }),
-        });
+          const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: statusValue,
+              comments: newComments,
+              overwriteComments: true,
+            }),
+          });
 
-        const data = await res.json().catch(() => null);
+          const data = await res.json().catch(() => null);
 
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.message || "Failed to update report");
-        }
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.message || "Failed to update report");
+          }
 
-        return data.report as Report;
-      })
-    );
+          return data.report as Report;
+        })
+      );
 
-    // update all in local state
-    setReports((prev) =>
-      prev.map((r) => {
-        const match = updatedReports.find((u) => u._id === r._id);
-        return match || r;
-      })
-    );
+      // update all in local state
+      setReports((prev) =>
+        prev.map((r) => {
+          const match = updatedReports.find((u) => u._id === r._id);
+          return match || r;
+        })
+      );
 
-    // keep modal in sync with the selected report
-    const updatedSelected =
-      updatedReports.find((u) => u._id === selectedReport._id) ||
-      updatedReports[0];
+      // keep modal in sync with the selected report
+      const updatedSelected =
+        updatedReports.find((u) => u._id === selectedReport._id) ||
+        updatedReports[0];
 
-    setSelectedReport(updatedSelected);
-    setStatusValue(updatedSelected.status || "Pending");
-    setCommentText("");
-  } catch (err: any) {
-    console.error("Error updating reports:", err);
-    alert(err.message || "There was a problem saving the changes.");
-  } finally {
-    setSaving(false);
-  }
-};
-
+      setSelectedReport(updatedSelected);
+      setStatusValue(updatedSelected.status || "Pending");
+      setCommentText("");
+    } catch (err: any) {
+      console.error("Error updating reports:", err);
+      alert(err.message || "There was a problem saving the changes.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleArchive = async () => {
     if (!selectedReport) return;
@@ -696,7 +698,6 @@ export default function ReportPage() {
       if (i !== index) return c;
       const updated: Comment = { ...c };
 
-      // prefer updating text and comment to keep both in sync
       updated.text = trimmed;
       updated.comment = trimmed;
       updated.at = new Date().toISOString();
@@ -1081,6 +1082,7 @@ export default function ReportPage() {
                           }}
                         />
                       </div>
+
                       <div className="report-body">
                         <div className="report-header-row">
                           <h3>{report.heading || "Untitled report"}</h3>
@@ -1250,11 +1252,18 @@ export default function ReportPage() {
           </>
         )}
 
-        {selectedReport && (
+                {selectedReport && (
           <div className="report-modal-backdrop" onClick={closeDetails}>
-            <div className="report-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="report-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* HEADER (same for web and mobile, layout handled by CSS) */}
               <div className="modal-header">
-                <h2>{selectedReport.heading || "Report details"}</h2>
+                <div className="modal-header-main">
+                  <h2>{selectedReport.heading || "Report details"}</h2>
+                </div>
+
                 <button
                   className="modal-close-btn"
                   onClick={closeDetails}
@@ -1264,14 +1273,31 @@ export default function ReportPage() {
                 </button>
               </div>
 
+              {/* CONTENT (desktop: grid image + info, mobile: column with image on top) */}
               <div className="modal-content">
+                  {/* small thumbnail in the header (can be hidden on desktop via CSS if you want) */}
+                  <div className="modal-thumb-mobile">
+                  <img
+                    src={resolveImageFile(
+                      selectedReport.ImageFile || selectedReport.image
+                    )}
+                    alt="Report"
+                    className="report-img report-img-clickable"
+                    onClick={() => setIsImageExpanded(true)}   // NEW
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultImg;
+                    }}
+                  />
+                  </div>
+
                 <div className="modal-img-wrapper">
                   <img
                     src={resolveImageFile(
-                      selectedReport.image || selectedReport.ImageFile
+                      selectedReport.ImageFile || selectedReport.image
                     )}
                     alt="Report"
-                    className="report-img"
+                    className="report-img report-img-clickable"
+                    onClick={() => setIsImageExpanded(true)}   // NEW
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = defaultImg;
                     }}
@@ -1454,11 +1480,36 @@ export default function ReportPage() {
                           ? "Saving..."
                           : "Save changes"}
                       </button>
+
+                      
                     </div>
+
+                    
                   </div>
                 </div>
               </div>
+              
             </div>
+
+            {/* FULLSCREEN IMAGE OVERLAY */}
+            {isImageExpanded && (
+              <div
+                className="image-fullscreen-backdrop"
+                onClick={() => setIsImageExpanded(false)}
+              >
+                <img
+                  src={resolveImageFile(
+                    selectedReport.ImageFile || selectedReport.image
+                  )}
+                  alt="Report full view"
+                  className="image-fullscreen-img"
+                  onClick={(e) => e.stopPropagation()}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = defaultImg;
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

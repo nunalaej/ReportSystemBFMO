@@ -6,8 +6,6 @@ body {
 
 /* =========================================
    LIGHT MODE OVERRIDES
-   Applied when html does NOT have .dark
-   Assumes ThemeProvider uses class="dark" for dark mode
 ========================================= */
 
 html:not(.dark) body {
@@ -15,12 +13,9 @@ html:not(.dark) body {
   color: #020617;
 }
 
-/* Layout */
 html:not(.dark) .report-wrapper {
-  /* same spacing, just lighter look */
 }
 
-/* Header */
 html:not(.dark) .report-wrapper h1 {
   color: #111827;
 }
@@ -70,7 +65,7 @@ html:not(.dark) .duplicate-toggle {
 html:not(.dark) .report {
   background: #ffffff;
   border-color: #969696;
-    border-width: 2px;
+  border-width: 2px;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
@@ -107,29 +102,24 @@ html:not(.dark) .status-panel {
 html:not(.dark) .status-focus-pending {
   background-color: rgba(251, 191, 36, 0.12);
   border-color: rgba(251, 191, 36, 0.7);
-    color: #020617;
-
+  color: #020617;
 }
 html:not(.dark) .status-focus-waiting {
-  background-color:transparent;
+  background-color: transparent;
   border-color: rgba(17, 0, 104, 0.7);
-    color: #020617;
-
+  color: #020617;
 }
 html:not(.dark) .status-focus-inprogress {
   background-color: rgba(59, 130, 246, 0.16);
   border-color: rgba(59, 130, 246, 0.7);
-    color: #020617;
-
+  color: #020617;
 }
 
 html:not(.dark) .status-focus-completed {
   background-color: rgba(34, 197, 94, 0.16);
   border-color: rgba(34, 197, 94, 0.7);
-    color: #020617;
-
+  color: #020617;
 }
-
 
 html:not(.dark) .status-focus-label {
   font-size: 0.75rem;
@@ -138,14 +128,11 @@ html:not(.dark) .status-focus-label {
   color: #000000;
 }
 
-
 html:not(.dark) .status-focus-archived {
   background-color: rgba(117, 5, 9, 0.417);
   border-color: #440606;
-    color: #020617;
-
+  color: #020617;
 }
-
 
 /* Modal backdrop and container */
 html:not(.dark) .report-modal-backdrop {
@@ -256,8 +243,6 @@ html:not(.dark) .back-btn {
 html:not(.dark) .back-btn:hover {
   background: #e5e7eb;
 }
-
-
 
 /* Layout */
 .report-wrapper {
@@ -376,7 +361,6 @@ html:not(.dark) .back-btn:hover {
   transform: translateY(-1px);
 }
 
-
 .print-btn {
   margin-top: 10px;
   padding: 10px 16px;
@@ -389,7 +373,6 @@ html:not(.dark) .back-btn:hover {
 .print-btn:hover {
   background: #1e40af;
 }
-
 
 /* Filters row grid */
 .filters {
@@ -573,7 +556,6 @@ html:not(.dark) .back-btn:hover {
   color: #fbbf24;
 }
 
-
 .status-waiting {
   background-color: #00135171;
   color: #1d4ed8;
@@ -593,7 +575,6 @@ html:not(.dark) .back-btn:hover {
   background-color: transparent;
   color: #9ca3af;
 }
-
 
 /* Status focus row and panel */
 .status-focus-row,
@@ -622,8 +603,6 @@ html:not(.dark) .back-btn:hover {
   color: #9ca3af;
 }
 
-
-
 .status-panel-header {
   display: flex;
   align-items: center;
@@ -639,14 +618,6 @@ html:not(.dark) .back-btn:hover {
   color: #9ca3af;
 }
 
-html:not(dark) .status-panel-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #bfbfbf;
-}
-
 .status-row-inline {
   margin-top: 0.35rem;
 }
@@ -655,18 +626,14 @@ html:not(dark) .status-panel-title {
   font-size: 0.8rem;
   color: #e5e7eb;
 }
-html:not(dark) .status-row-label {
-  font-size: 0.8rem;
-  color: #bfbfbf;
-}
+
 /* Focus background colors for row and panel */
 .status-focus-pending {
   background-color: rgba(251, 191, 36, 0.12);
   border-color: rgba(251, 191, 36, 0.7);
-  
 }
 .status-focus-waiting {
-  background-color:transparent;
+  background-color: transparent;
   border-color: rgba(17, 0, 104, 0.7);
 }
 .status-focus-inprogress {
@@ -693,100 +660,132 @@ html:not(dark) .status-row-label {
   cursor: pointer;
 }
 
-/* Backdrop */
+/* ========= MODAL BACKDROP ========= */
+
 .report-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.8);
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  z-index: 40;
+  background: rgba(15, 23, 42, 0.7); /* dark overlay */
+  backdrop-filter: blur(4px);
 }
 
-/* Modal container */
+/* ========= MODAL PANEL ========= */
+
 .report-modal {
-  background: #020617;
-  border-radius: 18px;
-  max-width: 960px;
   width: 100%;
-  max-height: 90vh;
+  max-width: 960px;
+  max-height: min(90vh, 720px);
+  background: #020617;
+  color: #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
-  border: 1px solid #1f2937;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
   overflow: hidden;
 }
 
 /* Modal header */
 .modal-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #111827;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
 }
 
-.modal-header h2 {
-  margin: 0;
+.modal-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.modal-header-main h2 {
   font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
   color: #f9fafb;
 }
 
+/* Thumbnail in header (hidden by default, only on mobile later) */
+.modal-thumb-mobile {
+  display: none;
+  flex-shrink: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #cbd5f5;
+  background: #020617;
+}
+
+.modal-thumb-mobile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .modal-close-btn {
-  background: #111827;
-  border: 1px solid #1f2937;
-  color: #9ca3af;
-  border-radius: 999px;
-  width: 30px;
-  height: 30px;
-  font-size: 1rem;
+  border: none;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 1.2rem;
   cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease;
 }
 
 .modal-close-btn:hover {
-  color: #e5e7eb;
-  background: #1f2937;
+  background: rgba(148, 163, 184, 0.2);
+  transform: translateY(-1px);
 }
 
-/* Modal scrollable content */
+/* ========= MAIN CONTENT ========= */
+
 .modal-content {
+  padding: 1.25rem 1.5rem 1.5rem;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-  gap: 1.25rem;
-  padding: 1.25rem;
-  flex: 1 1 auto;
-  min-height: 0;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 3fr);
+  gap: 1.5rem;
   overflow-y: auto;
-  overflow-x: hidden;
 }
 
+/* big image on the left */
 .modal-img-wrapper {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #1f2937;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.3);
   max-height: 380px;
 }
 
 .modal-img-wrapper img {
   width: 100%;
   height: 100%;
+  max-height: 380px;
   object-fit: cover;
+  display: block;
 }
+
+/* right column info */
 
 .modal-info {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 1rem;
 }
 
 .modal-description {
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.95rem;
+  line-height: 1.5;
   color: #e5e7eb;
 }
 
@@ -794,7 +793,35 @@ html:not(dark) .status-row-label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: #cbd5f5;
+}
+
+.modal-meta-grid strong {
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+/* status panel */
+
+.status-panel {
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
+.status-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.status-panel-title {
   font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: #9ca3af;
 }
 
@@ -822,86 +849,100 @@ html:not(dark) .status-row-label {
   border-color: #3b82f6;
 }
 
-/* Comments */
+/* comments */
+
 .comments-section {
   margin-top: 0.5rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #111827;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .comments-section h3 {
-  margin: 0;
+  margin-bottom: 0.5rem;
   font-size: 0.95rem;
 }
 
 .comments-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   max-height: 160px;
   overflow-y: auto;
-  padding: 0;
-  margin: 0;
-  list-style: none;
 }
 
 .comment-item {
-  padding: 0.45rem 0;
-  border-bottom: 1px solid #020617;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 .comment-text {
-  margin: 0;
   font-size: 0.85rem;
-  color: #e5e7eb;
+  margin-bottom: 0.25rem;
 }
 
-.comment-date {
-  display: inline-block;
-  margin-top: 0.15rem;
-  font-size: 0.7rem;
+.comment-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
   color: #9ca3af;
 }
 
-.no-comments {
-  font-size: 0.8rem;
-  color: #9ca3af;
+.comment-actions {
+  display: flex;
+  gap: 0.25rem;
 }
+
+.comment-btn-edit,
+.comment-btn-delete,
+.comment-btn-save,
+.comment-btn-cancel {
+  border-radius: 999px;
+  border: none;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+/* textarea and action buttons */
 
 .comment-input {
   width: 100%;
-  border-radius: 8px;
-  border: 1px solid #374151;
+  min-height: 70px;
+  resize: vertical;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
   background: #020617;
   color: #e5e7eb;
-  padding: 0.5rem 0.6rem;
   font-size: 0.85rem;
-  resize: vertical;
 }
 
-.comment-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-}
-
-/* Modal footer actions */
 .modal-actions {
+  margin-top: 0.75rem;
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  margin-top: 0.5rem;
+}
+
+/* keep buttons */
+.archive-btn,
+.save-comment-btn {
+  border-radius: 999px;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
 /* Save button */
 .save-comment-btn {
   background: #3b82f6;
   color: white;
-  border: none;
-  border-radius: 999px;
-  padding: 0.4rem 1rem;
-  font-size: 0.8rem;
   font-weight: 600;
-  cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
 }
 
@@ -919,12 +960,7 @@ html:not(dark) .status-row-label {
 .archive-btn {
   background: #6b7280;
   color: #f9fafb;
-  border: none;
-  border-radius: 999px;
-  padding: 0.4rem 1rem;
-  font-size: 0.8rem;
   font-weight: 600;
-  cursor: pointer;
   transition: background 0.15s ease, transform 0.1s ease;
 }
 
@@ -938,46 +974,103 @@ html:not(dark) .status-row-label {
   cursor: default;
 }
 
-/* Responsive */
-@media (max-width: 1200px) {
-  .reports-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+/* COMMENTS extra button styles */
+
+.comment-footer > div:first-child {
+  flex: 1;
 }
 
-@media (max-width: 900px) {
-  .reports-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .modal-content {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .modal-img-wrapper {
-    max-height: 260px;
-  }
-
-  .filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.comment-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-@media (max-width: 500px) {
-  .reports-list {
-    grid-template-columns: 1fr;
-  }
-
-  .report-wrapper {
-    padding: 1.25rem;
-  }
-
-  .filters {
-    grid-template-columns: 1fr 1fr;
-  }
+.comment-edit-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  background: #020617;
+  color: #e5e7eb;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  resize: vertical;
 }
 
-/* Transparent merged scroll */
+.comment-actions-row {
+  margin-top: 0.35rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.comment-btn-edit,
+.comment-btn-delete,
+.comment-btn-save,
+.comment-btn-cancel {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.comment-btn-edit {
+  background: #020617;
+  color: #93c5fd;
+  border: 1px solid #1d4ed8;
+}
+
+.comment-btn-edit:hover:not(:disabled) {
+  background: #1d4ed8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.comment-btn-delete {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: 1px solid #f87171;
+}
+
+.comment-btn-delete:hover:not(:disabled) {
+  background: #ef4444;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.comment-btn-save {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.comment-btn-save:hover:not(:disabled) {
+  background: #16a34a;
+  transform: translateY(-1px);
+}
+
+.comment-btn-cancel {
+  background: #4b5563;
+  color: #e5e7eb;
+}
+
+.comment-btn-cancel:hover:not(:disabled) {
+  background: #6b7280;
+  transform: translateY(-1px);
+}
+
+.log-list {
+  color: #000000;
+}
+
+html:not(dark) .log-list {
+  color: #000000;
+}
+
+/* Transparent scrollbars */
 
 /* Firefox */
 * {
@@ -985,7 +1078,7 @@ html:not(dark) .status-row-label {
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 
-/* WebKit (Chrome, Edge, Safari) */
+/* WebKit */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1005,141 +1098,69 @@ html:not(dark) .status-row-label {
   background-color: rgba(148, 163, 184, 0.8);
 }
 
-/* ==========================
-   COMMENTS LAYOUT WITH SIDE BUTTONS
-   ========================== */
-
-/* One row per comment */
-.comment-item {
-  padding: 0.45rem 0;
-  border-bottom: 1px solid #020617;
-}
-
-/* Text + date on the left, buttons on the right */
-.comment-footer {
-  margin-top: 0.15rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-/* Limit width of the left side so buttons do not wrap weirdly */
-.comment-footer > div:first-child {
-  flex: 1;
-}
-
-/* Right side: buttons in a row */
-.comment-actions {
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* Edit mode: textarea takes full width */
-.comment-edit-input {
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid #374151;
-  background: #020617;
-  color: #e5e7eb;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.85rem;
-  resize: vertical;
-}
-
-/* Slight highlight when editing */
-.comment-edit-input.comment-editing {
-  border-color: #3b82f6;
-  background: #020617;
-}
-
-/* Buttons row in edit mode (Save / Cancel) */
-.comment-actions-row {
-  margin-top: 0.35rem;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-/* Base button style (you already have some, this reinforces it) */
-.comment-btn-edit,
-.comment-btn-delete,
-.comment-btn-save,
-.comment-btn-cancel {
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: 4px;
-  border: none;
+/* make the modal image look tappable on small screens */
+.report-img-clickable {
   cursor: pointer;
-  transition: all 0.15s ease;
-  font-weight: 500;
 }
 
-/* Edit button */
-.comment-btn-edit {
-  background: #020617;
-  color: #93c5fd;
-  border: 1px solid #1d4ed8;
+/* Fullscreen overlay for image */
+.image-fullscreen-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
 }
 
-.comment-btn-edit:hover:not(:disabled) {
-  background: #1d4ed8;
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
-/* Delete button */
-.comment-btn-delete {
-  background: #7f1d1d;
-  color: #fecaca;
-  border: 1px solid #f87171;
-}
-
-.comment-btn-delete:hover:not(:disabled) {
-  background: #ef4444;
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
-/* Save edit button */
-.comment-btn-save {
-  background: #22c55e;
-  color: #ffffff;
-}
-
-.comment-btn-save:hover:not(:disabled) {
-  background: #16a34a;
-  transform: translateY(-1px);
-}
-
-/* Cancel edit button */
-.comment-btn-cancel {
-  background: #4b5563;
-  color: #e5e7eb;
-}
-
-.comment-btn-cancel:hover:not(:disabled) {
-  background: #6b7280;
-  transform: translateY(-1px);
-}
-
-.log-list {
-    color:#000000;
-}
-
-html:not(dark) .log-list{
-
-    color:#000000
+.image-fullscreen-img {
+  max-width: 80%;
+  max-height: 80%;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* ==========================
    MOBILE ENHANCEMENTS
    ========================== */
 
-/* Very small screens: tighter padding, stacked header */
-@media (max-width: 640px) {
+@media (max-width: 1200px) {
+  .reports-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* 900px: stack cards, filters single column, keep modal desktop layout */
+@media (max-width: 900px) {
+  .reports-list {
+    grid-template-columns: 1fr;
+  }
+
+  .report-wrapper {
+    padding: 1.25rem;
+  }
+
+  .modal-header-main h2 {
+    font-size: 0.98rem;
+  }
+
+  .report-modal-backdrop {
+    padding: 0.75rem;
+  }
+
+  .report-modal {
+    max-height: 95vh;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 768px and below: full-screen modal, big image, vertical layout */
+@media (max-width: 768px) {
   .report-wrapper {
     padding: 1rem;
   }
@@ -1161,56 +1182,66 @@ html:not(dark) .log-list{
     font-size: 0.8rem;
     padding: 0.5rem 0.9rem;
   }
-}
 
-/* Filters: make them one per row on small phones */
-@media (max-width: 600px) {
-  .filters {
-    grid-template-columns: 1fr;
-  }
-
-  .filter-field {
-    min-width: 0;
-  }
-
-  .duplicate-toggle {
-    margin-top: 0.25rem;
-  }
-}
-
-/* Reports grid: single column sooner on small devices */
-@media (max-width: 720px) {
-  .reports-list {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Modal tweaks for small screens */
-@media (max-width: 720px) {
   .report-modal-backdrop {
-    padding: 0.75rem;
+    padding: 0;
   }
 
   .report-modal {
-    max-height: 95vh;
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
   }
 
+  /* vertical layout inside modal */
   .modal-content {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    padding: 0.75rem 1rem 1rem;
     gap: 0.75rem;
-    padding: 0.9rem;
+    overflow-y: auto;
   }
 
+  /* show thumbnail near title (optional) */
+  .modal-thumb-mobile {
+    display: block;
+    width: 100%;     /* bigger thumbnail */
+    height: 250px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  .modal-thumb-mobile img {
+    width: 100% !important; 
+    height: 100% !important;
+    object-fit: cover;
+  }
+
+  /* big image first, full width */
   .modal-img-wrapper {
-    max-height: 220px;
+    max-height: 320px;
+  }
+
+  .modal-img-wrapper img {
+    width: 100%;
+    height: auto;      /* do not squeeze into a tiny box */
+    max-height: 320px;
+    object-fit: cover;
+    display: block;
   }
 
   .modal-meta-grid {
     grid-template-columns: 1fr;
   }
 
+  /* comments can grow naturally */
   .comments-section {
-    max-height: 260px;
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .report-img-clickable {
+    cursor: zoom-in;
   }
 }
