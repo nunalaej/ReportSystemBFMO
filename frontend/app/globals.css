@@ -165,3 +165,35 @@ html.dark .layout {
 .switch input:checked ~ .slider .cloud {
   opacity: 1;
 }
+
+/* ==========================
+   HEADER (LAYOUT) MOBILE ENHANCEMENTS
+   ========================== */
+
+@media (max-width: 768px) {
+  .layout {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .layout > div {
+    min-width: 0;
+  }
+
+  /* Left logo + title */
+  .layout .flex.items-center.gap-3 {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .layout {
+    padding: 0.4rem 0.6rem;
+  }
+
+  .layout img.w-10.h-10 {
+    width: 2rem;
+    height: 2rem;
+  }
+}

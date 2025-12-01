@@ -107,3 +107,42 @@ html:not(.dark) .value::before {
   height: 25px;
   display: inline-block;
 }
+
+
+/* ==========================
+   NAVBAR MOBILE ENHANCEMENTS
+   ========================== */
+
+@media (max-width: 768px) {
+  /* Make nav take full width and allow horizontal scroll if needed */
+  .input {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 4px 4px;
+    gap: 0.25rem;
+  }
+
+  .value {
+    margin: 0 4px 0 0;
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    white-space: nowrap; /* keep buttons in one line */
+  }
+
+  .nav-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .input {
+    padding: 3px 2px;
+  }
+
+  .value {
+    padding: 7px 9px;
+    font-size: 0.75rem;
+  }
+}

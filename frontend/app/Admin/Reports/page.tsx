@@ -535,71 +535,79 @@ export default function ReportPage() {
   */
 
   const handleSaveChanges = async () => {
-    if (!selectedReport) return;
+  if (!selectedReport) return;
 
-    const trimmed = commentText.trim();
+  const trimmed = commentText.trim();
 
-    const payload: {
-      status: string;
-      comment?: string;
-      by?: string;
-    } = {
-      status: statusValue,
-    };
+  try {
+    setSaving(true);
 
-    if (trimmed) {
-      payload.comment = trimmed;
-      payload.by = "Admin";
-    }
+    // find all reports with the same building + concern
+    const groupKey = getGroupKey(selectedReport);
+    const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
-    try {
-      setSaving(true);
+    const nowIso = new Date().toISOString();
 
-      // find all reports with the same building + concern
-      const groupKey = getGroupKey(selectedReport);
-      const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
+    const updatedReports = await Promise.all(
+      groupReports.map(async (r) => {
+        const existingComments = Array.isArray(r.comments) ? r.comments : [];
 
-      // update all of them on the server
-      const updatedReports = await Promise.all(
-        groupReports.map(async (r) => {
-          const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json().catch(() => null);
+        // if there is a new comment, append it
+        let newComments = existingComments;
+        if (trimmed) {
+          const newComment: Comment = {
+            text: trimmed,
+            comment: trimmed,
+            by: "Admin",
+            at: nowIso,
+          };
+          newComments = [...existingComments, newComment];
+        }
 
-          if (!res.ok || !data?.success) {
-            throw new Error(data?.message || "Failed to update report");
-          }
+        const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: statusValue,
+            comments: newComments,
+            overwriteComments: true,
+          }),
+        });
 
-          return data.report as Report;
-        })
-      );
+        const data = await res.json().catch(() => null);
 
-      // update all in local state
-      setReports((prev) =>
-        prev.map((r) => {
-          const match = updatedReports.find((u) => u._id === r._id);
-          return match || r;
-        })
-      );
+        if (!res.ok || !data?.success) {
+          throw new Error(data?.message || "Failed to update report");
+        }
 
-      // keep modal in sync with the selected report
-      const updatedSelected =
-        updatedReports.find((u) => u._id === selectedReport._id) ||
-        updatedReports[0];
+        return data.report as Report;
+      })
+    );
 
-      setSelectedReport(updatedSelected);
-      setStatusValue(updatedSelected.status || "Pending");
-      setCommentText("");
-    } catch (err: any) {
-      console.error("Error updating reports:", err);
-      alert(err.message || "There was a problem saving the changes.");
-    } finally {
-      setSaving(false);
-    }
-  };
+    // update all in local state
+    setReports((prev) =>
+      prev.map((r) => {
+        const match = updatedReports.find((u) => u._id === r._id);
+        return match || r;
+      })
+    );
+
+    // keep modal in sync with the selected report
+    const updatedSelected =
+      updatedReports.find((u) => u._id === selectedReport._id) ||
+      updatedReports[0];
+
+    setSelectedReport(updatedSelected);
+    setStatusValue(updatedSelected.status || "Pending");
+    setCommentText("");
+  } catch (err: any) {
+    console.error("Error updating reports:", err);
+    alert(err.message || "There was a problem saving the changes.");
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const handleArchive = async () => {
     if (!selectedReport) return;
