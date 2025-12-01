@@ -1188,9 +1188,9 @@ html:not(dark) .log-list {
   }
 
   .report-modal {
-    max-width: 100%;
-    max-height: 100vh;
-    border-radius: 0;
+    border-radius: 20px;
+        max-width: 80%;
+        max-height: 90%;
   }
 
   /* vertical layout inside modal */
