@@ -163,10 +163,10 @@ const Analytics: FC = () => {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
 
-  // only true if user is loaded AND role is admin
+  // only true if user is loaded AND role is staff
   const [canView, setCanView] = useState(false);
 
-  /* AUTH GUARD: only admins can view this page */
+  /* AUTH GUARD: only STAFF can view this page */
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -177,7 +177,7 @@ const Analytics: FC = () => {
       return;
     }
 
-    // role could be "admin" OR ["admin"]
+    // role could be "staff" OR ["staff"]
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
 
@@ -187,17 +187,22 @@ const Analytics: FC = () => {
       role = rawRole.toLowerCase();
     }
 
-    if (role !== "admin") {
-      // Non admin -> send to student dashboard
-      router.replace("/Student/Dashboard");
+    if (role !== "staff") {
+      // Non staff users are redirected away
+      if (role === "admin") {
+        router.replace("/Admin");
+      } else {
+        router.replace("/Student/Dashboard");
+      }
       return;
     }
 
-    // User is admin -> allow rendering and data fetch
+    // User is staff -> allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
   const handleReports = () => {
+    // Staff reports path, change this if you have a separate staff route
     router.push("/Admin/Reports");
   };
 
@@ -395,7 +400,6 @@ const Analytics: FC = () => {
   ]);
 
   // Available options for each filter, depending on the other filters
-  // If an option is not connected to any report, it disappears
 
   const availableStatusFilters = useMemo(() => {
     const s = new Set<string>();

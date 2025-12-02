@@ -16,7 +16,7 @@ export default function AdminDashboard() {
       <section className="admin-card-grid">
         <button
           className="admin-card"
-          onClick={() => router.push("/Admin/Reports")}
+          onClick={() => router.push("/Staff/Reports")}
         >
           <h2>View Reports</h2>
           <p>See all facility reports submitted by students and staff.</p>
@@ -24,7 +24,7 @@ export default function AdminDashboard() {
 
         <button
           className="admin-card"
-          onClick={() => router.push("/Admin/Analytics")}
+          onClick={() => router.push("/Staff/Analytics")}
         >
           <h2>Analytics</h2>
           <p>Check statistics by status, building, and concern type.</p>

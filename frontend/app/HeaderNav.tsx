@@ -7,19 +7,14 @@ import "@/app/style/nav.css";
 
 // Simple image icon for Activity Logs
 const HistoryIcon: FC = () => (
-  <img
-    src="/icon.svg"          // change this path if your icon is different
-    alt="Activity Logs"
-    className="nav-icon"     // optional class, style it in nav.css
-  />
+  <img src="/icon.svg" alt="Activity Logs" className="nav-icon" />
 );
 
-interface HeaderNavProps {}
-
-const HeaderNav: FC<HeaderNavProps> = () => {
+const HeaderNav: FC = () => {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
 
+  // Determine role from Clerk metadata
   const role = useMemo(() => {
     if (!isLoaded || !isSignedIn || !user) return "guest";
 
@@ -35,17 +30,34 @@ const HeaderNav: FC<HeaderNavProps> = () => {
     return r;
   }, [isLoaded, isSignedIn, user]);
 
-  const gotoReports = () => router.push("/Admin/Reports");
-  const gotoAnalytics = () => router.push("/Admin/Analytics");
-  const gotoAdminEdit = () => router.push("/Admin/Edit");
-  const gotoActivityLogs = () => router.push("/Logs"); // Logs page
-
   if (!isLoaded || !isSignedIn) return <div />;
 
+  // Only Admin and Staff see this nav
   if (role !== "admin" && role !== "staff") return <div />;
+
+  // Navigation handlers
+  const gotoReports = () => {
+    if (role === "admin") {
+      router.push("/Admin/Reports");
+    } else if (role === "staff") {
+      router.push("/Staff/Reports");
+    }
+  };
+
+  const gotoAnalytics = () => {
+    if (role === "admin") {
+      router.push("/Admin/Analytics");
+    } else if (role === "staff") {
+      router.push("/Staff/Analytics");
+    }
+  };
+
+  const gotoAdminEdit = () => router.push("/Admin/Edit");
+  const gotoActivityLogs = () => router.push("/Logs");
 
   return (
     <nav className="input">
+      {/* Shared buttons for Admin and Staff */}
       <button className="value" onClick={gotoReports}>
         Reports
       </button>
@@ -54,12 +66,14 @@ const HeaderNav: FC<HeaderNavProps> = () => {
         Analytics
       </button>
 
+      {/* Admin only */}
       {role === "admin" && (
         <button className="value" onClick={gotoAdminEdit}>
           Admin Edit
         </button>
       )}
 
+      {/* Logs */}
       <button
         className="value"
         onClick={gotoActivityLogs}

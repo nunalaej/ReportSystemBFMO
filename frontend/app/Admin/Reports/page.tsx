@@ -11,10 +11,9 @@ const defaultImg = "/default.jpg";
 // Backend base URL (Render)
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
-    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
-  "";
+    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "";
 
-// Cloudinary - only the cloud name is needed on the frontend
+// Cloudinary – only the cloud name is needed on the frontend
 const CLOUDINARY_CLOUD_NAME =
   process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
 
@@ -23,6 +22,7 @@ type Comment = {
   comment?: string;
   at?: string;
   by?: string;
+  imageUrl?: string; // optional image per comment (existing only, read-only now)
 };
 
 type Report = {
@@ -138,15 +138,27 @@ const statusMatchesFilter = (
 const REPORTS_PER_PAGE = 12;
 
 // helper to compute the "similar group" key
-const getGroupKey = (r: Report) =>
-  `${(r.building || "").trim()}-${(r.concern || "").trim()}`;
+// similar if:
+// - same Concern + SubConcern + Building (no room)
+// - same Concern + SubConcern + Building + Room (if there is a room)
+const getGroupKey = (r: Report) => {
+  const building = (r.building || "").trim();
+  const concern = (r.concern || "").trim();
+  const subConcern = (r.subConcern || r.otherConcern || "").trim();
+  const room = (r.room || r.otherRoom || "").trim();
+
+  if (room) {
+    return `${building}|${concern}|${subConcern}|${room}`;
+  }
+  return `${building}|${concern}|${subConcern}`;
+};
 
 /**
  * Resolve the correct image URL.
  * Priority:
- * 1. Already full URL (Cloudinary secure_url or other) -> use as is
- * 2. If we have a Cloudinary cloud name and it looks like a public_id -> build Cloudinary URL
- * 3. Else treat it as a path from the backend and prepend API_BASE
+ * 1. Already full URL (Cloudinary secure_url or other) uses as is
+ * 2. If we have a Cloudinary cloud name and it looks like a public_id builds Cloudinary URL
+ * 3. Else treats it as a path from the backend and prepends API_BASE
  */
 const resolveImageFile = (raw?: string) => {
   if (!raw) return defaultImg;
@@ -213,13 +225,13 @@ export default function ReportPage() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Not signed in -> go to landing
+    // Not signed in goes to landing
     if (!isSignedIn || !user) {
       router.replace("/");
       return;
     }
 
-    // role could be "admin" OR ["admin"]
+    // role could be "admin" or ["admin"]
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
 
@@ -230,12 +242,12 @@ export default function ReportPage() {
     }
 
     if (role !== "admin") {
-      // Non admin -> send to student dashboard
+      // Non admin goes to student dashboard
       router.replace("/Student/Dashboard");
       return;
     }
 
-    // User is admin -> allow rendering and data fetch
+    // User is admin allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
@@ -461,13 +473,13 @@ export default function ReportPage() {
 
   /* CARD & MODAL HANDLERS */
 
-    const handleCardClick = (report: Report) => {
+  const handleCardClick = (report: Report) => {
     setSelectedReport(report);
     setStatusValue(report.status || "Pending");
     setCommentText("");
     setEditingIndex(null);
     setEditingText("");
-    setIsImageExpanded(false); // reset
+    setIsImageExpanded(false);
   };
 
   const closeDetails = () => {
@@ -476,9 +488,8 @@ export default function ReportPage() {
     setCommentText("");
     setEditingIndex(null);
     setEditingText("");
-    setIsImageExpanded(false); // reset
+    setIsImageExpanded(false);
   };
-
 
   const handleClearFilters = () => {
     setBuildingFilter("All Buildings");
@@ -500,9 +511,7 @@ export default function ReportPage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // keep current status
           status: selectedReport.status || "Pending",
-          // replace the comments with the updated list
           comments: updatedComments,
           overwriteComments: true,
         }),
@@ -534,7 +543,7 @@ export default function ReportPage() {
   };
 
   /* UPDATE STATUS / COMMENTS
-     when saving, update ALL reports with same building + concern
+     when saving, update ALL reports with same building + concern (+ subConcern, + room)
   */
 
   const handleSaveChanges = async () => {
@@ -545,7 +554,7 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      // find all reports with the same building + concern
+      // find all reports with the same group key
       const groupKey = getGroupKey(selectedReport);
       const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
@@ -555,7 +564,7 @@ export default function ReportPage() {
         groupReports.map(async (r) => {
           const existingComments = Array.isArray(r.comments) ? r.comments : [];
 
-          // if there is a new comment, append it
+          // if there is a new comment, append it (text only now)
           let newComments = existingComments;
           if (trimmed) {
             const newComment: Comment = {
@@ -619,7 +628,7 @@ export default function ReportPage() {
     try {
       setSaving(true);
 
-      // find all reports with the same building + concern
+      // find all reports with the same group key
       const groupKey = getGroupKey(selectedReport);
       const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
@@ -657,7 +666,7 @@ export default function ReportPage() {
       setStatusValue("Archived");
     } catch (err: any) {
       console.error("Error archiving reports:", err);
-      alert(err.message || "There was a problem archiving the report(s).");
+      alert("There was a problem archiving the report(s).");
     } finally {
       setSaving(false);
     }
@@ -701,6 +710,7 @@ export default function ReportPage() {
       updated.text = trimmed;
       updated.comment = trimmed;
       updated.at = new Date().toISOString();
+      // imageUrl left as is, no editing / inserting
 
       return updated;
     });
@@ -721,9 +731,7 @@ export default function ReportPage() {
     await syncComments(updatedComments);
   };
 
-  /* =========================================================
-    PRINT ANALYTICS (SUMMARY STATS) FOR CURRENT FILTERS
-  ========================================================= */
+  /* PRINT ANALYTICS (SUMMARY STATS) FOR CURRENT FILTERS */
 
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -923,7 +931,7 @@ export default function ReportPage() {
     );
   }
 
-  // comments to show: ONLY from the currently selected report
+  // comments to show: only from the currently selected report
   const commentsToShow: Comment[] = selectedReport?.comments || [];
 
   return (
@@ -1252,7 +1260,7 @@ export default function ReportPage() {
           </>
         )}
 
-                {selectedReport && (
+        {selectedReport && (
           <div className="report-modal-backdrop" onClick={closeDetails}>
             <div
               className="report-modal"
@@ -1275,20 +1283,20 @@ export default function ReportPage() {
 
               {/* CONTENT (desktop: grid image + info, mobile: column with image on top) */}
               <div className="modal-content">
-                  {/* small thumbnail in the header (can be hidden on desktop via CSS if you want) */}
-                  <div className="modal-thumb-mobile">
+                {/* small thumbnail in the header (can be hidden on desktop via CSS if you want) */}
+                <div className="modal-thumb-mobile">
                   <img
                     src={resolveImageFile(
                       selectedReport.ImageFile || selectedReport.image
                     )}
                     alt="Report"
                     className="report-img report-img-clickable"
-                    onClick={() => setIsImageExpanded(true)}   // NEW
+                    onClick={() => setIsImageExpanded(true)}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = defaultImg;
                     }}
                   />
-                  </div>
+                </div>
 
                 <div className="modal-img-wrapper">
                   <img
@@ -1297,7 +1305,7 @@ export default function ReportPage() {
                     )}
                     alt="Report"
                     className="report-img report-img-clickable"
-                    onClick={() => setIsImageExpanded(true)}   // NEW
+                    onClick={() => setIsImageExpanded(true)}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = defaultImg;
                     }}
@@ -1315,7 +1323,8 @@ export default function ReportPage() {
                       {formatBuilding(selectedReport)}
                     </p>
                     <p>
-                      <strong>Concern:</strong> {formatConcern(selectedReport)}
+                      <strong>Concern:</strong>{" "}
+                      {formatConcern(selectedReport)}
                     </p>
                     <p>
                       <strong>College:</strong>{" "}
@@ -1406,6 +1415,18 @@ export default function ReportPage() {
                                 <p className="comment-text">
                                   {c.text || c.comment || String(c)}
                                 </p>
+                                {/* Existing images can still be viewed but no way to add/update */}
+                                {c.imageUrl && (
+                                  <img
+                                    src={c.imageUrl}
+                                    alt="Comment attachment"
+                                    className="comment-image"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display =
+                                        "none";
+                                    }}
+                                  />
+                                )}
                                 <div className="comment-footer">
                                   <div>
                                     {c.at && (
@@ -1448,6 +1469,7 @@ export default function ReportPage() {
                       <p className="no-comments">No comments yet.</p>
                     )}
 
+                    {/* Text-only comment input now */}
                     <textarea
                       className="comment-input"
                       rows={3}
@@ -1480,15 +1502,10 @@ export default function ReportPage() {
                           ? "Saving..."
                           : "Save changes"}
                       </button>
-
-                      
                     </div>
-
-                    
                   </div>
                 </div>
               </div>
-              
             </div>
 
             {/* FULLSCREEN IMAGE OVERLAY */}

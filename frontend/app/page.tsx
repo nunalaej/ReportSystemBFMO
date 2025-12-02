@@ -15,33 +15,39 @@ import { useRouter } from "next/navigation";
 export default function Home() {
   const [lightMode, setLightMode] = useState(false);
 
-  // ⬅ now also grab `user`
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
 
-  // Redirect based on role once Clerk is ready
+  /* =========================================
+     ROLE-BASED REDIRECTION
+  ============================================ */
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !user) return;
 
-    // role might be "admin" or ["admin"]
+    // Read the role from Clerk publicMetadata
     const rawRole = (user.publicMetadata as any)?.role;
+
+    // Support: "admin" or ["admin"]
     let role: string =
       Array.isArray(rawRole) && rawRole.length > 0 ? rawRole[0] : rawRole;
 
     role = typeof role === "string" ? role.toLowerCase() : "";
 
+    // Redirect based on role
     if (role === "admin") {
       router.replace("/Admin");
     } else if (role === "staff") {
-      router.replace("/Staff");
+      router.replace("/Staff");          // ← EXACT PATH FOR Staff/page.tsx
     } else {
-      // default → student
       router.replace("/Student/Dashboard");
     }
   }, [isLoaded, isSignedIn, user, router]);
 
   const isLoadingUser = !isLoaded;
 
+  /* =========================================
+     MAIN LOGIN PAGE UI
+  ============================================ */
   return (
     <div
       className={
@@ -94,7 +100,7 @@ export default function Home() {
           <div style={{ marginBottom: 20 }}>
             <p className="welcome">
               Welcome to the online reporting portal for maintenance concerns at
-              DLSU-D. Please use your DLSU-D Account to Login
+              DLSU-D. Please use your DLSU-D Account to Login.
             </p>
           </div>
 
@@ -108,11 +114,10 @@ export default function Home() {
           )}
 
           <div className="login-tabs-morph">
+            {/* Not Signed In */}
             <SignedOut>
               <SignInButton
                 mode="modal"
-                // after sign in we always come back here,
-                // then the useEffect above redirects based on role
                 fallbackRedirectUrl="/"
                 signUpFallbackRedirectUrl="/"
               >
@@ -122,6 +127,7 @@ export default function Home() {
               </SignInButton>
             </SignedOut>
 
+            {/* Signed In */}
             <SignedIn>
               <UserButton afterSignOutUrl="/" />
             </SignedIn>

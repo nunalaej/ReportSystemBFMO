@@ -105,7 +105,7 @@ html:not(.dark) .status-focus-pending {
   color: #020617;
 }
 html:not(.dark) .status-focus-waiting {
-  background-color: transparent;
+  background-color: purple;
   border-color: rgba(17, 0, 104, 0.7);
   color: #020617;
 }
@@ -1244,4 +1244,42 @@ html:not(dark) .log-list {
   .report-img-clickable {
     cursor: zoom-in;
   }
+}
+
+
+.comment-upload-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comment-upload-btn {
+  background: #1e293b;
+  border: none;
+  padding: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.comment-upload-btn:hover {
+  background: #334155;
+}
+
+.upload-icon {
+  width: 22px;
+  height: 22px;
+  color: #e2e8f0;
+}
+
+.comment-image-preview {
+  margin-top: 10px;
+  max-width: 160px;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  object-fit: cover;
 }

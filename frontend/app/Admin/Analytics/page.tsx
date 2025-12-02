@@ -1434,7 +1434,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                   <YAxis allowDecimals={false} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff01",
+                      backgroundColor: "#ffffff",
                       borderRadius: 8,
                       border: "1px solid #e5e7eb",
                       color: "#000000",
@@ -1522,7 +1522,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff",
+                      backgroundColor: "#ffffff0",
                       borderRadius: 8,
                       border: "1px solid #e5e7eb",
                       color: "#000000",

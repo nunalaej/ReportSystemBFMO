@@ -215,6 +215,30 @@ const containsProfanity = (text: string | undefined | null): boolean => {
   return profanityPatterns.some((re) => re.test(lower) || re.test(leet));
 };
 
+/* Similarity key helper
+   Same rule as admin reports:
+   - same Building + Concern + SubConcern/OtherConcern
+   - and same Room/OtherRoom when there is a room
+*/
+const getSimilarityKey = (r: {
+  building?: string;
+  concern?: string;
+  subConcern?: string;
+  otherConcern?: string;
+  room?: string;
+  otherRoom?: string;
+}): string => {
+  const building = (r.building || "").trim();
+  const concern = (r.concern || "").trim();
+  const sub = (r.subConcern || r.otherConcern || "").trim();
+  const room = (r.room || r.otherRoom || "").trim();
+
+  if (room) {
+    return `${building}|${concern}|${sub}|${room}`;
+  }
+  return `${building}|${concern}|${sub}`;
+};
+
 export default function Create() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -451,12 +475,15 @@ export default function Create() {
   ];
 
   // Floor options that should be visible given building
+  const isIctc = formData.building === "ICTC";
+  const isCos = formData.building === "COS";
+
   const visibleFloorOptions = useMemo(() => {
-    if (formData.building === "ICTC") {
+    if (isIctc) {
       return ["First Floor", "Second Floor", "Other"];
     }
     return floorOptions;
-  }, [formData.building]);
+  }, [isIctc]);
 
   // Room ranges allowed per floor (global, then intersect per building)
   const floorRoomRanges: Record<string, string[]> = {
@@ -482,9 +509,6 @@ export default function Create() {
     }
     return out;
   };
-
-  const isIctc = formData.building === "ICTC";
-  const isCos = formData.building === "COS";
 
   // All rooms allowed for the chosen building (non ICTC)
   const allRoomsForBuilding = useMemo(() => {
@@ -605,90 +629,89 @@ export default function Create() {
   }, [formData]);
 
   const performSubmit = async () => {
-  setSubmitting(true);
-  setIsConfirming(false);
-  showMsg("info", "Submitting report...");
-  try {
-    const data = new FormData();
-
-    // Text fields
-    data.append("email", formData.email);
-    data.append("heading", formData.heading);
-    data.append("description", formData.description);
-    data.append("concern", formData.concern);
-    data.append("subConcern", formData.subConcern);
-    data.append("building", formData.building);
-    data.append("college", formData.college);
-    data.append("floor", formData.floor);
-    data.append("room", formData.room);
-    data.append("otherConcern", formData.otherConcern);
-    data.append("otherBuilding", formData.otherBuilding);
-    data.append("otherRoom", formData.otherRoom);
-
-    // File field – MUST match multer.single("ImageFile")
-    if (formData.ImageFile) {
-      data.append("ImageFile", formData.ImageFile);
-    }
-
-    const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
-
-    const res = await fetch(submitUrl, {
-      method: "POST",
-      body: data,
-    });
-
-    const raw = await res.text().catch(() => "");
-
-    if (!res.ok) {
-      console.error("Submit error status:", res.status, raw);
-      showMsg(
-        "error",
-        raw || `Submission failed with status ${res.status}`
-      );
-      return;
-    }
-
-    let result: any = {};
+    setSubmitting(true);
+    setIsConfirming(false);
+    showMsg("info", "Submitting report...");
     try {
-      result = raw ? JSON.parse(raw) : {};
-    } catch {
-      // ignore parse error, we already logged raw
-    }
+      const data = new FormData();
 
-    if (result.success) {
-      if (result.report && typeof result.report === "object") {
-        setExistingReports((prev) => [...prev, result.report as Report]);
+      // Text fields
+      data.append("email", formData.email);
+      data.append("heading", formData.heading);
+      data.append("description", formData.description);
+      data.append("concern", formData.concern);
+      data.append("subConcern", formData.subConcern);
+      data.append("building", formData.building);
+      data.append("college", formData.college);
+      data.append("floor", formData.floor);
+      data.append("room", formData.room);
+      data.append("otherConcern", formData.otherConcern);
+      data.append("otherBuilding", formData.otherBuilding);
+      data.append("otherRoom", formData.otherRoom);
+
+      // File field must match multer.single("ImageFile")
+      if (formData.ImageFile) {
+        data.append("ImageFile", formData.ImageFile);
       }
 
-      showMsg("success", "Report submitted successfully.");
-      setFormData({
-        email: currentUserEmail || "",
-        heading: "",
-        description: "",
-        concern: "",
-        subConcern: "",
-        building: "",
-        college: "",
-        floor: "",
-        room: "",
-        ImageFile: null,
-        otherConcern: "",
-        otherBuilding: "",
-        otherRoom: "",
-      });
-      setPreview(null);
-      setSpecificRoom(false);
-    } else {
-      showMsg("error", result.message || "Submission failed.");
-    }
-  } catch (err) {
-    console.error("Submit error:", err);
-    showMsg("error", "Network error while submitting report.");
-  } finally {
-    setSubmitting(false);
-  }
-};
+      const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
 
+      const res = await fetch(submitUrl, {
+        method: "POST",
+        body: data,
+      });
+
+      const raw = await res.text().catch(() => "");
+
+      if (!res.ok) {
+        console.error("Submit error status:", res.status, raw);
+        showMsg(
+          "error",
+          raw || `Submission failed with status ${res.status}`
+        );
+        return;
+      }
+
+      let result: any = {};
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {
+        // ignore parse error, we already logged raw
+      }
+
+      if (result.success) {
+        if (result.report && typeof result.report === "object") {
+          setExistingReports((prev) => [...prev, result.report as Report]);
+        }
+
+        showMsg("success", "Report submitted successfully.");
+        setFormData({
+          email: currentUserEmail || "",
+          heading: "",
+          description: "",
+          concern: "",
+          subConcern: "",
+          building: "",
+          college: "",
+          floor: "",
+          room: "",
+          ImageFile: null,
+          otherConcern: "",
+          otherBuilding: "",
+          otherRoom: "",
+        });
+        setPreview(null);
+        setSpecificRoom(false);
+      } else {
+        showMsg("error", result.message || "Submission failed.");
+      }
+    } catch (err) {
+      console.error("Submit error:", err);
+      showMsg("error", "Network error while submitting report.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -787,55 +810,30 @@ export default function Create() {
     return "";
   }, [specificRoom, hasRoom, formData.floor, formData.room, isIctc, isCos]);
 
-  // Similar reports count by same building, concern and location logic
+  // Similar reports count using the same similarity key rule:
+  // same Concern and SubConcern/OtherConcern and Building,
+  // and same Room/OtherRoom when there is a room.
   const similarReportsCount = useMemo(() => {
     if (!formData.building || !formData.concern) return 0;
 
-    const building = norm(formData.building);
-    const concern = norm(formData.concern);
-    const isSpecific = specificRoom;
+    // Build a "virtual" report from the current form
+    const currentKey = getSimilarityKey({
+      building: formData.building,
+      concern: formData.concern,
+      subConcern: formData.concern === "Other" ? "" : formData.subConcern,
+      otherConcern:
+        formData.concern === "Other" ? formData.otherConcern : undefined,
+      room: formData.room || undefined,
+      otherRoom: formData.room ? undefined : formData.otherRoom || undefined,
+    });
 
-    // Location for the current report
-    let currentLocation = "";
-    if (isSpecific) {
-      if (formData.room) currentLocation = norm(formData.room);
-      else if (formData.otherRoom) currentLocation = norm(formData.otherRoom);
-      if (!currentLocation) return 0;
-    }
-
-    const curSub = norm(formData.subConcern);
-    const curOther = norm(formData.otherConcern);
+    if (!currentKey.trim()) return 0;
 
     return existingReports.filter((r) => {
       const status = norm(r.status || "Pending");
       if (status === "archived") return false;
-
-      if (norm(r.building) !== building) return false;
-      if (norm(r.concern) !== concern) return false;
-
-      const repLocation = norm(r.room || r.otherRoom);
-
-      if (isSpecific) {
-        // Specific room is on, match only same room or spot
-        if (!repLocation) return false;
-        if (repLocation !== currentLocation) return false;
-      } else {
-        // Specific room is off, match only reports that also have no location
-        if (repLocation) return false;
-      }
-
-      // Match further by sub concern or other concern if provided
-      if (concern === norm("other")) {
-        if (curOther) {
-          const repOther = norm(r.otherConcern);
-          if (repOther !== curOther) return false;
-        }
-      } else if (curSub) {
-        const repSub = norm(r.subConcern);
-        if (repSub !== curSub) return false;
-      }
-
-      return true;
+      const key = getSimilarityKey(r);
+      return key === currentKey;
     }).length;
   }, [
     existingReports,
@@ -845,7 +843,6 @@ export default function Create() {
     formData.otherConcern,
     formData.room,
     formData.otherRoom,
-    specificRoom,
   ]);
 
   const summaryText = useMemo(() => {
