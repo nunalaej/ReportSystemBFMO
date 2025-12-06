@@ -8,7 +8,7 @@ import { useUser } from "@clerk/nextjs";
 
 const defaultImg = "/default.jpg";
 
-// Backend base URL (Render)
+// Backend base URL
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
@@ -50,8 +50,8 @@ const formatConcern = (report: Report) => {
 
 const formatBuilding = (report: Report) => {
   const rawBuilding = report.building || "Unspecified";
-
   const isOther = rawBuilding && rawBuilding.toLowerCase() === "other";
+
   const buildingLabel =
     isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
 
@@ -112,14 +112,32 @@ export default function ReportPage() {
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string>("");
+
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [loadError, setLoadError] = useState("");
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
-  /* NAVIGATION */
+  // NEW: fullscreen image viewer
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+
+  // Mobile mode
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const updateMobile = () => setIsMobile(window.innerWidth <= 768);
+
+    updateMobile();
+    window.addEventListener("resize", updateMobile);
+    return () => window.removeEventListener("resize", updateMobile);
+  }, []);
+
+  const handleHome = () => {
+    router.push("/Student/Dashboard");
+  };
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -129,26 +147,13 @@ export default function ReportPage() {
     }
   };
 
-  const handleHome = () => {
-    router.push("/Student/Dashboard");
-  };
-
   useEffect(() => {
     if (!isLoaded || !user) return;
 
-    // READ ROLE FROM CLERK PUBLIC METADATA
     const role = user.publicMetadata?.role;
+    if (role === "admin") return router.push("/Admin/");
+    if (role === "staff") return router.push("/Staff/");
 
-    // 1. CHECK IF ADMIN → REDIRECT
-    if (role === "admin") {
-      router.push("/Admin/");
-      return;
-    } else if (role === "staff") {
-      router.push("/Staff/");
-      return;
-    }
-
-    // If normal user → continue loading their reports
     const emailFromClerk =
       user.primaryEmailAddress?.emailAddress ||
       user.emailAddresses[0]?.emailAddress ||
@@ -162,390 +167,375 @@ export default function ReportPage() {
 
     setUserEmail(emailFromClerk);
     setCurrentUserName(usernameFromClerk);
-  }, [isLoaded, user, router]);
-
-  /* FETCH REPORTS FOR THIS USER ONLY */
+  }, [user, isLoaded, router]);
 
   useEffect(() => {
     if (!userEmail) return;
-    fetchReportsForUser(userEmail);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    const fetchReportsForUser = async () => {
+      try {
+        setLoadError("");
+        const res = await fetch(`${API_BASE}/api/reports`, {
+          cache: "no-store",
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data) {
+          setLoadError("Failed to load reports.");
+          setReports([]);
+          return;
+        }
+
+        let list: Report[] = [];
+
+        if (Array.isArray(data)) list = data;
+        else if (Array.isArray(data.reports)) list = data.reports;
+        else if (Array.isArray(data.data)) list = data.data;
+
+        const filtered = list.filter(
+          (r) =>
+            r.email?.toLowerCase() === userEmail.toLowerCase() &&
+            r.status !== "Archived"
+        );
+
+        setReports(filtered);
+        setSelectedReport(filtered[0] || null);
+        setCurrentPage(1);
+      } catch (err) {
+        setLoadError("Network error loading reports.");
+      }
+    };
+
+    fetchReportsForUser();
   }, [userEmail]);
 
-  const fetchReportsForUser = async (email: string) => {
-    try {
-      setLoadError("");
-
-      const res = await fetch(`${API_BASE}/api/reports`, {
-        cache: "no-store",
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok || !data) {
-        console.warn("Failed /api/reports:", data);
-        setLoadError(
-          data?.message ||
-            "Could not load reports. Check the server response."
-        );
-        setReports([]);
-        setSelectedReport(null);
-        return;
-      }
-
-      let list: Report[] = [];
-
-      if (Array.isArray(data)) {
-        list = data;
-      } else if (Array.isArray(data.reports)) {
-        list = data.reports;
-      } else if (Array.isArray(data.data)) {
-        list = data.data;
-      } else {
-        console.warn("Unexpected /api/reports payload:", data);
-        setLoadError(
-          "Could not load reports. Check the server response."
-        );
-        setReports([]);
-        setSelectedReport(null);
-        return;
-      }
-
-      // only reports for this email and not archived
-      const userReports = list.filter(
-        (r) =>
-          r.email &&
-          r.email.toLowerCase() === email.toLowerCase() &&
-          r.status !== "Archived"
-      );
-
-      setReports(userReports);
-      setCurrentPage(1);
-
-      if (userReports.length > 0) {
-        setSelectedReport(userReports[0]);
-      } else {
-        setSelectedReport(null);
-      }
-    } catch (err) {
-      console.error("Error fetching reports:", err);
-      setLoadError("Network error while loading reports.");
-      setReports([]);
-      setSelectedReport(null);
-    }
-  };
-
   const renderStatusPill = (statusRaw?: string) => {
-    const classKey = getStatusClassKey(statusRaw);
-    const status = statusRaw || "Pending";
-
-    return <span className={`status-pill status-${classKey}`}>{status}</span>;
+    const key = getStatusClassKey(statusRaw);
+    return <span className={`status-pill status-${key}`}>{statusRaw || "Pending"}</span>;
   };
 
-  /* PAGINATION */
+  const renderDetailsContent = (report: Report) => (
+    <div className="report-details-panel">
+      <div className="details-header">
+        <h3>{report.heading || "Report details"}</h3>
+
+        
+      <div className="modal-img-wrapper">
+        <img
+          src={report.ImageFile || report.image || defaultImg}
+          alt="Report"
+          className="report-img-clickable"
+          onClick={() =>
+            setFullscreenImage(report.ImageFile || report.image || defaultImg)
+          }
+          onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
+        />
+      </div>
+      
+        {renderStatusPill(report.status)}
+      </div>
+
+      
+      <p className="modal-description">
+        {report.description || "No description provided."}
+      </p>
+
+      <div className="modal-meta-grid">
+        <p><strong>Building:</strong> {formatBuilding(report)}</p>
+        <p><strong>Concern:</strong> {formatConcern(report)}</p>
+        <p><strong>College:</strong> {report.college || "Unspecified"}</p>
+        <p><strong>Email:</strong> {report.email}</p>
+        <p>
+          <strong>Submitted:</strong>{" "}
+          {report.createdAt &&
+            new Date(report.createdAt).toLocaleString()}{" "}
+          {report.createdAt && `(${getRelativeTime(report.createdAt)})`}
+        </p>
+      </div>
+
+
+      <div className="comments-section comments-section--static">
+        <h3>Comments</h3>
+
+        {Array.isArray(report.comments) && report.comments.length > 0 ? (
+          <ul className="comments-list">
+            {report.comments.map((c, idx) => (
+              <li key={idx} className="comment-item">
+                <p className="comment-text">{c.text || c.comment}</p>
+                <div>
+                  {c.at && (
+                    <span className="comment-date">
+                      {new Date(c.at).toLocaleString()}{" "}
+                    </span>
+                  )}
+                  {c.by && <span className="comment-date">by {c.by}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="no-comments">No comments yet.</p>
+        )}
+      </div>
+    </div>
+  );
 
   const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PER_PAGE));
   const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
-  const paginatedReports = reports.slice(
-    startIndex,
-    startIndex + REPORTS_PER_PAGE
-  );
-
-  /* RENDER */
+  const paginatedReports = reports.slice(startIndex, startIndex + REPORTS_PER_PAGE);
 
   return (
     <>
       <div className="report-wrapper">
         <div className="header">
-          <div className="header-left">
+          <div>
             <h1>My reports</h1>
+            <p className="header-subtitle">
+              View all issues you have submitted.
+            </p>
           </div>
 
-          <div className="header-right">
+          <div className="header-actions">
             <a href="/Student/CreateReport" className="create-report-btn">
               + Create Report
             </a>
           </div>
         </div>
 
-        {!isLoaded && <p>Loading your account...</p>}
-
-        {isLoaded && !userEmail && (
-          <p className="no-reports-msg">
-            No logged in user found. Please log in again.
-          </p>
-        )}
+        {!isLoaded && <p>Loading...</p>}
 
         {loadError && (
           <div className="load-error-banner">
-            {loadError}{" "}
-            <button
-              type="button"
-              onClick={() => userEmail && fetchReportsForUser(userEmail)}
-            >
-              Retry
-            </button>
+            {loadError}
+            <button onClick={() => userEmail && location.reload()}>Retry</button>
           </div>
         )}
 
-        {isLoaded && userEmail && (
-          <>
-            {reports.length === 0 && !loadError && (
-              <p className="no-reports-msg">
-                You have not submitted any reports yet.
-              </p>
-            )}
+        {reports.length > 0 && (
+          <div className="reports-two-column">
+            {/* LEFT LIST */}
+            <div className="reports-list-column">
+              <div className="reports-list">
+                {paginatedReports.map((report) => {
+                  const isActive =
+                    selectedReport && selectedReport._id === report._id;
 
-            {reports.length > 0 && (
-              <div className="reports-two-column">
-                {/* LEFT: list of reports */}
-                <div className="reports-list-column">
-                  <div className="reports-list">
-                    {paginatedReports.map((report) => {
-                      const statusKey = getStatusClassKey(report.status);
-                      const isActive =
-                        selectedReport && selectedReport._id === report._id;
+                  const latestComment =
+                    report.comments?.[report.comments.length - 1] || null;
 
-                      const latestComment =
-                        Array.isArray(report.comments) &&
-                        report.comments.length > 0
-                          ? report.comments[report.comments.length - 1]
-                          : null;
-
-                      return (
-                        <div
-                          key={report._id}
-                          className={
-                            "report" + (isActive ? " report--active" : "")
-                          }
-                          onClick={() => setSelectedReport(report)}
-                        >
-                          <div className="report-img-container">
-                            <img
-                              src={
-                                report.ImageFile || report.image || defaultImg
-                              }
-                              alt="Report"
-                              className="report-img"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = defaultImg;
-                              }}
-                            />
-                          </div>
-                          <div className="report-body">
-                            <div className="report-header-row">
-                              <h3>{report.heading || "Untitled report"}</h3>
-                            </div>
-
-                            <div
-                              className={`status-focus-row status-focus-${statusKey}`}
-                            >
-                              <span className="status-focus-label">
-                                Status
-                              </span>
-                              {renderStatusPill(report.status)}
-                            </div>
-
-                            <p className="report-description">
-                              {report.description ||
-                                "No description provided."}
-                            </p>
-
-                            <div className="report-info">
-                              <p>
-                                <strong>Building:</strong>{" "}
-                                {formatBuilding(report)}
-                              </p>
-                              <p>
-                                <strong>Concern:</strong>{" "}
-                                {formatConcern(report)}
-                              </p>
-                              <p>
-                                <strong>College:</strong>{" "}
-                                {report.college || "Unspecified"}
-                              </p>
-                            </div>
-
-                            <p className="submitted-date">
-                              {report.createdAt
-                                ? new Date(
-                                    report.createdAt
-                                  ).toLocaleDateString()
-                                : ""}
-                              {report.createdAt &&
-                                ` (${getRelativeTime(report.createdAt)})`}
-                            </p>
-
-                            {latestComment && (
-                              <p className="report-comment-preview">
-                                <strong>Latest comment:</strong>{" "}
-                                {latestComment.text ||
-                                  latestComment.comment ||
-                                  String(latestComment)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {totalPages > 1 && (
-                    <div className="pagination">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCurrentPage((p) => Math.max(1, p - 1))
-                        }
-                        disabled={currentPage === 1}
-                      >
-                        Previous
-                      </button>
-
-                      {Array.from({ length: totalPages }, (_, idx) => {
-                        const page = idx + 1;
-                        return (
-                          <button
-                            key={page}
-                            type="button"
-                            className={
-                              page === currentPage
-                                ? "page-btn active"
-                                : "page-btn"
-                            }
-                            onClick={() => setCurrentPage(page)}
-                          >
-                            {page}
-                          </button>
-                        );
-                      })}
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCurrentPage((p) =>
-                            Math.min(totalPages, p + 1)
-                          )
-                        }
-                        disabled={currentPage === totalPages}
-                      >
-                        Next
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* RIGHT: details plus comments (read only) */}
-                <div className="report-details-column">
-                  <h2 className="column-title">Details and comments</h2>
-
-                  {!selectedReport && (
-                    <p className="no-reports-msg">
-                      Select a report on the left to see its details and
-                      comments.
-                    </p>
-                  )}
-
-                  {selectedReport && (
-                    <div className="report-details-panel">
-                      <div className="details-header">
-                        <h3>
-                          {selectedReport.heading || "Report details"}
-                        </h3>
-                        {renderStatusPill(selectedReport.status)}
-                      </div>
-
-                      <p className="modal-description">
-                        {selectedReport.description ||
-                          "No description provided."}
-                      </p>
-
-                      <div className="modal-meta-grid">
-                        <p>
-                          <strong>Building:</strong>{" "}
-                          {formatBuilding(selectedReport)}
-                        </p>
-                        <p>
-                          <strong>Concern:</strong>{" "}
-                          {formatConcern(selectedReport)}
-                        </p>
-                        <p>
-                          <strong>College:</strong>{" "}
-                          {selectedReport.college || "Unspecified"}
-                        </p>
-                        <p>
-                          <strong>Email:</strong>{" "}
-                          {selectedReport.email || "Unspecified"}
-                        </p>
-                        <p>
-                          <strong>Submitted:</strong>{" "}
-                          {selectedReport.createdAt &&
-                            new Date(
-                              selectedReport.createdAt
-                            ).toLocaleString()}{" "}
-                          {selectedReport.createdAt &&
-                            `(${getRelativeTime(
-                              selectedReport.createdAt
-                            )})`}
-                        </p>
-                      </div>
-
-                      {/* use the same modal-img-wrapper class so mobile CSS applies */}
-                      <div className="modal-img-wrapper">
+                  return (
+                    <div
+                      key={report._id}
+                      className={`report ${isActive ? "report--active" : ""}`}
+                      onClick={() => {
+                        setSelectedReport(report);
+                        if (isMobile) window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      <div className="report-img-container">
                         <img
-                          src={
-                            selectedReport.ImageFile ||
-                            selectedReport.image ||
-                            defaultImg
-                          }
+                          src={report.ImageFile || report.image || defaultImg}
                           alt="Report"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = defaultImg;
-                          }}
+                          className="report-img"
+                          onError={(e) =>
+                            ((e.target as HTMLImageElement).src = defaultImg)
+                          }
                         />
                       </div>
 
-                      <div className="comments-section comments-section--static">
-                        <h3>Comments</h3>
+                      <div className="report-body">
+                        <div className="report-header-row">
+                          <h3>{report.heading || "Untitled report"}</h3>
+                        </div>
 
-                        {Array.isArray(selectedReport.comments) &&
-                        selectedReport.comments.length > 0 ? (
-                          <ul className="comments-list">
-                            {selectedReport.comments.map((c, idx) => (
-                              <li key={idx} className="comment-item">
-                                <p className="comment-text">
-                                  {c.text || c.comment || String(c)}
-                                </p>
-                                <div>
-                                  {c.at && (
-                                    <span className="comment-date">
-                                      {new Date(c.at).toLocaleString()}
-                                      &nbsp;
-                                    </span>
-                                  )}
-                                  {c.by && (
-                                    <span className="comment-date">
-                                      by {c.by}
-                                    </span>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="no-comments">
-                            No comments yet for this report.
+                        <div
+                          className={`status-focus-row status-focus-${getStatusClassKey(
+                            report.status
+                          )}`}
+                        >
+                          <span className="status-focus-label">Status</span>
+                          {renderStatusPill(report.status)}
+                        </div>
+
+                        <p className="report-description">
+                          {report.description || "No description provided."}
+                        </p>
+
+                        <div className="report-info">
+                          <p><strong>Building:</strong> {formatBuilding(report)}</p>
+                          <p><strong>Concern:</strong> {formatConcern(report)}</p>
+                          <p><strong>College:</strong> {report.college}</p>
+                        </div>
+
+                        <p className="submitted-date">
+                          {report.createdAt &&
+                            new Date(report.createdAt).toLocaleDateString()}{" "}
+                          {report.createdAt &&
+                            `(${getRelativeTime(report.createdAt)})`}
+                        </p>
+
+                        {latestComment && (
+                          <p className="report-comment-preview">
+                            <strong>Latest comment:</strong>{" "}
+                            {latestComment.text || latestComment.comment}
                           </p>
                         )}
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+
+              {/* PAGINATION */}
+              {totalPages > 1 && (
+                <div className="pagination">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i}
+                      className={`page-btn ${currentPage === i + 1 ? "active" : ""}`}
+                      onClick={() => setCurrentPage(i + 1)}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT DETAILS (DESKTOP) */}
+            {!isMobile && selectedReport && (
+              <div className="report-details-column">
+                <h2 className="column-title">Details and comments</h2>
+                {renderDetailsContent(selectedReport)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* MOBILE MODAL */}
+      {isMobile && selectedReport && (
+        <div
+          className="report-modal-backdrop"
+          onClick={() => setSelectedReport(null)}
+        >
+          <div className="report-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedReport.heading}</h2>
+              <button
+                className="modal-close-btn"
+                onClick={() => setSelectedReport(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <div className="modal-img-wrapper">
+                <img
+                  src={
+                    selectedReport.ImageFile ||
+                    selectedReport.image ||
+                    defaultImg
+                  }
+                  alt="Report"
+                  className="report-img-clickable"
+                  onClick={() =>
+                    setFullscreenImage(
+                      selectedReport.ImageFile ||
+                        selectedReport.image ||
+                        defaultImg
+                    )
+                  }
+                  onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
+                />
+              </div>
+
+              <div className="modal-info">
+                <div className="status-panel">
+                  <div className="status-panel-header">
+                    <span className="status-panel-title">Current status</span>
+                    {renderStatusPill(selectedReport.status)}
+                  </div>
+                  <div className="status-row-inline">
+                    <span className="status-row-label">
+                      Submitted {getRelativeTime(selectedReport.createdAt)}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="modal-description">
+                  {selectedReport.description || "No description provided."}
+                </p>
+
+                <div className="modal-meta-grid">
+                  <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
+                  <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
+                  <p><strong>College:</strong> {selectedReport.college}</p>
+                  <p><strong>Email:</strong> {selectedReport.email}</p>
+                </div>
+
+                <div className="comments-section comments-section--static">
+                  <h3>Comments</h3>
+
+                  {selectedReport.comments?.length ? (
+                    <ul className="comments-list">
+                      {selectedReport.comments.map((c, idx) => (
+                        <li key={idx} className="comment-item">
+                          <p className="comment-text">
+                            {c.text || c.comment}
+                          </p>
+                          <div>
+                            {c.at && (
+                              <span className="comment-date">
+                                {new Date(c.at).toLocaleString()}{" "}
+                              </span>
+                            )}
+                            {c.by && <span className="comment-date">by {c.by}</span>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="no-comments">No comments yet.</p>
                   )}
                 </div>
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN IMAGE OVERLAY (DESKTOP + MOBILE) */}
+      {fullscreenImage && (
+        <div
+          className="image-fullscreen-backdrop"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <img
+            src={fullscreenImage}
+            className="image-fullscreen-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 }

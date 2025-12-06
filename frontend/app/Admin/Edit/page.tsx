@@ -25,11 +25,6 @@ type ConcernMeta = {
   subconcerns: string[];
 };
 
-type CollegeEntry = {
-  college: string;
-  count: number;
-};
-
 const DEFAULT_BUILDINGS: BuildingMeta[] = [
   {
     id: "ayuntamiento",
@@ -125,7 +120,7 @@ function Panel(props: {
   );
 }
 
-// Normalize buildings coming from DB (dbOnly or preferDefaults mode)
+// Normalize buildings coming from DB
 function normalizeBuildingsFromDb(raw: unknown[]): BuildingMeta[] {
   return raw.map((b, idx) => {
     if (typeof b === "string") {
@@ -242,9 +237,6 @@ export default function AdminEditPage() {
     }
   }, [isLoaded, isSignedIn, user, role, router]);
 
-  // mode:
-  // "preferDefaults" = use DB if available, else fall back to DEFAULT_* (for initial load)
-  // "dbOnly" = show exactly what DB has (can be empty), no default fallback
   const loadMeta = useCallback(
     async (mode: "preferDefaults" | "dbOnly" = "preferDefaults") => {
       try {
@@ -286,7 +278,6 @@ export default function AdminEditPage() {
               ? normalizeConcernsFromDb(rawConcerns)
               : DEFAULT_CONCERNS;
         } else {
-          // dbOnly mode
           incomingBuildings = normalizeBuildingsFromDb(rawBuildings);
           incomingConcerns = normalizeConcernsFromDb(rawConcerns);
         }
@@ -315,18 +306,15 @@ export default function AdminEditPage() {
     []
   );
 
-  // initial load prefers DB but falls back to defaults
   useEffect(() => {
     loadMeta("preferDefaults");
   }, [loadMeta]);
 
-  // save with enforced Other
   const handleSave = async (scope?: "building" | "concern") => {
     setSaving(true);
     setError("");
     setSaveMsg("");
 
-    // clean buildings
     let cleanBuildings: BuildingMeta[] = buildings
       .map((b, idx) => {
         const name = String(b.name || "").trim();
@@ -364,7 +352,6 @@ export default function AdminEditPage() {
       })
       .filter(Boolean) as BuildingMeta[];
 
-    // ensure an Other building exists
     const hasOtherBuilding = cleanBuildings.some(
       (b) => norm(b.name) === "other"
     );
@@ -379,7 +366,6 @@ export default function AdminEditPage() {
       });
     }
 
-    // keep user order but move Other to the end
     const otherBuildings = cleanBuildings.filter(
       (b) => norm(b.name) === "other"
     );
@@ -388,7 +374,6 @@ export default function AdminEditPage() {
     );
     cleanBuildings = [...normalBuildings, ...otherBuildings];
 
-    // clean concerns
     let cleanConcerns: ConcernMeta[] = concerns
       .map((c, idx) => {
         const label = String(c.label || "").trim();
@@ -404,12 +389,10 @@ export default function AdminEditPage() {
           .map((s) => String(s || "").trim())
           .filter((s) => s.length > 0);
 
-        // ensure "Other" exists as last item
         const hasOtherSub = subs.some((s) => norm(s) === "other");
         if (!hasOtherSub) {
           subs.push("Other");
         } else {
-          // move existing "Other" to the end while keeping the rest order
           const others = subs.filter((s) => norm(s) === "other");
           const normalSubs = subs.filter((s) => norm(s) !== "other");
           subs = [...normalSubs, ...others];
@@ -423,7 +406,6 @@ export default function AdminEditPage() {
       })
       .filter(Boolean) as ConcernMeta[];
 
-    // ensure there is an Other concern
     let otherConcernIndex = cleanConcerns.findIndex(
       (c) => norm(c.label) === "other"
     );
@@ -610,7 +592,6 @@ export default function AdminEditPage() {
     });
   };
 
-  // NEW: add building at the TOP so it stays visible until you save
   const handleAddBuilding = () => {
     const newBuilding: BuildingMeta = {
       id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -634,7 +615,6 @@ export default function AdminEditPage() {
     );
   };
 
-  // NEW: add concern at the TOP so it stays visible until you save
   const handleAddConcern = () => {
     const newConcern: ConcernMeta = {
       id: `concern-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -723,9 +703,10 @@ export default function AdminEditPage() {
               Buildings, concerns, and subconcerns
             </h1>
             <p className="admin-edit__page-subtitle">
-              Manage buildings and their floor and room counts, or mark them as
-              specific positions, plus concerns and subconcerns used in the
-              report form.
+              Configure options that appear in the report form. Changes affect how students select locations and concerns when submitting tickets.
+            </p>
+            <p className="admin-edit__meta">
+              {buildings.length} buildings · {concerns.length} concerns
             </p>
           </div>
 
@@ -740,6 +721,7 @@ export default function AdminEditPage() {
                 setError("");
               }}
               disabled={saving || loading}
+              title="Reset to recommended default values"
             >
               Load defaults
             </button>
@@ -748,6 +730,7 @@ export default function AdminEditPage() {
               className="btn btn-secondary"
               onClick={() => loadMeta("dbOnly")}
               disabled={saving || loading}
+              title="Reload the values stored in the database"
             >
               Load database
             </button>
@@ -780,12 +763,12 @@ export default function AdminEditPage() {
           <div className="admin-edit__grid">
             <Panel
               title="Buildings"
-              subtitle="These fill the building dropdown. Choose if a building has floors and rooms, or if it is a single position or area."
+              subtitle="These fill the building dropdown. Mark if a building has floors and rooms, or if it is a specific position only."
               actions={
                 <>
                   <input
                     type="text"
-                    className="admin-edit__search"
+                    className="admin-edit__input admin-edit__search"
                     placeholder="Search buildings"
                     value={searchBuilding}
                     onChange={(e) => setSearchBuilding(e.target.value)}
@@ -835,7 +818,7 @@ export default function AdminEditPage() {
                           type="text"
                           className="admin-edit__input"
                           value={building.name}
-                          placeholder="Building name"
+                          placeholder="Example: CBAA"
                           onChange={(e) =>
                             handleBuildingChange(index, e.target.value)
                           }
@@ -912,7 +895,7 @@ export default function AdminEditPage() {
                             <input
                               type="text"
                               className="admin-edit__input"
-                              placeholder="Example: Kiosk, Guard post, Open area"
+                              placeholder="Example: Guard post, Kiosk, Open area"
                               value={building.singleLocationLabel || ""}
                               onChange={(e) =>
                                 handleBuildingPositionChange(
@@ -930,7 +913,7 @@ export default function AdminEditPage() {
                         className="btn btn-ghost"
                         onClick={() => handleRemoveBuilding(index)}
                       >
-                        Remove building
+                        Remove
                       </button>
                     </div>
                   );
@@ -940,12 +923,12 @@ export default function AdminEditPage() {
 
             <Panel
               title="Concerns and subconcerns"
-              subtitle="These fill the concern and subconcern dropdowns in the report form."
+              subtitle="These fill the concern and subconcern dropdowns used for report categorization."
               actions={
                 <>
                   <input
                     type="text"
-                    className="admin-edit__search"
+                    className="admin-edit__input admin-edit__search"
                     placeholder="Search concerns"
                     value={searchConcern}
                     onChange={(e) => setSearchConcern(e.target.value)}
@@ -1020,7 +1003,7 @@ export default function AdminEditPage() {
                         className="btn btn-ghost"
                         onClick={() => handleRemoveConcern(index)}
                       >
-                        Remove concern
+                        Remove
                       </button>
                     </div>
 

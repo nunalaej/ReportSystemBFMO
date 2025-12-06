@@ -137,6 +137,22 @@ html:not(.dark) .stat-chip {
   font-size: 0.85rem;
   backdrop-filter: blur(12px);
 }
+
+
+html:not(dark) .stat-chip-total {
+  display: inline-flex;
+  justify-content: center;
+  align-self: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(233, 233, 233, 0.9);
+  color: var(--text);
+  border: 1px solid rgba(148,163,184,0.25);
+  font-weight: 600;
+  font-size: 0.85rem;
+  backdrop-filter: blur(12px);
+}
 html:not(.dark) .stat-chip {
   background: var(--bg-soft);
   border-color: var(--card-border);
@@ -679,4 +695,40 @@ html:not(.dark) .pa-card__base {
 .printreports-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 14px rgba(23, 155, 0, 0.45);
+}
+
+/* full width card under the grid (Reports Over Time) */
+.analytics-card-full {
+  grid-column: 1 / -1;
+}
+
+/* time mode toggle buttons */
+.time-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.time-mode-toggle {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.time-mode-btn {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.time-mode-btn.is-active {
+  border-color: var(--brand);
+  background: linear-gradient(to right, #22c55e, #0ea5e9);
+  color: #ffffff;
 }

@@ -14,6 +14,7 @@ body {
   min-height: 100vh;
   display: flex;
   align-items: center;
+  background: transparent;
   justify-content: center;
   padding: 0 clamp(16px, 4vw, 48px); /* only left/right */
 }
@@ -38,7 +39,7 @@ body {
       rgba(50, 205, 50, 0.6) 0%,
       rgba(50, 205, 50, 0) 65%
     ),
-    linear-gradient(135deg, #000000 0%, #0a0520 100%);
+    linear-gradient(135deg, #000000 0%, #0a0520 100%) !important;
   background-blend-mode: overlay, screen, hard-light;
   animation: aurora-drift 25s infinite alternate ease-in-out;
   opacity: 0.9;

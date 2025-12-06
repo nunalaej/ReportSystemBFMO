@@ -15,6 +15,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  AreaChart,
+  Area,
 } from "recharts";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -74,6 +76,13 @@ interface ConcernChartDatum {
   fullLabel: string; // original "Civil : Lights"
   value: number;
 }
+
+interface TimeSeriesPoint {
+  label: string;
+  value: number;
+}
+
+type TimeMode = "day" | "week" | "month" | "year";
 
 const BUILDING_COLORS = [
   "#3b82f6", // blue
@@ -146,7 +155,6 @@ const DEFAULT_STATUS_SET = new Set<string>([
   "In Progress",
   "Resolved",
 ]);
-
 
 // Labels shown in chart/legend per internal key
 const STATUS_LABELS: Record<StatusKey, string> = {
@@ -328,8 +336,8 @@ const Analytics: FC = () => {
 
   // Default: everything EXCEPT Archived
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
-  () => new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"])
-);
+    () => new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"])
+  );
 
   const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(
     () => new Set()
@@ -344,14 +352,13 @@ const Analytics: FC = () => {
   const [dateTo, setDateTo] = useState<string>("");
 
   const FILTERS_OPEN_KEY = "analytics_filters_open_v1";
-const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
-  if (typeof window === "undefined") return false; // SSR fallback
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false; // SSR fallback
 
-  const saved = localStorage.getItem(FILTERS_OPEN_KEY);
-  // if nothing saved yet, start CLOSED
-  return saved === null ? false : saved === "1";
-});
-
+    const saved = localStorage.getItem(FILTERS_OPEN_KEY);
+    // if nothing saved yet, start CLOSED
+    return saved === null ? false : saved === "1";
+  });
 
   const toggleFiltersOpen = () => {
     setFiltersOpen((prev) => {
@@ -377,7 +384,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
     };
 
   const clearAllFilters = () => {
-    setSelectedStatuses(new Set(selectedStatuses));
+    setSelectedStatuses(new Set(DEFAULT_STATUS_SET));
     setSelectedBuildings(new Set());
     setSelectedConcerns(new Set());
     setSelectedColleges(new Set());
@@ -399,8 +406,8 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
 
     return reports.filter((r) => {
-      const st = (r.status || "").trim();
-      if (!selectedStatuses.has(st)) return false;
+      const st = normalizeStatusFilterLabel(r.status);
+      if (!st || !selectedStatuses.has(st)) return false;
 
       if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
         return false;
@@ -433,7 +440,6 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
   ]);
 
   // Available options for each filter, depending on the other filters
-  // If an option is not connected to any report, it disappears
 
   const availableStatusFilters = useMemo(() => {
     const s = new Set<string>();
@@ -617,12 +623,57 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
     dateTo,
   ]);
 
+  // sort options so checked ones are always on top
+  const sortedStatusFilters = useMemo(
+    () =>
+      [...availableStatusFilters].sort((a, b) => {
+        const aSel = selectedStatuses.has(a);
+        const bSel = selectedStatuses.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableStatusFilters, selectedStatuses]
+  );
+
+  const sortedBuildings = useMemo(
+    () =>
+      [...availableBuildings].sort((a, b) => {
+        const aSel = selectedBuildings.has(a);
+        const bSel = selectedBuildings.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableBuildings, selectedBuildings]
+  );
+
+  const sortedConcerns = useMemo(
+    () =>
+      [...availableConcerns].sort((a, b) => {
+        const aSel = selectedConcerns.has(a);
+        const bSel = selectedConcerns.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableConcerns, selectedConcerns]
+  );
+
+  const sortedColleges = useMemo(
+    () =>
+      [...availableColleges].sort((a, b) => {
+        const aSel = selectedColleges.has(a);
+        const bSel = selectedColleges.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableColleges, selectedColleges]
+  );
+
   const activeFilterCount = useMemo(() => {
     let c = 0;
     const statusesChanged =
-    selectedStatuses.size !== DEFAULT_STATUS_SET.size ||
-    [...DEFAULT_STATUS_SET].some((s) => !selectedStatuses.has(s)); 
-    if (statusesChanged) c++;   
+      selectedStatuses.size !== DEFAULT_STATUS_SET.size ||
+      [...DEFAULT_STATUS_SET].some((s) => !selectedStatuses.has(s));
+    if (statusesChanged) c++;
     if (selectedBuildings.size) c++;
     if (selectedConcerns.size) c++;
     if (selectedColleges.size) c++;
@@ -651,7 +702,8 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
     filtered.forEach((r) => {
       const s = (r.status || "").trim().toLowerCase();
       if (s === "pending") map.pending++;
-      else if (s === "waiting for materials" || s === "waiting") map.waiting++;
+      else if (s === "waiting for materials" || s === "waiting")
+        map.waiting++;
       else if (s === "in progress") map.progress++;
       else if (s === "resolved") map.resolved++;
       else if (s === "archived") map.archived++;
@@ -744,6 +796,102 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
   const collegeData = useMemo(() => agg(filtered, "college"), [filtered, agg]);
 
   const total = filtered.length;
+
+  /* =========================================================
+    TIME SERIES: REPORTS OVER TIME (days, weeks, months, years)
+  ========================================================= */
+
+  const [timeMode, setTimeMode] = useState<TimeMode>("month");
+
+  const timeSeriesData: TimeSeriesPoint[] = useMemo(() => {
+    if (!filtered.length) return [];
+
+    const now = new Date();
+
+    const map = new Map<
+      string,
+      { label: string; value: number; sortKey: number }
+    >();
+
+    const makeDayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+    const getThreshold = (): Date => {
+      const d = new Date(now);
+      if (timeMode === "day") {
+        d.setDate(d.getDate() - 29); // last 30 days
+      } else if (timeMode === "week") {
+        d.setDate(d.getDate() - 7 * 11); // last 12 weeks
+      } else if (timeMode === "month") {
+        d.setMonth(d.getMonth() - 11); // last 12 months
+      } else {
+        d.setFullYear(d.getFullYear() - 4); // last 5 years
+      }
+      return d;
+    };
+
+    const threshold = getThreshold();
+
+    filtered.forEach((r) => {
+      if (!r.createdAt) return;
+      const dt = new Date(r.createdAt);
+      if (Number.isNaN(dt.getTime())) return;
+      if (dt < threshold) return;
+
+      let key: string;
+      let label: string;
+      let sortKey: number;
+
+      const year = dt.getFullYear();
+      const month = dt.getMonth(); // 0 based
+      const day = dt.getDate();
+
+      if (timeMode === "day") {
+        key = makeDayKey(dt);
+        label = `${month + 1}/${day}`;
+        sortKey = dt.getTime();
+      } else if (timeMode === "week") {
+        const tmp = new Date(dt);
+        const dayOfWeek = tmp.getDay() || 7; // 1..7, Monday based
+        tmp.setDate(tmp.getDate() - (dayOfWeek - 1)); // Monday
+        key = `W${tmp.getFullYear()}-${makeDayKey(tmp)}`;
+        label = `Wk ${tmp.getFullYear().toString().slice(2)}-${tmp.getMonth() + 1}`;
+        sortKey = tmp.getTime();
+      } else if (timeMode === "month") {
+        key = `${year}-${month + 1}`;
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        label = `${monthNames[month]} ${year.toString().slice(2)}`;
+        sortKey = year * 12 + month;
+      } else {
+        key = `${year}`;
+        label = `${year}`;
+        sortKey = year;
+      }
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.value += 1;
+      } else {
+        map.set(key, { label, value: 1, sortKey });
+      }
+    });
+
+    return [...map.values()]
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .map((v) => ({ label: v.label, value: v.value }));
+  }, [filtered, timeMode]);
 
   /* =========================================================
     PRINT AS TABLE (with statistics)
@@ -1132,7 +1280,6 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
           </div>
         </header>
 
-
         {/* Filters */}
         {filtersOpen && (
           <section
@@ -1144,7 +1291,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
               <div className="filter-block">
                 <h4>Status</h4>
                 <div className="chips">
-                  {availableStatusFilters.map((s) => (
+                  {sortedStatusFilters.map((s) => (
                     <label
                       key={s}
                       className={`chip ${
@@ -1165,7 +1312,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
               <div className="filter-block">
                 <h4>Building</h4>
                 <div className="chips scroll">
-                  {availableBuildings.map((b) => (
+                  {sortedBuildings.map((b) => (
                     <label
                       key={b}
                       className={`chip ${
@@ -1186,7 +1333,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
               <div className="filter-block">
                 <h4>Concern</h4>
                 <div className="chips scroll">
-                  {availableConcerns.map((c) => (
+                  {sortedConcerns.map((c) => (
                     <label
                       key={c}
                       className={`chip ${
@@ -1207,7 +1354,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
               <div className="filter-block">
                 <h4>College</h4>
                 <div className="chips scroll">
-                  {availableColleges.map((col) => (
+                  {sortedColleges.map((col) => (
                     <label
                       key={col}
                       className={`chip ${
@@ -1288,7 +1435,6 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                 <span>Total</span>
                 <strong>{reports.length}</strong>
               </div>
-
             </div>
             <div className="chart-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
@@ -1372,7 +1518,6 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                     itemStyle={{ color: "#000000" }}
                   />
 
-                  {/* Custom legend showing each building with color */}
                   <Legend
                     content={() => (
                       <div
@@ -1441,18 +1586,15 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                     }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
-                    // show base and sub nicely in the tooltip
                     labelFormatter={(_, payload) => {
                       const p = (payload && payload[0]?.payload) as
                         | ConcernChartDatum
                         | undefined;
                       if (!p) return "";
-                      // Example: "Civil - Lights"
                       return `${p.name}`;
                     }}
                     formatter={(value) => [`${value}`, "Reports"]}
                   />
-                  {/* custom legend that shows base concerns with their colors */}
                   <Legend
                     content={() => {
                       const bases = ["Civil", "Mechanical", "Electrical"];
@@ -1522,7 +1664,7 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff0",
+                      backgroundColor: "#ffffff",
                       borderRadius: 8,
                       border: "1px solid #e5e7eb",
                       color: "#000000",
@@ -1531,12 +1673,11 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                     itemStyle={{ color: "#000000" }}
                   />
 
-                  {/* Custom legend with unique colors per College */}
                   <Legend
                     content={() => (
                       <div
                         style={{
-                          justifyContent: 'center',
+                          justifyContent: "center",
                           display: "flex",
                           flexWrap: "wrap",
                           gap: 10,
@@ -1558,7 +1699,10 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                                 width: 10,
                                 height: 10,
                                 borderRadius: 999,
-                                backgroundColor: getCollegeColor(col.name, idx),
+                                backgroundColor: getCollegeColor(
+                                  col.name,
+                                  idx
+                                ),
                               }}
                             />
                             {col.name}
@@ -1577,6 +1721,93 @@ const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
                     ))}
                   </Bar>
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Reports Over Time (days / weeks / months / years) */}
+          <div className="card analytics-card analytics-card-full">
+            <div className="time-header">
+              <h3>Reports Over Time</h3>
+              <div className="time-mode-toggle">
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "day" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("day")}
+                >
+                  Days
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "week" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("week")}
+                >
+                  Weeks
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "month" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("month")}
+                >
+                  Months
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "year" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("year")}
+                >
+                  Years
+                </button>
+              </div>
+            </div>
+            <div className="chart-wrap resizable">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={timeSeriesData}>
+                  <defs>
+                    <linearGradient
+                      id="reportsGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
+                      <stop offset="60%" stopColor="#0ea5e9" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                    formatter={(value) => [`${value}`, "Reports"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#22c55e"
+                    fill="url(#reportsGradient)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>

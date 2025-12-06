@@ -363,17 +363,18 @@
   border: 1px solid var(--outline);
   background: #003fa3;
   color: #ffffff;
+  font-weight: 500;
   padding: 8px 12px;
   border-radius: 999px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   transition: 0.15s;
 }
 
 .create-scope__reset-btn:hover {
   background-color: #00b3ff;
   color: #fff;
-  border-color: #140065;
+  border-color: #00a4f6;
 }
 .create-scope__reset-btn:focus-visible {
   outline: none;
