@@ -19,7 +19,7 @@
     "mongod": "^2.0.0",
     "mongodb": "^7.0.0",
     "mongoose": "^9.0.0",
-    "next": "16.0.4",
+    "next": "^16.0.7",
     "nodemon": "^3.1.11",
     "react": "^19.2.0",
     "react-bootstrap": "^2.10.10",
