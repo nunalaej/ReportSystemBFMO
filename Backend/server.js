@@ -4,6 +4,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+const nodemailer = require("nodemailer");
 const Meta = require("./api/meta.js");        // Mongoose model
 const reportsRouter = require("./api/reports"); // still a router
 
