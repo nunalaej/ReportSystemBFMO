@@ -7,6 +7,8 @@ const path = require("path");
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary"); // <--- import cloudinary
 
+const { sendReportStatusEmail } = require("../utils/mailer"); // adjust path if needed
+
 /* ============================================================
    IMAGE UPLOAD CONFIG (multer, memory storage for Cloudinary)
 ============================================================ */
@@ -127,31 +129,53 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
    UPDATE REPORT (Status + Edit Comments)
    /api/reports/:id  (PUT)
 ============================================================ */
+/* ============================================================
+   UPDATE REPORT (Status + Edit Comments)
+   /api/reports/:id  (PUT)
+============================================================ */
 router.put("/:id", async (req, res) => {
   try {
     const { status, overwriteComments, comments } = req.body;
-    const updateFields = {};
 
-    if (status) updateFields.status = status;
-
-    if (overwriteComments && Array.isArray(comments)) {
-      updateFields.comments = comments;
+    // find existing report first, so we can compare old vs new status
+    const existing = await Report.findById(req.params.id);
+    if (!existing) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Report not found" });
     }
 
-    const updated = await Report.findByIdAndUpdate(
-      req.params.id,
-      { $set: updateFields },
-      { new: true }
-    );
+    const oldStatus = existing.status || "Pending";
 
-    if (!updated) {
-      return res.status(404).json({ success: false, message: "Report not found" });
+    // apply updates
+    if (status) {
+      existing.status = status;
+    }
+
+    if (overwriteComments && Array.isArray(comments)) {
+      existing.comments = comments;
+    }
+
+    const updated = await existing.save();
+
+    // after saving, if status changed to allowed statuses, send email
+    if (status && status !== oldStatus) {
+      sendReportStatusEmail({
+        to: updated.email,
+        heading: updated.heading,
+        status: updated.status,
+        reportId: String(updated._id),
+      }).catch((err) => {
+        console.error("Error sending status email:", err);
+      });
     }
 
     res.json({ success: true, report: updated });
   } catch (err) {
     console.error("PUT /reports/:id error:", err);
-    res.status(500).json({ success: false, message: "Failed to update report" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update report" });
   }
 });
 
