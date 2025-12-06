@@ -612,6 +612,12 @@ export default function ReportPage() {
       setSelectedReport(updatedSelected);
       setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
+
+      // Show success message with email confirmation
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Report(s) updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error updating reports:", err);
       alert(err.message || "There was a problem saving the changes.");
@@ -664,6 +670,12 @@ export default function ReportPage() {
 
       setSelectedReport(updatedSelected);
       setStatusValue("Archived");
+
+      // Show success message
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Report(s) archived successfully!\n\n📧 Status update sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error archiving reports:", err);
       alert("There was a problem archiving the report(s).");
