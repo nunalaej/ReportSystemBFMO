@@ -4,9 +4,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
-const nodemailer = require("nodemailer");
-const Meta = require("./api/meta.js");        // Mongoose model
-const reportsRouter = require("./api/reports"); // still a router
+
+const Meta = require("./api/meta.js");          // Mongoose model
+const reportsRouter = require("./api/reports"); // router for /api/reports
 
 const app = express();
 
@@ -15,7 +15,7 @@ const app = express();
 --------------------------------*/
 app.use(
   cors({
-    origin: "*", // you can restrict this later if needed
+    origin: "*", // you can restrict this later
   })
 );
 
@@ -65,18 +65,15 @@ app.get("/", (req, res) => {
   });
 });
 
-
 /* -------------------------------
    META
 --------------------------------*/
-// GET /api/meta
 app.get("/api/meta", async (req, res) => {
   try {
     let meta = await Meta.findOne();
     if (!meta) {
-      // If nothing yet, seed with defaults so AdminEdit loads ok
       meta = await Meta.create({
-        buildings: [],   // AdminEdit has its own defaults
+        buildings: [],
         concerns: [],
       });
     }
@@ -95,7 +92,6 @@ app.get("/api/meta", async (req, res) => {
   }
 });
 
-// PUT /api/meta
 app.put("/api/meta", async (req, res) => {
   try {
     const { buildings, concerns } = req.body || {};
@@ -107,10 +103,7 @@ app.put("/api/meta", async (req, res) => {
       });
     }
 
-    const update = {
-      buildings,
-      concerns,
-    };
+    const update = { buildings, concerns };
 
     const meta = await Meta.findOneAndUpdate({}, update, {
       new: true,
@@ -131,10 +124,8 @@ app.put("/api/meta", async (req, res) => {
   }
 });
 
-
-
 /* -------------------------------
-   404 HANDLER (optional)
+   404 HANDLER
 --------------------------------*/
 app.use((req, res) => {
   res.status(404).json({
@@ -147,7 +138,7 @@ app.use((req, res) => {
 /* -------------------------------
    START SERVER
 --------------------------------*/
-const PORT = process.env.PORT || 5000; // Render will inject PORT
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });

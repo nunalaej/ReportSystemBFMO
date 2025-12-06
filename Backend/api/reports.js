@@ -1,13 +1,13 @@
-// routes/reports.js
+// api/reports.js (or routes/reports.js – just make sure the path matches in server.js)
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 
 const Report = require("../models/Report");
-const cloudinary = require("../config/cloudinary"); // import cloudinary
+const cloudinary = require("../config/cloudinary");
 
-const { sendReportStatusEmail } = require("../utils/mailer"); // <<< FIXED PATH
+const { sendReportStatusEmail } = require("../utils/mailer"); // <<< IMPORTANT
 
 /* ============================================================
    IMAGE UPLOAD CONFIG (multer, memory storage for Cloudinary)
@@ -134,7 +134,6 @@ router.put("/:id", async (req, res) => {
   try {
     const { status, overwriteComments, comments } = req.body;
 
-    // find existing report first, so we can compare old vs new status
     const existing = await Report.findById(req.params.id);
     if (!existing) {
       return res
@@ -144,7 +143,6 @@ router.put("/:id", async (req, res) => {
 
     const oldStatus = existing.status || "Pending";
 
-    // apply updates
     if (status) {
       existing.status = status;
     }
@@ -155,7 +153,7 @@ router.put("/:id", async (req, res) => {
 
     const updated = await existing.save();
 
-    // after saving, if status changed, try to send email
+    // After saving, if status changed, attempt to send email
     if (status && status !== oldStatus) {
       sendReportStatusEmail({
         to: updated.email,

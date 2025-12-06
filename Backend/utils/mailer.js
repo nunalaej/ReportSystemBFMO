@@ -9,10 +9,17 @@ const {
   FROM_EMAIL,
 } = process.env;
 
+// You can add a simple guard so it is obvious in logs if SMTP is not set
+if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+  console.warn(
+    "[Mailer] SMTP config is incomplete. Emails will fail unless env vars are set."
+  );
+}
+
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: Number(SMTP_PORT) || 587,
-  secure: false, // 587 is usually STARTTLS
+  secure: false, // 587 usually uses STARTTLS
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
