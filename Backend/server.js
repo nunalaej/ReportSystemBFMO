@@ -7,6 +7,7 @@ require("dotenv").config();
 
 const Meta = require("./api/meta.js");          // Mongoose model
 const reportsRouter = require("./api/reports"); // router for /api/reports
+const { sendReportStatusEmail } = require("./utils/mailer"); // adjust if needed
 
 const app = express();
 
@@ -90,6 +91,23 @@ app.get("/api/meta", async (req, res) => {
       message: "Failed to load meta.",
     });
   }
+});
+
+
+app.get("/api/test-email", async (req, res) => {
+  const to = req.query.to;
+  if (!to) {
+    return res.status(400).json({ success: false, message: "Missing ?to=" });
+  }
+
+  await sendReportStatusEmail({
+    to,
+    heading: "Test BFMO report",
+    status: "Resolved", // allowed status
+    reportId: "TEST-123",
+  });
+
+  res.json({ success: true, message: `Attempted to send test email to ${to}` });
 });
 
 app.put("/api/meta", async (req, res) => {

@@ -1,7 +1,5 @@
 // utils/mailer.js
 
-// We use Resend HTTP API via fetch (Node 18+ has global fetch, Render uses Node 22)
-
 const { RESEND_API_KEY, FROM_EMAIL } = process.env;
 
 /**
@@ -9,8 +7,18 @@ const { RESEND_API_KEY, FROM_EMAIL } = process.env;
  * Only sends when status is Waiting for Materials, In Progress, or Resolved
  */
 async function sendReportStatusEmail({ to, heading, status, reportId }) {
+  console.log("[Mailer] sendReportStatusEmail called with:", {
+    to,
+    heading,
+    status,
+    reportId,
+  });
+
   try {
-    if (!to || !status) return;
+    if (!to || !status) {
+      console.warn("[Mailer] Missing 'to' or 'status', aborting email.");
+      return;
+    }
 
     const allowedStatuses = [
       "Waiting for Materials",
@@ -18,7 +26,12 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
       "Resolved",
     ];
 
-    if (!allowedStatuses.includes(status)) return;
+    if (!allowedStatuses.includes(status)) {
+      console.log(
+        `[Mailer] Status '${status}' not in allowed statuses, no email sent.`
+      );
+      return;
+    }
 
     if (!RESEND_API_KEY) {
       console.warn("[Mailer] RESEND_API_KEY is missing. Email not sent.");
@@ -72,6 +85,8 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
       <p>Thank you.<br />BFMO Reports System</p>
     `;
 
+    console.log("[Mailer] Sending request to Resend…");
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -89,11 +104,17 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => "");
-      console.error("[Mailer] Resend API error:", res.status, errorText);
-    } else {
-      const data = await res.json().catch(() => null);
-      console.log("[Mailer] Email sent via Resend:", data);
+      console.error(
+        "[Mailer] Resend API error:",
+        res.status,
+        res.statusText,
+        errorText
+      );
+      return;
     }
+
+    const data = await res.json().catch(() => null);
+    console.log("[Mailer] Email sent via Resend:", data);
   } catch (err) {
     console.error("[Mailer] Error sending email:", err);
   }
