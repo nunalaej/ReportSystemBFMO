@@ -173,7 +173,7 @@ html:not(.dark) .modal-meta-grid {
   color: #010101;
 }
 
-html:not(.dark) .modal-meta-grid strong{
+html:not(.dark) .modal-meta-grid strong {
   color: #010101;
 }
 
@@ -190,7 +190,8 @@ html:not(.dark) .status-select:focus {
 
 /* Comments */
 html:not(.dark) .comment-item {
-  border-bottom-color: #e5e7eb;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 html:not(.dark) .comment-text {
@@ -622,6 +623,10 @@ html:not(.dark) .back-btn:hover {
   color: #9ca3af;
 }
 
+html:not(.dark) .status-panel-title {
+  color: #000000;
+}
+
 .status-row-inline {
   margin-top: 0.35rem;
 }
@@ -631,8 +636,7 @@ html:not(.dark) .back-btn:hover {
   color: #e5e7eb;
 }
 
-html:not(dark) .status-row-label {
-  font-size: 0.8rem;
+html:not(.dark) .status-row-label {
   color: #0d0d0d;
 }
 
@@ -679,7 +683,7 @@ html:not(dark) .status-row-label {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: rgba(15, 23, 42, 0.7); /* dark overlay */
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(4px);
 }
 
@@ -827,13 +831,6 @@ html:not(dark) .status-row-label {
   margin-bottom: 0.5rem;
 }
 
-.status-panel-title {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #000000;
-}
-
 /* Status select in modal */
 .status-row {
   display: flex;
@@ -867,7 +864,11 @@ html:not(dark) .status-row-label {
 .comments-section h3 {
   margin-bottom: 0.5rem;
   font-size: 0.95rem;
-  color: black
+  color: #e5e7eb;
+}
+
+html:not(.dark) .comments-section h3 {
+  color: #111827;
 }
 
 .comments-list {
@@ -878,7 +879,7 @@ html:not(dark) .status-row-label {
   flex-direction: column;
   gap: 0.5rem;
   max-height: 160px;
-  overflow-y: auto; 
+  overflow-y: auto;
 }
 
 .comment-item {
@@ -887,14 +888,6 @@ html:not(dark) .status-row-label {
   background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
-
-html:not(dark) .comment-item {
-  padding: 0.5rem 0.75rem;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-}
-
 
 .comment-text {
   font-size: 0.85rem;
@@ -1042,7 +1035,7 @@ html:not(dark) .comment-item {
   border: 1px solid #1d4ed8;
 }
 
-html:not(dark) .comment-btn-edit {
+html:not(.dark) .comment-btn-edit {
   background: #0020af;
   color: #ffffff;
   border: 1px solid #1d4ed8;
@@ -1087,10 +1080,10 @@ html:not(dark) .comment-btn-edit {
 }
 
 .log-list {
-  color: #000000;
+  color: #e5e7eb;
 }
 
-html:not(dark) .log-list {
+html:not(.dark) .log-list {
   color: #000000;
 }
 
@@ -1213,8 +1206,8 @@ html:not(dark) .log-list {
 
   .report-modal {
     border-radius: 20px;
-        max-width: 90%;
-        max-height: 90%;
+    max-width: 90%;
+    max-height: 90%;
   }
 
   /* vertical layout inside modal */
@@ -1229,7 +1222,7 @@ html:not(dark) .log-list {
   /* show thumbnail near title (optional) */
   .modal-thumb-mobile {
     display: block;
-    width: 100%;     /* bigger thumbnail */
+    width: 100%;
     height: 250px;
     border-radius: 12px;
     overflow: hidden;
@@ -1237,7 +1230,7 @@ html:not(dark) .log-list {
   }
 
   .modal-thumb-mobile img {
-    width: 100% !important; 
+    width: 100% !important;
     height: 100% !important;
     object-fit: cover;
   }
@@ -1249,7 +1242,7 @@ html:not(dark) .log-list {
 
   .modal-img-wrapper img {
     width: 100%;
-    height: auto;      /* do not squeeze into a tiny box */
+    height: auto;
     max-height: 320px;
     object-fit: cover;
     display: block;
@@ -1269,7 +1262,6 @@ html:not(dark) .log-list {
     cursor: zoom-in;
   }
 }
-
 
 .comment-upload-row {
   margin-top: 6px;
