@@ -5,9 +5,9 @@ const multer = require("multer");
 const path = require("path");
 
 const Report = require("../models/Report");
-const cloudinary = require("../config/cloudinary"); // <--- import cloudinary
+const cloudinary = require("../config/cloudinary"); // import cloudinary
 
-const { sendReportStatusEmail } = require("../mailer"); // adjust path if needed
+const { sendReportStatusEmail } = require("../utils/mailer"); // <<< FIXED PATH
 
 /* ============================================================
    IMAGE UPLOAD CONFIG (multer, memory storage for Cloudinary)
@@ -21,7 +21,6 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.get("/", async (req, res) => {
   try {
     const reports = await Report.find().sort({ createdAt: -1 });
-    // front end can handle both plain array or {reports}, but let's be explicit
     res.json({ success: true, reports });
   } catch (err) {
     console.error("GET /reports error:", err);
@@ -37,7 +36,9 @@ router.get("/:id", async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
     if (!report) {
-      return res.status(404).json({ success: false, message: "Report not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Report not found" });
     }
     res.json({ success: true, report });
   } catch (err) {
@@ -120,15 +121,11 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create report.",
-      error: err.message, // <--- expose reason to frontend
+      error: err.message,
     });
   }
 });
 
-/* ============================================================
-   UPDATE REPORT (Status + Edit Comments)
-   /api/reports/:id  (PUT)
-============================================================ */
 /* ============================================================
    UPDATE REPORT (Status + Edit Comments)
    /api/reports/:id  (PUT)
@@ -158,7 +155,7 @@ router.put("/:id", async (req, res) => {
 
     const updated = await existing.save();
 
-    // after saving, if status changed to allowed statuses, send email
+    // after saving, if status changed, try to send email
     if (status && status !== oldStatus) {
       sendReportStatusEmail({
         to: updated.email,
@@ -187,7 +184,9 @@ router.post("/:id/comments", async (req, res) => {
   try {
     const { text, by } = req.body;
     if (!text) {
-      return res.status(400).json({ success: false, message: "Comment text required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Comment text required" });
     }
 
     const newComment = {
@@ -203,7 +202,9 @@ router.post("/:id/comments", async (req, res) => {
     );
 
     if (!updated) {
-      return res.status(404).json({ success: false, message: "Report not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Report not found" });
     }
 
     res.json({ success: true, report: updated });
@@ -223,12 +224,16 @@ router.delete("/:id/comments/:index", async (req, res) => {
 
     const report = await Report.findById(id);
     if (!report) {
-      return res.status(404).json({ success: false, message: "Report not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Report not found" });
     }
 
     const idx = parseInt(index, 10);
     if (isNaN(idx) || idx < 0 || idx >= report.comments.length) {
-      return res.status(400).json({ success: false, message: "Invalid comment index" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid comment index" });
     }
 
     report.comments.splice(idx, 1);
@@ -237,7 +242,9 @@ router.delete("/:id/comments/:index", async (req, res) => {
     res.json({ success: true, report });
   } catch (err) {
     console.error("DELETE /reports/:id/comments/:index error:", err);
-    res.status(500).json({ success: false, message: "Failed to delete comment" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to delete comment" });
   }
 });
 
