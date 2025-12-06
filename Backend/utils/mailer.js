@@ -28,7 +28,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
 
     if (!allowedStatuses.includes(status)) {
       console.log(
-        `[Mailer] Status '${status}' not in allowed statuses, no email sent.`
+        `[Mailer] Status '${status}' not allowed for email sending.`
       );
       return;
     }
@@ -85,7 +85,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
       <p>Thank you.<br />BFMO Reports System</p>
     `;
 
-    console.log("[Mailer] Sending request to Resend…");
+    console.log("[Mailer] Sending request to Resend...");
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -99,6 +99,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
         subject,
         text: textBody,
         html: htmlBody,
+        reply_to: "bfmodlsud@gmail.com",
       }),
     });
 
@@ -114,9 +115,9 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
     }
 
     const data = await res.json().catch(() => null);
-    console.log("[Mailer] Email sent via Resend:", data);
+    console.log("[Mailer] Email sent successfully:", data);
   } catch (err) {
-    console.error("[Mailer] Error sending email:", err);
+    console.error("[Mailer] Fatal error sending email:", err);
   }
 }
 
