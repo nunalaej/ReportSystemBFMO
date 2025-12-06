@@ -7,7 +7,7 @@ const path = require("path");
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary"); // <--- import cloudinary
 
-const { sendReportStatusEmail } = require("../utils/mailer"); // adjust path if needed
+const { sendReportStatusEmail } = require("../mailer"); // adjust path if needed
 
 /* ============================================================
    IMAGE UPLOAD CONFIG (multer, memory storage for Cloudinary)
