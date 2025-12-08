@@ -192,7 +192,7 @@ export default function ReportPage() {
   const { user, isLoaded, isSignedIn } = useUser();
   const firstName = user?.firstName || "";
 
-  // only true if user is loaded AND role is admin
+  // only true if user is loaded AND role is staff
   const [canView, setCanView] = useState(false);
 
   const [reports, setReports] = useState<Report[]>([]);
@@ -220,7 +220,7 @@ export default function ReportPage() {
 
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
-  /* AUTH GUARD: only admins can view this page */
+  /* AUTH GUARD: only staff can view this page */
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -231,7 +231,7 @@ export default function ReportPage() {
       return;
     }
 
-    // role could be "admin" or ["admin"]
+    // role could be "staff" or ["staff"]
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
 
@@ -242,12 +242,12 @@ export default function ReportPage() {
     }
 
     if (role !== "staff") {
-      // Non admin goes to student dashboard
+      // Non staff goes to student dashboard
       router.replace("/Student/Dashboard");
       return;
     }
 
-    // User is admin allow rendering and data fetch
+    // User is staff allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
@@ -570,7 +570,7 @@ export default function ReportPage() {
             const newComment: Comment = {
               text: trimmed,
               comment: trimmed,
-              by: firstName,
+              by: "BFMO Staff",
               at: nowIso,
             };
             newComments = [...existingComments, newComment];
@@ -612,6 +612,12 @@ export default function ReportPage() {
       setSelectedReport(updatedSelected);
       setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
+
+      // Show success message with email confirmation
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Report(s) updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error updating reports:", err);
       alert(err.message || "There was a problem saving the changes.");
@@ -664,6 +670,12 @@ export default function ReportPage() {
 
       setSelectedReport(updatedSelected);
       setStatusValue("Archived");
+
+      // Show success message
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Report(s) archived successfully!\n\n📧 Status update sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error archiving reports:", err);
       alert("There was a problem archiving the report(s).");
@@ -736,7 +748,7 @@ export default function ReportPage() {
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const printedBy = firstName || "Staff";
+    const printedBy = firstName || "BFMO Staff";
 
     // statistics based on current filtered reports
     const concernBaseCounts = new Map<string, number>();
@@ -922,7 +934,7 @@ export default function ReportPage() {
 
   /* RENDER */
 
-  // While Clerk is still loading, or we have not yet confirmed the user is admin
+  // While Clerk is still loading, or we have not yet confirmed the user is staff
   if (!isLoaded || !canView) {
     return (
       <div className="report-wrapper">

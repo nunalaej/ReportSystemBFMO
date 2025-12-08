@@ -2,13 +2,7 @@
 
 import "@/app/Admin/style/analytics.css";
 
-import React, {
-  FC,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-} from "react";
+import React, { FC, useState, useEffect, useMemo, useCallback } from "react";
 import {
   PieChart,
   Pie,
@@ -21,6 +15,8 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  AreaChart,
+  Area,
 } from "recharts";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -81,6 +77,43 @@ interface ConcernChartDatum {
   value: number;
 }
 
+interface TimeSeriesPoint {
+  label: string;
+  value: number;
+}
+
+type TimeMode = "day" | "week" | "month" | "year";
+
+const BUILDING_COLORS = [
+  "#3b82f6", // blue
+  "#22c55e", // green
+  "#fbbf24", // yellow
+  "#ef4444", // red
+  "#8b5cf6", // purple
+  "#14b8a6", // teal
+  "#f97316", // orange
+  "#64748b", // slate
+];
+
+const getBuildingColor = (name: string, index: number) => {
+  return BUILDING_COLORS[index % BUILDING_COLORS.length];
+};
+
+const COLLEGE_COLORS = [
+  "#3b82f6", // blue
+  "#22c55e", // green
+  "#fbbf24", // yellow
+  "#ef4444", // red
+  "#8b5cf6", // purple
+  "#14b8a6", // teal
+  "#f97316", // orange
+  "#64748b", // slate
+];
+
+const getCollegeColor = (name: string, index: number) => {
+  return COLLEGE_COLORS[index % COLLEGE_COLORS.length];
+};
+
 const getConcernBaseFromLabel = (
   fullLabel: string
 ): { base: string; sub: string } => {
@@ -114,6 +147,14 @@ const STATUSES: string[] = [
   "Resolved",
   "Archived",
 ];
+
+// Default selection: everything except Archived
+const DEFAULT_STATUS_SET = new Set<string>([
+  "Pending",
+  "Waiting for Materials",
+  "In Progress",
+  "Resolved",
+]);
 
 // Labels shown in chart/legend per internal key
 const STATUS_LABELS: Record<StatusKey, string> = {
@@ -166,7 +207,7 @@ const Analytics: FC = () => {
   // only true if user is loaded AND role is staff
   const [canView, setCanView] = useState(false);
 
-  /* AUTH GUARD: only STAFF can view this page */
+  /* AUTH GUARD: only staff can view this page */
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -177,7 +218,7 @@ const Analytics: FC = () => {
       return;
     }
 
-    // role could be "staff" OR ["staff"]
+    // role could be "admin" OR ["admin"]
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
 
@@ -188,22 +229,17 @@ const Analytics: FC = () => {
     }
 
     if (role !== "staff") {
-      // Non staff users are redirected away
-      if (role === "admin") {
-        router.replace("/Admin");
-      } else {
-        router.replace("/Student/Dashboard");
-      }
+      // Non admin -> send to student dashboard
+      router.replace("/Student/Dashboard");
       return;
     }
 
-    // User is staff -> allow rendering and data fetch
+    // User is admin -> allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
   const handleReports = () => {
-    // Staff reports path, change this if you have a separate staff route
-    router.push("/Admin/Reports");
+    router.push("/Staff/Reports");
   };
 
   /* =========================================================
@@ -298,9 +334,11 @@ const Analytics: FC = () => {
     FILTERS
   ========================================================= */
 
+  // Default: everything EXCEPT Archived
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
-    () => new Set(STATUSES)
+    () => new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"])
   );
+
   const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(
     () => new Set()
   );
@@ -315,9 +353,11 @@ const Analytics: FC = () => {
 
   const FILTERS_OPEN_KEY = "analytics_filters_open_v1";
   const [filtersOpen, setFiltersOpen] = useState<boolean>(() => {
-    if (typeof window === "undefined") return true;
+    if (typeof window === "undefined") return false; // SSR fallback
+
     const saved = localStorage.getItem(FILTERS_OPEN_KEY);
-    return saved === null ? true : saved === "1";
+    // if nothing saved yet, start CLOSED
+    return saved === null ? false : saved === "1";
   });
 
   const toggleFiltersOpen = () => {
@@ -344,7 +384,7 @@ const Analytics: FC = () => {
     };
 
   const clearAllFilters = () => {
-    setSelectedStatuses(new Set(STATUSES));
+    setSelectedStatuses(new Set(DEFAULT_STATUS_SET));
     setSelectedBuildings(new Set());
     setSelectedConcerns(new Set());
     setSelectedColleges(new Set());
@@ -366,8 +406,8 @@ const Analytics: FC = () => {
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
 
     return reports.filter((r) => {
-      const st = (r.status || "").trim();
-      if (!selectedStatuses.has(st)) return false;
+      const st = normalizeStatusFilterLabel(r.status);
+      if (!st || !selectedStatuses.has(st)) return false;
 
       if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
         return false;
@@ -583,9 +623,57 @@ const Analytics: FC = () => {
     dateTo,
   ]);
 
+  // sort options so checked ones are always on top
+  const sortedStatusFilters = useMemo(
+    () =>
+      [...availableStatusFilters].sort((a, b) => {
+        const aSel = selectedStatuses.has(a);
+        const bSel = selectedStatuses.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableStatusFilters, selectedStatuses]
+  );
+
+  const sortedBuildings = useMemo(
+    () =>
+      [...availableBuildings].sort((a, b) => {
+        const aSel = selectedBuildings.has(a);
+        const bSel = selectedBuildings.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableBuildings, selectedBuildings]
+  );
+
+  const sortedConcerns = useMemo(
+    () =>
+      [...availableConcerns].sort((a, b) => {
+        const aSel = selectedConcerns.has(a);
+        const bSel = selectedConcerns.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableConcerns, selectedConcerns]
+  );
+
+  const sortedColleges = useMemo(
+    () =>
+      [...availableColleges].sort((a, b) => {
+        const aSel = selectedColleges.has(a);
+        const bSel = selectedColleges.has(b);
+        if (aSel !== bSel) return aSel ? -1 : 1;
+        return a.localeCompare(b);
+      }),
+    [availableColleges, selectedColleges]
+  );
+
   const activeFilterCount = useMemo(() => {
     let c = 0;
-    if (selectedStatuses.size !== STATUSES.length) c++;
+    const statusesChanged =
+      selectedStatuses.size !== DEFAULT_STATUS_SET.size ||
+      [...DEFAULT_STATUS_SET].some((s) => !selectedStatuses.has(s));
+    if (statusesChanged) c++;
     if (selectedBuildings.size) c++;
     if (selectedConcerns.size) c++;
     if (selectedColleges.size) c++;
@@ -705,12 +793,105 @@ const Analytics: FC = () => {
     });
   }, [filtered]);
 
-  const collegeData = useMemo(
-    () => agg(filtered, "college"),
-    [filtered, agg]
-  );
+  const collegeData = useMemo(() => agg(filtered, "college"), [filtered, agg]);
 
   const total = filtered.length;
+
+  /* =========================================================
+    TIME SERIES: REPORTS OVER TIME (days, weeks, months, years)
+  ========================================================= */
+
+  const [timeMode, setTimeMode] = useState<TimeMode>("month");
+
+  const timeSeriesData: TimeSeriesPoint[] = useMemo(() => {
+    if (!filtered.length) return [];
+
+    const now = new Date();
+
+    const map = new Map<
+      string,
+      { label: string; value: number; sortKey: number }
+    >();
+
+    const makeDayKey = (d: Date) => d.toISOString().slice(0, 10);
+
+    const getThreshold = (): Date => {
+      const d = new Date(now);
+      if (timeMode === "day") {
+        d.setDate(d.getDate() - 29); // last 30 days
+      } else if (timeMode === "week") {
+        d.setDate(d.getDate() - 7 * 11); // last 12 weeks
+      } else if (timeMode === "month") {
+        d.setMonth(d.getMonth() - 11); // last 12 months
+      } else {
+        d.setFullYear(d.getFullYear() - 4); // last 5 years
+      }
+      return d;
+    };
+
+    const threshold = getThreshold();
+
+    filtered.forEach((r) => {
+      if (!r.createdAt) return;
+      const dt = new Date(r.createdAt);
+      if (Number.isNaN(dt.getTime())) return;
+      if (dt < threshold) return;
+
+      let key: string;
+      let label: string;
+      let sortKey: number;
+
+      const year = dt.getFullYear();
+      const month = dt.getMonth(); // 0 based
+      const day = dt.getDate();
+
+      if (timeMode === "day") {
+        key = makeDayKey(dt);
+        label = `${month + 1}/${day}`;
+        sortKey = dt.getTime();
+      } else if (timeMode === "week") {
+        const tmp = new Date(dt);
+        const dayOfWeek = tmp.getDay() || 7; // 1..7, Monday based
+        tmp.setDate(tmp.getDate() - (dayOfWeek - 1)); // Monday
+        key = `W${tmp.getFullYear()}-${makeDayKey(tmp)}`;
+        label = `Wk ${tmp.getFullYear().toString().slice(2)}-${tmp.getMonth() + 1}`;
+        sortKey = tmp.getTime();
+      } else if (timeMode === "month") {
+        key = `${year}-${month + 1}`;
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+        label = `${monthNames[month]} ${year.toString().slice(2)}`;
+        sortKey = year * 12 + month;
+      } else {
+        key = `${year}`;
+        label = `${year}`;
+        sortKey = year;
+      }
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.value += 1;
+      } else {
+        map.set(key, { label, value: 1, sortKey });
+      }
+    });
+
+    return [...map.values()]
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .map((v) => ({ label: v.label, value: v.value }));
+  }, [filtered, timeMode]);
 
   /* =========================================================
     PRINT AS TABLE (with statistics)
@@ -735,14 +916,10 @@ const Analytics: FC = () => {
       // detailed concern (with subConcern)
       const concernLabel = formatConcernLabel(r);
       const concernKey = concernLabel || "Unspecified";
-      concernCounts.set(
-        concernKey,
-        (concernCounts.get(concernKey) || 0) + 1
-      );
+      concernCounts.set(concernKey, (concernCounts.get(concernKey) || 0) + 1);
 
       // building
-      const buildingKey =
-        (r.building || "Unspecified").trim() || "Unspecified";
+      const buildingKey = (r.building || "Unspecified").trim() || "Unspecified";
       buildingCounts.set(
         buildingKey,
         (buildingCounts.get(buildingKey) || 0) + 1
@@ -971,9 +1148,7 @@ const Analytics: FC = () => {
 
   const toggleCollapse = (listId: string) =>
     setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId ? { ...l, collapsed: !l.collapsed } : l
-      )
+      prev.map((l) => (l.id === listId ? { ...l, collapsed: !l.collapsed } : l))
     );
 
   const addTask = (listId: string, text: string) => {
@@ -983,7 +1158,10 @@ const Analytics: FC = () => {
         l.id === listId
           ? {
               ...l,
-              tasks: [...l.tasks, { id: uid(), text: text.trim(), done: false }],
+              tasks: [
+                ...l.tasks,
+                { id: uid(), text: text.trim(), done: false },
+              ],
             }
           : l
       )
@@ -1096,11 +1274,6 @@ const Analytics: FC = () => {
             >
               Open Lists Panel
             </button>
-
-            <button className="analytics-btn" onClick={handleReports}>
-              To Reports
-            </button>
-
             <button className="printreports-btn" onClick={handlePrint}>
               Print Analytics
             </button>
@@ -1118,7 +1291,7 @@ const Analytics: FC = () => {
               <div className="filter-block">
                 <h4>Status</h4>
                 <div className="chips">
-                  {availableStatusFilters.map((s) => (
+                  {sortedStatusFilters.map((s) => (
                     <label
                       key={s}
                       className={`chip ${
@@ -1139,7 +1312,7 @@ const Analytics: FC = () => {
               <div className="filter-block">
                 <h4>Building</h4>
                 <div className="chips scroll">
-                  {availableBuildings.map((b) => (
+                  {sortedBuildings.map((b) => (
                     <label
                       key={b}
                       className={`chip ${
@@ -1160,7 +1333,7 @@ const Analytics: FC = () => {
               <div className="filter-block">
                 <h4>Concern</h4>
                 <div className="chips scroll">
-                  {availableConcerns.map((c) => (
+                  {sortedConcerns.map((c) => (
                     <label
                       key={c}
                       className={`chip ${
@@ -1181,7 +1354,7 @@ const Analytics: FC = () => {
               <div className="filter-block">
                 <h4>College</h4>
                 <div className="chips scroll">
-                  {availableColleges.map((col) => (
+                  {sortedColleges.map((col) => (
                     <label
                       key={col}
                       className={`chip ${
@@ -1256,7 +1429,13 @@ const Analytics: FC = () => {
         <div className="analytics-grid">
           {/* Status Overview */}
           <div className="card analytics-card">
-            <h3>Status Overview</h3>
+            <div className="header-stats-total">
+              <h3>Status Overview</h3>
+              <div className="stat-chip-total">
+                <span>Total</span>
+                <strong>{reports.length}</strong>
+              </div>
+            </div>
             <div className="chart-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1283,76 +1462,51 @@ const Analytics: FC = () => {
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
-                  <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="header-stats">
               <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#0ea5e9" }}
-                />
-                <span>Total</span>
-                <strong>{reports.length}</strong>
-              </div>
-
-              <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#22c55e" }}
-                />
+                <span className="stat-dot" style={{ background: "#22c55e" }} />
                 <span>Resolved</span>
                 <strong>{statusCounts.resolved}</strong>
               </div>
 
               <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#fbbf24" }}
-                />
+                <span className="stat-dot" style={{ background: "#fbbf24" }} />
                 <span>Pending</span>
                 <strong>{statusCounts.pending}</strong>
               </div>
 
               <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#60a5fa" }}
-                />
+                <span className="stat-dot" style={{ background: "#60a5fa" }} />
                 <span>Waiting</span>
                 <strong>{statusCounts.waiting}</strong>
               </div>
 
               <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#6366f1" }}
-                />
+                <span className="stat-dot" style={{ background: "#6366f1" }} />
                 <span>In Progress</span>
                 <strong>{statusCounts.progress}</strong>
               </div>
 
               <div className="stat-chip">
-                <span
-                  className="stat-dot"
-                  style={{ background: "#9ca3af" }}
-                />
+                <span className="stat-dot" style={{ background: "#9ca3af" }} />
                 <span>Archived</span>
                 <strong>{statusCounts.archived}</strong>
               </div>
             </div>
           </div>
 
-          {/* Reports by Building */}
           <div className="card analytics-card">
             <h3>Reports by Building</h3>
-            <div className="chart-wrap resizable">
+            <div className="bar-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={buildingData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
+
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#ffffff",
@@ -1363,8 +1517,51 @@ const Analytics: FC = () => {
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
-                  <Legend />
-                  <Bar dataKey="value" fill="#22c55e" />
+
+                  <Legend
+                    content={() => (
+                      <div
+                        style={{
+                          justifyContent: "center",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          marginTop: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        {buildingData.map((b, idx) => (
+                          <div
+                            key={b.name}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                backgroundColor: getBuildingColor(b.name, idx),
+                              }}
+                            />
+                            {b.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  />
+
+                  <Bar dataKey="value">
+                    {buildingData.map((entry, index) => (
+                      <Cell
+                        key={entry.name}
+                        fill={getBuildingColor(entry.name, index)}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1389,23 +1586,23 @@ const Analytics: FC = () => {
                     }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
-                    // show base and sub nicely in the tooltip
                     labelFormatter={(_, payload) => {
-                      const p = (payload &&
-                        payload[0]?.payload) as ConcernChartDatum | undefined;
+                      const p = (payload && payload[0]?.payload) as
+                        | ConcernChartDatum
+                        | undefined;
                       if (!p) return "";
-                      // Example: "Civil - Lights"
-                      return `${p.base} - ${p.name}`;
+                      return `${p.name}`;
                     }}
                     formatter={(value) => [`${value}`, "Reports"]}
                   />
-                  {/* custom legend that shows base concerns with their colors */}
                   <Legend
                     content={() => {
                       const bases = ["Civil", "Mechanical", "Electrical"];
                       return (
                         <div
                           style={{
+                            justifyContent: "center",
+                            alignItems: "center",
                             display: "flex",
                             flexWrap: "wrap",
                             gap: 8,
@@ -1464,6 +1661,7 @@ const Analytics: FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
+
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "#ffffff",
@@ -1474,9 +1672,142 @@ const Analytics: FC = () => {
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
-                  <Legend />
-                  <Bar dataKey="value" fill="#fbbf24" />
+
+                  <Legend
+                    content={() => (
+                      <div
+                        style={{
+                          justifyContent: "center",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          marginTop: 8,
+                          fontSize: 12,
+                        }}
+                      >
+                        {collegeData.map((col, idx) => (
+                          <div
+                            key={col.name}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                backgroundColor: getCollegeColor(
+                                  col.name,
+                                  idx
+                                ),
+                              }}
+                            />
+                            {col.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  />
+
+                  <Bar dataKey="value">
+                    {collegeData.map((entry, index) => (
+                      <Cell
+                        key={entry.name}
+                        fill={getCollegeColor(entry.name, index)}
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Reports Over Time (days / weeks / months / years) */}
+          <div className="card analytics-card analytics-card-full">
+            <div className="time-header">
+              <h3>Reports Over Time</h3>
+              <div className="time-mode-toggle">
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "day" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("day")}
+                >
+                  Days
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "week" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("week")}
+                >
+                  Weeks
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "month" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("month")}
+                >
+                  Months
+                </button>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${
+                    timeMode === "year" ? "is-active" : ""
+                  }`}
+                  onClick={() => setTimeMode("year")}
+                >
+                  Years
+                </button>
+              </div>
+            </div>
+            <div className="chart-wrap resizable">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={timeSeriesData}>
+                  <defs>
+                    <linearGradient
+                      id="reportsGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
+                      <stop offset="60%" stopColor="#0ea5e9" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: 8,
+                      border: "1px solid #e5e7eb",
+                      color: "#000000",
+                    }}
+                    labelStyle={{ color: "#000000" }}
+                    itemStyle={{ color: "#000000" }}
+                    formatter={(value) => [`${value}`, "Reports"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#22c55e"
+                    fill="url(#reportsGradient)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
@@ -1564,8 +1895,7 @@ const Analytics: FC = () => {
                       <button
                         className="small-btn"
                         onClick={() => {
-                          if (confirm("Delete this list?"))
-                            deleteList(list.id);
+                          if (confirm("Delete this list?")) deleteList(list.id);
                         }}
                       >
                         Delete
@@ -1581,8 +1911,7 @@ const Analytics: FC = () => {
                           placeholder="New task name"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
-                              const v =
-                                (e.currentTarget.value || "").trim();
+                              const v = (e.currentTarget.value || "").trim();
                               if (v) {
                                 addTask(list.id, v);
                                 (e.currentTarget as HTMLInputElement).value =
@@ -1594,9 +1923,8 @@ const Analytics: FC = () => {
                         <button
                           className="small-btn"
                           onClick={(e) => {
-                            const input =
-                              e.currentTarget
-                                .previousElementSibling as HTMLInputElement | null;
+                            const input = e.currentTarget
+                              .previousElementSibling as HTMLInputElement | null;
                             if (input && input.value.trim()) {
                               addTask(list.id, input.value.trim());
                               input.value = "";
@@ -1616,9 +1944,7 @@ const Analytics: FC = () => {
                               <input
                                 type="checkbox"
                                 checked={!!task.done}
-                                onChange={() =>
-                                  toggleTask(list.id, task.id)
-                                }
+                                onChange={() => toggleTask(list.id, task.id)}
                               />
                               <label
                                 style={{
