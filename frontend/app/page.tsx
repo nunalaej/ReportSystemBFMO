@@ -17,6 +17,8 @@ export default function Home() {
 
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
+  router.refresh(); // Refreshes the current route, re-fetching data
+
 
   /* =========================================
      ROLE-BASED REDIRECTION
@@ -36,7 +38,7 @@ export default function Home() {
     // Redirect based on role
     if (role === "admin") {
       router.replace("/Admin");
-    } else if (role === "staff") {
+    } else if (role === "staff" || role === "Staff") {
       router.replace("/Staff");          // ← EXACT PATH FOR Staff/page.tsx
     } else {
       router.replace("/Student/Dashboard");

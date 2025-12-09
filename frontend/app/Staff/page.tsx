@@ -3,14 +3,13 @@
 import { useRouter } from "next/navigation";
 import "@/app/Admin/style/dashboard.css";
 
-export default function AdminDashboard() {
+export default function StaffDashboard() {
   const router = useRouter();
 
   return (
     <main className="admin-dashboard">
       <header className="admin-header">
         <h1>Staff Dashboard</h1>
-        <p>Only admins can access this page.</p>
       </header>
 
       <section className="admin-card-grid">
