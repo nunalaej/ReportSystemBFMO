@@ -12,6 +12,8 @@ const HistoryIcon: FC = () => (
 
 const HeaderNav: FC = () => {
   const router = useRouter();
+  router.refresh(); // Refreshes the current route, re-fetching data
+
   const { user, isLoaded, isSignedIn } = useUser();
 
   // Determine role from Clerk metadata
