@@ -17,8 +17,6 @@ export default function Home() {
 
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
-  router.refresh(); // Refreshes the current route, re-fetching data
-
 
   /* =========================================
      ROLE-BASED REDIRECTION
