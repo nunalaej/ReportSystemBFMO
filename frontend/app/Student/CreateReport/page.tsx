@@ -714,25 +714,29 @@ export default function Create() {
   };
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (hasProfanity) {
-      showMsg(
-        "error",
-        "Your report contains foul or inappropriate language. Please remove it before submitting."
-      );
-      return;
-    }
+  if (!formData.ImageFile) {
+    showMsg("error", "Please attach an image before submitting.");
+    return;
+  }
 
-    // if there are similar reports, open modal confirmation
-    if (similarReportsCount > 0) {
-      setIsConfirming(true);
-      return;
-    }
+  if (hasProfanity) {
+    showMsg(
+      "error",
+      "Your report contains foul or inappropriate language. Please remove it before submitting."
+    );
+    return;
+  }
 
-    // no similar reports, go ahead
-    void performSubmit();
-  };
+  if (similarReportsCount > 0) {
+    setIsConfirming(true);
+    return;
+  }
+
+  void performSubmit();
+};
+
 
   const viewreports = () => {
     localStorage.removeItem("currentUser");
@@ -958,7 +962,7 @@ export default function Create() {
                 </div>
 
                 <div>Attach clear photo</div>
-                <div>Recommended</div>
+                <div>Required</div>
                 <div>Include room number</div>
                 <div>If applicable</div>
               </div>
@@ -1576,7 +1580,7 @@ export default function Create() {
 
               {/* Dropzone */}
               <div className="create-scope__group">
-                <label>Attach an image (Recommended)</label>
+                <label>Attach an image (Required)</label>
                 <label
                   className="create-scope__dropzone"
                   onDrop={onDrop}
@@ -1584,11 +1588,13 @@ export default function Create() {
                   onDragLeave={onDragLeave}
                 >
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleChange}
-                    name="ImageFile"
-                  />
+  type="file"
+  accept="image/*"
+  onChange={handleChange}
+  name="ImageFile"
+  required={!formData.ImageFile}
+/>
+
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path
