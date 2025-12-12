@@ -1040,3 +1040,60 @@ html.dark .column-title {
   object-fit: contain;
   cursor: zoom-out;
 }
+
+/* MOBILE: show full image inside report cards (no cropping) */
+@media (max-width: 500px) {
+  .report-img-container {
+    height: 180px;           /* adjust if you want taller */
+    background: #ffffff;     /* so letterboxing looks clean */
+  }
+
+  .report-img {
+    object-fit: contain;     /* key fix: no crop */
+    object-position: center;
+    transform: none;         /* remove the default scale */
+  }
+
+  .report:hover .report-img {
+    transform: none;         /* prevent hover zoom on mobile */
+  }
+  
+
+  .modal-img-wrapper img {
+  object-fit: contain;
+}
+
+}
+
+/* Default: desktop and tablet */
+.btn-long {
+  display: inline;
+}
+
+.btn-short {
+  display: none;
+}
+
+/* Mobile (≤500px): show full text */
+@media (max-width: 500px) {
+  .btn-long {
+    display: inline;
+  }
+
+  .btn-short {
+    display: none;
+  }
+}
+
+/* Above 500px: short text */
+@media (min-width: 501px) {
+  .btn-long {
+    display: none;
+  }
+
+  .btn-short {
+    display: inline;
+  }
+}
+
+

@@ -296,11 +296,13 @@ export default function ReportPage() {
             </p>
           </div>
 
-          <div className="header-actions">
-            <a href="/Student/CreateReport" className="create-report-btn">
-              + Create Report
-            </a>
-          </div>
+  <div className="header-actions">
+  <a href="/Student/CreateReport" className="create-report-btn">
+    <span className="btn-long">+ Create</span>
+    <span className="btn-short">+ Create Report</span>
+  </a>
+</div>
+
         </div>
 
         {!isLoaded && <p>Loading...</p>}

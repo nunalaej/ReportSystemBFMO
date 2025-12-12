@@ -1,3 +1,5 @@
+/* Admin/style/reports.css */
+
 body {
   background-color: #020617;
   color: #e5e5e5;
@@ -91,11 +93,11 @@ html:not(.dark) .submitted-date {
   color: #9ca3af;
 }
 
-/* Status focus row and panel */
+/* Status focus row and panel (LIGHT MODE FIX) */
 html:not(.dark) .status-focus-row,
 html:not(.dark) .status-panel {
-  background-color: #000000;
-  border-color: #000000;
+  background-color: #ffffff;
+  border-color: #e5e7eb;
 }
 
 /* Focus background colors for row and panel */
@@ -104,11 +106,14 @@ html:not(.dark) .status-focus-pending {
   border-color: rgba(251, 191, 36, 0.7);
   color: #020617;
 }
+
+/* waiting focus (LIGHT MODE FIXED) */
 html:not(.dark) .status-focus-waiting {
-  background-color: rgba(225, 210, 0, 0.518);
-  border-color: rgba(178, 181, 0, 0.7);
-  color: #020617;
+  background-color: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: #111827;
 }
+
 html:not(.dark) .status-focus-inprogress {
   background-color: rgba(59, 130, 246, 0.16);
   border-color: rgba(59, 130, 246, 0.7);
@@ -125,13 +130,20 @@ html:not(.dark) .status-focus-label {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #262626;
+  color: #111827;
+}
+
+html:not(.dark) .status-focus-label .status-waiting {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #111827;
 }
 
 html:not(.dark) .status-focus-archived {
   background-color: rgba(117, 5, 9, 0.417);
   border-color: #440606;
-  color: #020617;
+  color: #ffffff;
 }
 
 /* Modal backdrop and container */
@@ -357,7 +369,8 @@ html:not(.dark) .back-btn:hover {
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    transform 0.1s ease;
 }
 
 .clear-filters-btn:hover {
@@ -553,6 +566,7 @@ html:not(.dark) .back-btn:hover {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+  border: 1px solid transparent;
 }
 
 /* Pill colors */
@@ -566,14 +580,17 @@ html:not(.dark) .status-pending {
   color: #0a0a0a;
 }
 
+/* WAITING FIX (better, consistent, readable in modal and cards) */
 .status-waiting {
-  background-color: #be9b0271;
-  color: #ececec;
+  background-color: rgba(168, 85, 247, 0.18);
+  color: #e9d5ff;
+  border: 1px solid rgba(168, 85, 247, 0.45);
 }
 
 html:not(.dark) .status-waiting {
-  background-color: #be9b0271;
-  color: #181818;
+  background-color: rgba(168, 85, 247, 0.15);
+  color: #5b21b6;
+  border: 1px solid rgba(168, 85, 247, 0.45);
 }
 
 .status-inprogress {
@@ -590,7 +607,6 @@ html:not(.dark) .status-waiting {
   background-color: transparent;
   color: #9ca3af;
 }
-
 
 html:not(.dark) .status-archived {
   background-color: #ba8a8a;
@@ -624,7 +640,6 @@ html:not(.dark) .status-archived {
   color: #ffffff;
 }
 
-
 .status-panel-header {
   display: flex;
   align-items: center;
@@ -641,7 +656,7 @@ html:not(.dark) .status-archived {
 }
 
 html:not(.dark) .status-panel-title {
-  color: #000000;
+  color: #111827;
 }
 
 .status-row-inline {
@@ -654,7 +669,7 @@ html:not(.dark) .status-panel-title {
 }
 
 html:not(.dark) .status-row-label {
-  color: #0d0d0d;
+  color: #111827;
 }
 
 /* Focus background colors for row and panel */
@@ -662,14 +677,12 @@ html:not(.dark) .status-row-label {
   background-color: rgba(251, 191, 36, 0.12);
   border-color: rgba(251, 191, 36, 0.7);
 }
-.status-focus-waiting {
-  background-color: rgba(178, 181, 0, 0.7);
-  border-color: rgba(141, 138, 0, 0.7);
-}
 
-html:not(.dark) .status-focus-waiting {
-  background-color: rgba(178, 181, 0, 0.7);
-  border-color: rgba(141, 138, 0, 0.7);
+/* WAITING FOCUS FIX (modal + card focus row) */
+.status-focus-waiting {
+  background-color: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.55);
+  color: #f8fafc;
 }
 
 .status-focus-inprogress {
@@ -844,7 +857,6 @@ html:not(.dark) .status-inprogress {
 }
 
 /* status panel */
-
 .status-panel {
   border-radius: 14px;
   padding: 0.75rem 1rem;
