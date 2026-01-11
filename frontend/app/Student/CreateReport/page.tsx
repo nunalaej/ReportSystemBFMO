@@ -180,7 +180,6 @@ const collegeOptions: string[] = [
 ];
 
 /* Profanity detection */
-
 const profanityPatterns: RegExp[] = [
   /potangina/i,
   /p0t4ng1na/i,
@@ -242,7 +241,7 @@ const getSimilarityKey = (r: {
 export default function Create() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const light = theme === "light";
 
   const [formData, setFormData] = useState<FormDataState>({
@@ -287,6 +286,19 @@ export default function Create() {
 
   const [hasProfanity, setHasProfanity] = useState<boolean>(false);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
+
+  // Fix scroll lock issues after navigation:
+  // Only lock scroll when overlays are open, otherwise always unlock
+  useEffect(() => {
+    const shouldLock = sidebarOverlayOpen || isConfirming;
+    document.body.style.overflow = shouldLock ? "hidden" : "";
+    document.documentElement.style.overflow = shouldLock ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+    };
+  }, [sidebarOverlayOpen, isConfirming]);
 
   // remember sidebar collapse state on desktop
   useEffect(() => {
@@ -665,10 +677,7 @@ export default function Create() {
 
       if (!res.ok) {
         console.error("Submit error status:", res.status, raw);
-        showMsg(
-          "error",
-          raw || `Submission failed with status ${res.status}`
-        );
+        showMsg("error", raw || `Submission failed with status ${res.status}`);
         return;
       }
 
@@ -676,7 +685,7 @@ export default function Create() {
       try {
         result = raw ? JSON.parse(raw) : {};
       } catch {
-        // ignore parse error, we already logged raw
+        // ignore parse error
       }
 
       if (result.success) {
@@ -711,36 +720,6 @@ export default function Create() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-
-  if (!formData.ImageFile) {
-    showMsg("error", "Please attach an image before submitting.");
-    return;
-  }
-
-  if (hasProfanity) {
-    showMsg(
-      "error",
-      "Your report contains foul or inappropriate language. Please remove it before submitting."
-    );
-    return;
-  }
-
-  if (similarReportsCount > 0) {
-    setIsConfirming(true);
-    return;
-  }
-
-  void performSubmit();
-};
-
-
-  const viewreports = () => {
-    localStorage.removeItem("currentUser");
-    router.push("/Student/ViewReports");
   };
 
   /* Derived summary and validation */
@@ -926,6 +905,35 @@ export default function Create() {
     return rooms;
   }, [isIctc, formData.floor]);
 
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!formData.ImageFile) {
+      showMsg("error", "Please attach an image before submitting.");
+      return;
+    }
+
+    if (hasProfanity) {
+      showMsg(
+        "error",
+        "Your report contains foul or inappropriate language. Please remove it before submitting."
+      );
+      return;
+    }
+
+    if (similarReportsCount > 0) {
+      setIsConfirming(true);
+      return;
+    }
+
+    void performSubmit();
+  };
+
+  const viewreports = () => {
+    localStorage.removeItem("currentUser");
+    router.push("/Student/ViewReports");
+  };
+
   return (
     <div className={`create-scope ${light ? "create-scope--light" : ""}`}>
       <div
@@ -1097,7 +1105,7 @@ export default function Create() {
 
         {/* Main */}
         <main className="create-scope__main">
-          {/* Top bar with burger and logo */}
+          {/* Top bar with burger */}
           <header className="create-scope__topbar">
             <div className="create-scope__topbar-left">
               <label className="burger">
@@ -1588,12 +1596,12 @@ export default function Create() {
                   onDragLeave={onDragLeave}
                 >
                   <input
-  type="file"
-  accept="image/*"
-  onChange={handleChange}
-  name="ImageFile"
-  required={!formData.ImageFile}
-/>
+                    type="file"
+                    accept="image/*"
+                    onChange={handleChange}
+                    name="ImageFile"
+                    required={!formData.ImageFile}
+                  />
 
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1609,6 +1617,7 @@ export default function Create() {
                     </div>
                   </div>
                 </label>
+
                 {preview && (
                   <img
                     className="create-scope__preview-img"
