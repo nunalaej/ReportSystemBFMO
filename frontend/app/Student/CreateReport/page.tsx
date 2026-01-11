@@ -4,6 +4,7 @@ import "@/app/style/create.css";
 
 import React, {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   ChangeEvent,
@@ -29,10 +30,6 @@ interface ConcernMeta {
   subconcerns?: string[];
 }
 
-/** Raw building item from /api/meta
- * Can be a simple string (old format)
- * or an object with a name field (new format from AdminEdit).
- */
 type BuildingMetaRaw = string | { id?: string; name?: string };
 
 interface MetaState {
@@ -86,11 +83,9 @@ function Panel({ title, subtitle, actions, children }: PanelProps) {
   );
 }
 
-// small helper for safe string comparison
 const norm = (v: unknown): string =>
   v == null ? "" : String(v).trim().toLowerCase();
 
-// derive floor from room string like "102" -> "1" fallback
 const deriveFloorFromRoom = (roomValue: unknown): string => {
   if (!roomValue) return "";
   const num = parseInt(String(roomValue), 10);
@@ -99,16 +94,12 @@ const deriveFloorFromRoom = (roomValue: unknown): string => {
   return floor > 0 ? String(floor) : "";
 };
 
-// required star helper for labels
 const requiredStar = (value: unknown): ReactNode => {
   const str = value == null ? "" : String(value).trim();
-  if (!str) {
-    return <span className="create-scope__required-star"> *</span>;
-  }
+  if (!str) return <span className="create-scope__required-star"> *</span>;
   return null;
 };
 
-// fallback options used if /api/meta is not available
 const FALLBACK_BUILDINGS: string[] = [
   "Ayuntamiento",
   "JFH",
@@ -157,12 +148,6 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
   },
 ];
 
-/**
- * API base for reports and meta:
- * If NEXT_PUBLIC_API_BASE is set it will call that backend, for example
- *   https://your-backend.onrender.com
- * If not set it will use Next routes on the same domain like /api/meta
- */
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
 const META_URL = API_BASE ? `${API_BASE}/api/meta` : "/api/meta";
@@ -214,11 +199,6 @@ const containsProfanity = (text: string | undefined | null): boolean => {
   return profanityPatterns.some((re) => re.test(lower) || re.test(leet));
 };
 
-/* Similarity key helper
-   Same rule as admin reports:
-   - same Building + Concern + SubConcern/OtherConcern
-   - and same Room/OtherRoom when there is a room
-*/
 const getSimilarityKey = (r: {
   building?: string;
   concern?: string;
@@ -231,11 +211,7 @@ const getSimilarityKey = (r: {
   const concern = (r.concern || "").trim();
   const sub = (r.subConcern || r.otherConcern || "").trim();
   const room = (r.room || r.otherRoom || "").trim();
-
-  if (room) {
-    return `${building}|${concern}|${sub}|${room}`;
-  }
-  return `${building}|${concern}|${sub}`;
+  return room ? `${building}|${concern}|${sub}|${room}` : `${building}|${concern}|${sub}`;
 };
 
 export default function Create() {
@@ -269,8 +245,7 @@ export default function Create() {
 
   const [hasRoom, setHasRoom] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [sidebarOverlayOpen, setSidebarOverlayOpen] =
-    useState<boolean>(false);
+  const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState<boolean>(false);
 
   const [specificRoom, setSpecificRoom] = useState<boolean>(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
@@ -287,18 +262,34 @@ export default function Create() {
   const [hasProfanity, setHasProfanity] = useState<boolean>(false);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
 
-  // Fix scroll lock issues after navigation:
-  // Only lock scroll when overlays are open, otherwise always unlock
-  useEffect(() => {
+  // ✅ IMPORTANT FIX:
+  // Run before paint to avoid initial "stuck no scroll" on first visit.
+  // Lock scroll only when overlay/modal is open; otherwise always unlock.
+  useLayoutEffect(() => {
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+
     const shouldLock = sidebarOverlayOpen || isConfirming;
-    document.body.style.overflow = shouldLock ? "hidden" : "";
-    document.documentElement.style.overflow = shouldLock ? "hidden" : "";
+    if (shouldLock) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    }
 
     return () => {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     };
   }, [sidebarOverlayOpen, isConfirming]);
+
+  // ✅ Recommended: close overlay automatically on desktop widths
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth >= 1024) setSidebarOverlayOpen(false);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // remember sidebar collapse state on desktop
   useEffect(() => {
@@ -343,9 +334,8 @@ export default function Create() {
       setMetaError("");
       try {
         const res = await fetch(META_URL, { credentials: "omit" });
-        if (!res.ok) {
-          throw new Error(`Failed to load options. Status ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`Failed to load options. Status ${res.status}`);
+
         const data = (await res.json()) as {
           buildings?: unknown;
           concerns?: unknown;
@@ -363,17 +353,11 @@ export default function Create() {
             ? (data.concerns as ConcernMeta[])
             : FALLBACK_CONCERNS;
 
-        setMeta({
-          buildings: incomingBuildings,
-          concerns: incomingConcerns,
-        });
+        setMeta({ buildings: incomingBuildings, concerns: incomingConcerns });
       } catch (err) {
         console.error("Error loading meta:", err);
         if (!alive) return;
-        setMeta({
-          buildings: FALLBACK_BUILDINGS,
-          concerns: FALLBACK_CONCERNS,
-        });
+        setMeta({ buildings: FALLBACK_BUILDINGS, concerns: FALLBACK_CONCERNS });
         setMetaError("Could not load latest options. Using defaults.");
       } finally {
         if (alive) setMetaLoading(false);
@@ -401,15 +385,10 @@ export default function Create() {
         const data = await res.json();
 
         let list: Report[] = [];
-        if (Array.isArray(data)) {
-          list = data as Report[];
-        } else if (Array.isArray((data as any).reports)) {
-          list = (data as any).reports as Report[];
-        } else if (Array.isArray((data as any).data)) {
-          list = (data as any).data as Report[];
-        } else {
-          console.warn("Unexpected reports payload shape:", data);
-        }
+        if (Array.isArray(data)) list = data as Report[];
+        else if (Array.isArray((data as any).reports)) list = (data as any).reports as Report[];
+        else if (Array.isArray((data as any).data)) list = (data as any).data as Report[];
+        else console.warn("Unexpected reports payload shape:", data);
 
         setExistingReports(list);
       } catch (err) {
@@ -433,7 +412,6 @@ export default function Create() {
     const normal = list.filter((x) => norm(x) !== "other");
 
     normal.sort((a, b) => a.localeCompare(b));
-
     return [...normal, ...others];
   }, [meta.buildings]);
 
@@ -446,7 +424,6 @@ export default function Create() {
     const normal = list.filter((x) => norm(x) !== "other");
 
     normal.sort((a, b) => String(a).localeCompare(String(b)));
-
     return [...normal, ...others];
   }, [meta.concerns]);
 
@@ -456,9 +433,7 @@ export default function Create() {
   );
 
   const dynamicSubconcernOptions = useMemo(() => {
-    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns)) {
-      return [];
-    }
+    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns)) return [];
     return selectedConcern.subconcerns;
   }, [selectedConcern]);
 
@@ -477,7 +452,6 @@ export default function Create() {
     Other: null,
   };
 
-  // Floor options (always include Other)
   const floorOptions: string[] = [
     "First Floor",
     "Second Floor",
@@ -486,18 +460,14 @@ export default function Create() {
     "Other",
   ];
 
-  // Floor options that should be visible given building
   const isIctc = formData.building === "ICTC";
   const isCos = formData.building === "COS";
 
   const visibleFloorOptions = useMemo(() => {
-    if (isIctc) {
-      return ["First Floor", "Second Floor", "Other"];
-    }
+    if (isIctc) return ["First Floor", "Second Floor", "Other"];
     return floorOptions;
   }, [isIctc]);
 
-  // Room ranges allowed per floor (global, then intersect per building)
   const floorRoomRanges: Record<string, string[]> = {
     "First Floor": ["101-110"],
     "Second Floor": ["201-213"],
@@ -522,20 +492,15 @@ export default function Create() {
     return out;
   };
 
-  // All rooms allowed for the chosen building (non ICTC)
   const allRoomsForBuilding = useMemo(() => {
     if (isIctc) return null;
     return expandRanges(buildingRoomRanges[formData.building] ?? null);
   }, [formData.building, isIctc]);
 
-  // Final list of rooms depends on building + floor (non ICTC)
   const availableRooms = useMemo(() => {
     if (!allRoomsForBuilding) return null;
 
-    // COS ignores floors: always show all allowed rooms
     if (isCos) return allRoomsForBuilding;
-
-    // If no specific room or no floor chosen yet, allow all rooms in the building
     if (!specificRoom || !formData.floor) return allRoomsForBuilding;
 
     const floorRanges = floorRoomRanges[formData.floor];
@@ -543,12 +508,9 @@ export default function Create() {
 
     const floorRooms = expandRanges(floorRanges) || [];
     const setAll = new Set(allRoomsForBuilding);
-
-    // intersection
     return floorRooms.filter((r) => setAll.has(r));
   }, [allRoomsForBuilding, specificRoom, formData.floor, isCos]);
 
-  // Same rooms but always include "Other"
   const availableRoomsWithOther = useMemo(() => {
     if (!availableRooms) return null;
     const set = new Set(availableRooms);
@@ -557,9 +519,7 @@ export default function Create() {
   }, [availableRooms]);
 
   useEffect(() => {
-    if (isIctc) {
-      return;
-    }
+    if (isIctc) return;
     const showRoom = Array.isArray(availableRooms) && availableRooms.length > 0;
     setHasRoom(showRoom);
     setFormData((f) => ({ ...f, room: "", otherRoom: "" }));
@@ -575,30 +535,31 @@ export default function Create() {
       const f = target.files[0];
       setFormData((prev) => ({ ...prev, ImageFile: f }));
       setPreview(URL.createObjectURL(f));
-    } else {
-      setFormData((prev) => {
-        const next: FormDataState = { ...prev, [name]: value } as FormDataState;
-
-        if (name === "concern") {
-          next.concern = value;
-          next.subConcern = "";
-          next.otherConcern = "";
-        }
-        if (name === "building") {
-          next.building = value;
-          next.otherBuilding = "";
-          next.floor = "";
-          next.room = "";
-          next.otherRoom = "";
-        }
-        if (name === "floor") {
-          next.floor = value;
-          next.room = "";
-        }
-
-        return next;
-      });
+      return;
     }
+
+    setFormData((prev) => {
+      const next: FormDataState = { ...prev, [name]: value } as FormDataState;
+
+      if (name === "concern") {
+        next.concern = value;
+        next.subConcern = "";
+        next.otherConcern = "";
+      }
+      if (name === "building") {
+        next.building = value;
+        next.otherBuilding = "";
+        next.floor = "";
+        next.room = "";
+        next.otherRoom = "";
+      }
+      if (name === "floor") {
+        next.floor = value;
+        next.room = "";
+      }
+
+      return next;
+    });
   };
 
   const onDrop = (e: DragEvent<HTMLLabelElement>) => {
@@ -622,22 +583,16 @@ export default function Create() {
     e.currentTarget.classList.remove("is-dragover");
   };
 
-  const checkProfanityInForm = (state: FormDataState) => {
-    const fieldsToCheck = [
-      state.heading,
-      state.description,
-      state.otherConcern,
-      state.otherBuilding,
-      state.otherRoom,
-      state.room,
-    ];
-    const found = fieldsToCheck.some((text) => containsProfanity(text));
-    setHasProfanity(found);
-  };
-
-  // run profanity scan whenever form changes
   useEffect(() => {
-    checkProfanityInForm(formData);
+    const fieldsToCheck = [
+      formData.heading,
+      formData.description,
+      formData.otherConcern,
+      formData.otherBuilding,
+      formData.otherRoom,
+      formData.room,
+    ];
+    setHasProfanity(fieldsToCheck.some((t) => containsProfanity(t)));
   }, [formData]);
 
   const performSubmit = async () => {
@@ -647,7 +602,6 @@ export default function Create() {
     try {
       const data = new FormData();
 
-      // Text fields
       data.append("email", formData.email);
       data.append("heading", formData.heading);
       data.append("description", formData.description);
@@ -661,18 +615,10 @@ export default function Create() {
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom", formData.otherRoom);
 
-      // File field must match multer.single("ImageFile")
-      if (formData.ImageFile) {
-        data.append("ImageFile", formData.ImageFile);
-      }
+      if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
       const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
-
-      const res = await fetch(submitUrl, {
-        method: "POST",
-        body: data,
-      });
-
+      const res = await fetch(submitUrl, { method: "POST", body: data });
       const raw = await res.text().catch(() => "");
 
       if (!res.ok) {
@@ -684,9 +630,7 @@ export default function Create() {
       let result: any = {};
       try {
         result = raw ? JSON.parse(raw) : {};
-      } catch {
-        // ignore parse error
-      }
+      } catch {}
 
       if (result.success) {
         if (result.report && typeof result.report === "object") {
@@ -722,12 +666,10 @@ export default function Create() {
     }
   };
 
-  /* Derived summary and validation */
   const showSubConcern = formData.concern && formData.concern !== "Other";
   const needsOtherConcern = formData.concern === "Other";
   const needsOtherBuilding = formData.building === "Other";
 
-  // multi floor buildings (non ICTC, non COS)
   const needsRoomDropdown = !isIctc && !isCos && specificRoom && hasRoom;
   const needsOtherRoom =
     !isIctc && specificRoom && !hasRoom && !!formData.building;
@@ -785,7 +727,6 @@ export default function Create() {
 
   const readyToSubmit = progressPct === 100;
 
-  // floor label derived for summary panels (non ICTC, non COS)
   const roomFloorLabel = useMemo(() => {
     if (!specificRoom || !hasRoom || isIctc || isCos) return "";
     if (formData.floor) return formData.floor;
@@ -793,13 +734,9 @@ export default function Create() {
     return "";
   }, [specificRoom, hasRoom, formData.floor, formData.room, isIctc, isCos]);
 
-  // Similar reports count using the same similarity key rule:
-  // same Concern and SubConcern/OtherConcern and Building,
-  // and same Room/OtherRoom when there is a room.
   const similarReportsCount = useMemo(() => {
     if (!formData.building || !formData.concern) return 0;
 
-    // Build a "virtual" report from the current form
     const currentKey = getSimilarityKey({
       building: formData.building,
       concern: formData.concern,
@@ -894,13 +831,10 @@ export default function Create() {
     }
   };
 
-  // ICTC second floor rooms list, always includes Other
   const ictcSecondFloorRooms = useMemo(() => {
     if (!isIctc || formData.floor !== "Second Floor") return [];
     const rooms: string[] = [];
-    for (let n = 201; n <= 213; n += 1) {
-      rooms.push(String(n));
-    }
+    for (let n = 201; n <= 213; n += 1) rooms.push(String(n));
     rooms.push("Other");
     return rooms;
   }, [isIctc, formData.floor]);
@@ -912,7 +846,6 @@ export default function Create() {
       showMsg("error", "Please attach an image before submitting.");
       return;
     }
-
     if (hasProfanity) {
       showMsg(
         "error",
@@ -920,12 +853,10 @@ export default function Create() {
       );
       return;
     }
-
     if (similarReportsCount > 0) {
       setIsConfirming(true);
       return;
     }
-
     void performSubmit();
   };
 
@@ -1004,9 +935,7 @@ export default function Create() {
                 <div className="create-scope__summary-row">
                   <span>Ready to submit</span>
                   <strong
-                    className={
-                      readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"
-                    }
+                    className={readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"}
                   >
                     {readyToSubmit && !hasProfanity ? "Yes" : "No"}
                   </strong>
@@ -1084,9 +1013,7 @@ export default function Create() {
                     {preview ? (
                       <img src={preview} alt="Attachment preview" />
                     ) : (
-                      <div className="create-scope__preview-empty">
-                        No image yet
-                      </div>
+                      <div className="create-scope__preview-empty">No image yet</div>
                     )}
                   </div>
                 </Panel>
@@ -1095,17 +1022,16 @@ export default function Create() {
           </div>
         </aside>
 
-        {/* Scrim for mobile drawer */}
-        <div
-          className={`create-scope__scrim ${
-            sidebarOverlayOpen ? "is-open" : ""
-          }`}
-          onClick={() => setSidebarOverlayOpen(false)}
-        />
+        {/* ✅ Scrim: render ONLY when open so it can never block scroll invisibly */}
+        {sidebarOverlayOpen && (
+          <div
+            className="create-scope__scrim is-open"
+            onClick={() => setSidebarOverlayOpen(false)}
+          />
+        )}
 
         {/* Main */}
         <main className="create-scope__main">
-          {/* Top bar with burger */}
           <header className="create-scope__topbar">
             <div className="create-scope__topbar-left">
               <label className="burger">
@@ -1181,16 +1107,12 @@ export default function Create() {
               </div>
             )}
 
-            {metaError && (
-              <div className="create-scope__message is-info">{metaError}</div>
-            )}
+            {metaError && <div className="create-scope__message is-info">{metaError}</div>}
 
             <form onSubmit={handleSubmit} className="create-scope__form">
               {/* Email */}
               <div className="create-scope__group">
-                <label htmlFor="email">
-                  Email{requiredStar(formData.email)}
-                </label>
+                <label htmlFor="email">Email{requiredStar(formData.email)}</label>
                 <input
                   id="email"
                   type="email"
@@ -1203,9 +1125,7 @@ export default function Create() {
                   readOnly={Boolean(currentUserEmail)}
                 />
                 {currentUserEmail ? (
-                  <p className="create-scope__hint">
-                    This email came from your login.
-                  </p>
+                  <p className="create-scope__hint">This email came from your login.</p>
                 ) : (
                   <p className="create-scope__hint">
                     We may contact you using this email for follow up.
@@ -1430,9 +1350,7 @@ export default function Create() {
 
                   {formData.floor === "First Floor" && (
                     <div className="create-scope__group">
-                      <label htmlFor="room">
-                        Room{requiredStar(formData.room)}
-                      </label>
+                      <label htmlFor="room">Room{requiredStar(formData.room)}</label>
                       <input
                         id="room"
                         type="text"
@@ -1447,9 +1365,7 @@ export default function Create() {
 
                   {formData.floor === "Second Floor" && (
                     <div className="create-scope__group">
-                      <label htmlFor="room">
-                        Room{requiredStar(formData.room)}
-                      </label>
+                      <label htmlFor="room">Room{requiredStar(formData.room)}</label>
                       <select
                         id="room"
                         name="room"
@@ -1486,12 +1402,10 @@ export default function Create() {
                 </>
               )}
 
-              {/* COS specific room handling (no floor, just room) */}
+              {/* COS specific room handling */}
               {specificRoom && isCos && hasRoom && (
                 <div className="create-scope__group">
-                  <label htmlFor="room">
-                    Room{requiredStar(formData.room)}
-                  </label>
+                  <label htmlFor="room">Room{requiredStar(formData.room)}</label>
                   <select
                     id="room"
                     name="room"
@@ -1509,16 +1423,14 @@ export default function Create() {
                 </div>
               )}
 
-              {/* Generic specific room handling for other buildings */}
+              {/* Generic room handling */}
               {specificRoom &&
                 formData.building !== "ICTC" &&
                 !isCos &&
                 hasRoom && (
                   <>
                     <div className="create-scope__group">
-                      <label htmlFor="floor">
-                        Floor{requiredStar(formData.floor)}
-                      </label>
+                      <label htmlFor="floor">Floor{requiredStar(formData.floor)}</label>
                       <select
                         id="floor"
                         name="floor"
@@ -1536,9 +1448,7 @@ export default function Create() {
                     </div>
 
                     <div className="create-scope__group">
-                      <label htmlFor="room">
-                        Room{requiredStar(formData.room)}
-                      </label>
+                      <label htmlFor="room">Room{requiredStar(formData.room)}</label>
                       <select
                         id="room"
                         name="room"
@@ -1548,9 +1458,7 @@ export default function Create() {
                         disabled={!formData.floor}
                       >
                         <option value="">
-                          {formData.floor
-                            ? "Select room"
-                            : "Select floor first"}
+                          {formData.floor ? "Select room" : "Select floor first"}
                         </option>
                         {formData.floor &&
                           availableRoomsWithOther?.map((r) => (
@@ -1602,7 +1510,6 @@ export default function Create() {
                     name="ImageFile"
                     required={!formData.ImageFile}
                   />
-
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path
@@ -1612,9 +1519,7 @@ export default function Create() {
                         strokeLinecap="round"
                       />
                     </svg>
-                    <div className="create-scope__hint">
-                      PNG, JPG up to 10 MB
-                    </div>
+                    <div className="create-scope__hint">PNG, JPG up to 10 MB</div>
                   </div>
                 </label>
 
@@ -1629,8 +1534,8 @@ export default function Create() {
 
               {hasProfanity && (
                 <p className="create-scope__hint create-scope__hint--error">
-                  Profanity or foul words were detected in your text. Please
-                  remove them before submitting.
+                  Profanity or foul words were detected in your text. Please remove them
+                  before submitting.
                 </p>
               )}
 
@@ -1653,8 +1558,8 @@ export default function Create() {
             <p className="cookieHeading">Are you sure?</p>
             <p className="cookieDescription">
               There&apos;s {similarReportsCount} similar report
-              {similarReportsCount === 1 ? "" : "s"} about the same building,
-              room, and concern.
+              {similarReportsCount === 1 ? "" : "s"} about the same building, room,
+              and concern.
               <br />
               Are you sure you want to submit this report?
             </p>

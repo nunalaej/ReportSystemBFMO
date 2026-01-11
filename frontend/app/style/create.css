@@ -1072,3 +1072,48 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   box-sizing: border-box;
 }
+
+
+
+
+.create-scope__scrim {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none; /* critical */
+}
+
+.create-scope__scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Make sure main can scroll */
+.create-scope,
+.create-scope__layout {
+  min-height: 100dvh;
+}
+
+.create-scope__main {
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+
+html,
+body {
+  height: auto;
+  overflow: auto;
+}
+
+.create-scope,
+.create-scope__layout {
+  min-height: 100dvh;
+}
+
+.create-scope__main {
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
