@@ -557,6 +557,11 @@ export default function Create() {
         next.floor = value;
         next.room = "";
       }
+      // ✅ Auto-clear otherRoom if room is not "Other"
+if (name === "room" && value !== "Other") {
+  next.otherRoom = "";
+}
+
 
       return next;
     });
@@ -670,6 +675,16 @@ export default function Create() {
   const needsOtherConcern = formData.concern === "Other";
   const needsOtherBuilding = formData.building === "Other";
 
+  const roomIsOther = formData.room === "Other";
+
+
+  const needsOtherRoomText =
+  specificRoom &&
+  !!formData.building &&
+  roomIsOther;
+
+
+
   const needsRoomDropdown = !isIctc && !isCos && specificRoom && hasRoom;
   const needsOtherRoom =
     !isIctc && specificRoom && !hasRoom && !!formData.building;
@@ -693,10 +708,14 @@ export default function Create() {
     if (needsOtherConcern) req.push("otherConcern");
     if (needsOtherBuilding) req.push("otherBuilding");
     if (needsRoomDropdown) {
-      req.push("floor");
-      req.push("room");
-    }
-    if (needsOtherRoom) req.push("otherRoom");
+  req.push("floor");
+  req.push("room");
+  // ✅ If room dropdown is "Other", require textbox too
+  if (roomIsOther) req.push("otherRoom");
+}
+
+if (needsOtherRoom) req.push("otherRoom");
+
     if (ictcHasSpecific) req.push("floor");
     if (ictcFirstFloor || ictcSecondFloor) req.push("room");
     if (cosHasSpecificRooms) req.push("room");
@@ -706,6 +725,7 @@ export default function Create() {
     needsOtherConcern,
     needsOtherBuilding,
     needsRoomDropdown,
+    roomIsOther,
     needsOtherRoom,
     ictcHasSpecific,
     ictcFirstFloor,
@@ -991,6 +1011,26 @@ export default function Create() {
                         <div>{formData.room || "-"}</div>
                       </>
                     )}
+
+                    {needsOtherRoomText && (
+  <div className="create-scope__group">
+    <label htmlFor="otherRoom">
+      Specify room / spot{requiredStar(formData.otherRoom)}
+    </label>
+    <input
+      id="otherRoom"
+      type="text"
+      name="otherRoom"
+      placeholder="Example: Near stairs, hallway, lab area"
+      value={formData.otherRoom}
+      onChange={handleChange}
+      required
+    />
+    <p className="create-scope__hint">
+      Please describe the exact room or location.
+    </p>
+  </div>
+)}
 
                   {specificRoom &&
                     formData.building !== "ICTC" &&
@@ -1402,27 +1442,6 @@ export default function Create() {
                 </>
               )}
 
-              {/* COS specific room handling */}
-              {specificRoom && isCos && hasRoom && (
-                <div className="create-scope__group">
-                  <label htmlFor="room">Room{requiredStar(formData.room)}</label>
-                  <select
-                    id="room"
-                    name="room"
-                    value={formData.room}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="">Select room</option>
-                    {availableRoomsWithOther?.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               {/* Generic room handling */}
               {specificRoom &&
                 formData.building !== "ICTC" &&
@@ -1471,28 +1490,35 @@ export default function Create() {
                   </>
                 )}
 
-              {specificRoom &&
-                formData.building !== "ICTC" &&
-                !hasRoom &&
-                !!formData.building && (
-                  <div className="create-scope__group">
-                    <label htmlFor="otherRoom">
-                      Specific spot{requiredStar(formData.otherRoom)}
-                    </label>
-                    <input
-                      id="otherRoom"
-                      type="text"
-                      name="otherRoom"
-                      placeholder="Example. Canteen south corner, near sink"
-                      value={formData.otherRoom}
-                      onChange={handleChange}
-                      required
-                    />
-                    <p className="create-scope__hint">
-                      If there is no room number, describe the exact location.
-                    </p>
-                  </div>
-                )}
+              
+
+                {/* ✅ OTHER ROOM TEXTBOX – GLOBAL */}
+<div
+  className={`animate-reveal ${
+    needsOtherRoomText ? "is-open" : ""
+  }`}
+>
+  {needsOtherRoomText && (
+    <div className="create-scope__group">
+      <label htmlFor="otherRoom">
+        Specify room / spot{requiredStar(formData.otherRoom)}
+      </label>
+      <input
+        id="otherRoom"
+        type="text"
+        name="otherRoom"
+        placeholder="Example: Near stairs, hallway, lab area"
+        value={formData.otherRoom}
+        onChange={handleChange}
+        required
+      />
+      <p className="create-scope__hint">
+        Please describe the exact room or location.
+      </p>
+    </div>
+  )}
+</div>
+
 
               {/* Dropzone */}
               <div className="create-scope__group">

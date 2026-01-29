@@ -1117,3 +1117,23 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Animated reveal container */
+.animate-reveal {
+  overflow: hidden;
+  transition:
+    max-height 250ms ease,
+    opacity 200ms ease,
+    transform 200ms ease;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+}
+
+.animate-reveal.is-open {
+  max-height: 200px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
