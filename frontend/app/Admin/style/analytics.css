@@ -732,3 +732,73 @@ html:not(.dark) .pa-card__base {
   background: linear-gradient(to right, #22c55e, #0ea5e9);
   color: #ffffff;
 }
+
+
+/* ================================
+   FILTERS PANEL – LOCKED HORIZONTAL
+================================ */
+
+.filters {
+  width: 100%;
+}
+
+/* Force filters into ONE row */
+.filters-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1fr)
+    minmax(200px, 1fr)
+    minmax(220px, 1fr)
+    minmax(180px, 1fr)
+    minmax(260px, 1.2fr);
+  gap: 20px;
+  align-items: flex-start;
+
+  /* 🔒 Prevent stacking */
+  flex-wrap: nowrap;
+}
+
+/* Prevent child blocks from shrinking weirdly */
+.filter-block {
+  min-width: 180px;
+}
+
+/* Date block needs more room */
+.filter-block:last-child {
+  min-width: 260px;
+}
+
+/* Chips scrolling instead of wrapping */
+.chips.scroll {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Remove mobile stacking behavior */
+@media (max-width: 1200px) {
+  .filters-row {
+    grid-template-columns:
+      minmax(180px, 1fr)
+      minmax(200px, 1fr)
+      minmax(220px, 1fr)
+      minmax(180px, 1fr)
+      minmax(260px, 1.2fr);
+    overflow-x: auto;
+  }
+}
+
+/* Kill any column fallback */
+@media (max-width: 900px) {
+  .filters-row {
+    display: grid !important;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    overflow-x: auto;
+  }
+}
+
+
+.filters.card {
+  background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(2,6,23,0.85));
+  backdrop-filter: blur(10px);
+}

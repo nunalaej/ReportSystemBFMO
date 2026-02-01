@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
-import { ClerkProvider, SignedIn, UserButton } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./ThemeProvider";
-import ThemeToggle from "./ThemeToggle";
-import HeaderNav from "./HeaderNav"; // import the client header nav
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,7 +21,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{ children: React.ReactNode }>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <ClerkProvider>
       <html lang="en">
@@ -31,31 +31,7 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         >
           <ThemeProvider>
-            <header className="layout">
-              {/* LEFT SECTION */}
-              <div className="flex items-center gap-3">
-                <img
-                  src="/logo-dlsud.png"
-                  alt="DLSU-D Logo"
-                  className="w-10 h-10 object-contain"
-                />
-                <h1 className="text-base sm:text-lg font-semibold site-title">
-                  BFMO Report System
-                </h1>
-              </div>
-
-              {/* MIDDLE SECTION – role based buttons */}
-              <HeaderNav />
-
-              {/* RIGHT SECTION */}
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <SignedIn>
-                  <UserButton />
-                </SignedIn>
-              </div>
-            </header>
-
+            {/* ❌ NO HEADER HERE */}
             {children}
           </ThemeProvider>
         </body>

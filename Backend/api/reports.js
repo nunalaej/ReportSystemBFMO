@@ -1,22 +1,36 @@
-// api/reports.js (or routes/reports.js – just make sure the path matches in server.js)
+// api/reports.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const path = require("path");
 
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary");
-
-const { sendReportStatusEmail } = require("../utils/mailer"); // <<< IMPORTANT
+const { sendReportStatusEmail } = require("../utils/mailer");
 
 /* ============================================================
-   IMAGE UPLOAD CONFIG (multer, memory storage for Cloudinary)
+   MULTER CONFIG (MEMORY STORAGE)
 ============================================================ */
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
+
+/* ============================================================
+   IMAGE VALIDATION CONFIG
+============================================================ */
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const ALLOWED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+  "image/gif",
+];
 
 /* ============================================================
    GET ALL REPORTS
-   /api/reports
+   GET /api/reports
 ============================================================ */
 router.get("/", async (req, res) => {
   try {
@@ -24,45 +38,44 @@ router.get("/", async (req, res) => {
     res.json({ success: true, reports });
   } catch (err) {
     console.error("GET /reports error:", err);
-    res.status(500).json({ success: false, message: "Failed to load reports" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to load reports",
+    });
   }
 });
 
 /* ============================================================
-   GET ONE REPORT
-   /api/reports/:id
+   GET SINGLE REPORT
+   GET /api/reports/:id
 ============================================================ */
 router.get("/:id", async (req, res) => {
   try {
     const report = await Report.findById(req.params.id);
+
     if (!report) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Report not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
     }
+
     res.json({ success: true, report });
   } catch (err) {
     console.error("GET /reports/:id error:", err);
-    res.status(500).json({ success: false, message: "Failed to load report" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to load report",
+    });
   }
 });
 
 /* ============================================================
    CREATE REPORT
-   /api/reports  (POST)
+   POST /api/reports
 ============================================================ */
 router.post("/", upload.single("ImageFile"), async (req, res) => {
   try {
-    console.log("BODY:", req.body);
-    console.log(
-      "FILE:",
-      req.file && {
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size,
-      }
-    );
-
     const {
       email,
       heading,
@@ -78,24 +91,50 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherRoom,
     } = req.body;
 
-    let ImageFile = "";
-
-    if (req.file) {
-      const uploaded = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: "bfmo_reports" },
-          (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-          }
-        );
-        stream.end(req.file.buffer);
+    /* ============================
+       IMAGE VALIDATION (SERVER)
+    ============================ */
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Image is required.",
       });
-
-      ImageFile = uploaded.secure_url;
-      console.log("Cloudinary uploaded URL:", ImageFile);
     }
 
+    if (!ALLOWED_IMAGE_MIME_TYPES.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid image type. Only JPG, PNG, HEIC, WEBP, GIF are allowed.",
+      });
+    }
+
+    if (req.file.size > MAX_IMAGE_SIZE) {
+      return res.status(400).json({
+        success: false,
+        message: "Image exceeds 10MB limit.",
+      });
+    }
+
+    /* ============================
+       UPLOAD TO CLOUDINARY
+    ============================ */
+    const uploaded = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: "bfmo_reports" },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    const ImageFile = uploaded.secure_url;
+
+    /* ============================
+       SAVE TO DATABASE
+    ============================ */
     const report = await Report.create({
       email,
       heading,
@@ -117,18 +156,17 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       report,
     });
   } catch (err) {
-    console.error("Error creating report:", err);
-    return res.status(500).json({
+    console.error("POST /reports error:", err);
+    res.status(500).json({
       success: false,
       message: "Failed to create report.",
-      error: err.message,
     });
   }
 });
 
 /* ============================================================
-   UPDATE REPORT (Status + Edit Comments)
-   /api/reports/:id  (PUT)
+   UPDATE REPORT (STATUS / COMMENTS)
+   PUT /api/reports/:id
 ============================================================ */
 router.put("/:id", async (req, res) => {
   try {
@@ -136,9 +174,10 @@ router.put("/:id", async (req, res) => {
 
     const existing = await Report.findById(req.params.id);
     if (!existing) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Report not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
     }
 
     const oldStatus = existing.status || "Pending";
@@ -153,7 +192,9 @@ router.put("/:id", async (req, res) => {
 
     const updated = await existing.save();
 
-    // After saving, if status changed, attempt to send email
+    /* ============================
+       EMAIL NOTIFICATION
+    ============================ */
     if (status && status !== oldStatus) {
       sendReportStatusEmail({
         to: updated.email,
@@ -161,30 +202,33 @@ router.put("/:id", async (req, res) => {
         status: updated.status,
         reportId: String(updated._id),
       }).catch((err) => {
-        console.error("Error sending status email:", err);
+        console.error("Email send failed:", err);
       });
     }
 
     res.json({ success: true, report: updated });
   } catch (err) {
     console.error("PUT /reports/:id error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to update report" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to update report",
+    });
   }
 });
 
 /* ============================================================
    ADD COMMENT
-   /api/reports/:id/comments  (POST)
+   POST /api/reports/:id/comments
 ============================================================ */
 router.post("/:id/comments", async (req, res) => {
   try {
     const { text, by } = req.body;
+
     if (!text) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Comment text required" });
+      return res.status(400).json({
+        success: false,
+        message: "Comment text is required",
+      });
     }
 
     const newComment = {
@@ -200,21 +244,25 @@ router.post("/:id/comments", async (req, res) => {
     );
 
     if (!updated) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Report not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
     }
 
     res.json({ success: true, report: updated });
   } catch (err) {
-    console.error("POST /reports/:id/comments error:", err);
-    res.status(500).json({ success: false, message: "Failed to add comment" });
+    console.error("POST comment error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add comment",
+    });
   }
 });
 
 /* ============================================================
-   DELETE COMMENT (by index)
-   /api/reports/:id/comments/:index  (DELETE)
+   DELETE COMMENT
+   DELETE /api/reports/:id/comments/:index
 ============================================================ */
 router.delete("/:id/comments/:index", async (req, res) => {
   try {
@@ -222,16 +270,18 @@ router.delete("/:id/comments/:index", async (req, res) => {
 
     const report = await Report.findById(id);
     if (!report) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Report not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
     }
 
     const idx = parseInt(index, 10);
     if (isNaN(idx) || idx < 0 || idx >= report.comments.length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid comment index" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid comment index",
+      });
     }
 
     report.comments.splice(idx, 1);
@@ -239,10 +289,11 @@ router.delete("/:id/comments/:index", async (req, res) => {
 
     res.json({ success: true, report });
   } catch (err) {
-    console.error("DELETE /reports/:id/comments/:index error:", err);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to delete comment" });
+    console.error("DELETE comment error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete comment",
+    });
   }
 });
 

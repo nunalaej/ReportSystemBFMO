@@ -10,29 +10,28 @@ export default function StudentDashboard() {
   const [firstName, setFirstName] = useState("Student");
 
   useEffect(() => {
-    if (isLoaded && user) {
-      // Try Clerk firstName
-      if (user.firstName && user.firstName.trim() !== "") {
-        setFirstName(user.firstName);
-        return;
-      }
+    if (!isLoaded || !user) return;
 
-      // Otherwise extract from email
-      const email =
-        user.primaryEmailAddress?.emailAddress ||
-        user.emailAddresses[0]?.emailAddress ||
-        "";
+    if (user.firstName && user.firstName.trim() !== "") {
+      setFirstName(user.firstName);
+      return;
+    }
 
-      if (email.includes("@")) {
-        setFirstName(email.split("@")[0]);
-      }
+    const email =
+      user.primaryEmailAddress?.emailAddress ??
+      user.emailAddresses[0]?.emailAddress ??
+      "";
+
+    if (email.includes("@")) {
+      setFirstName(email.split("@")[0]);
     }
   }, [isLoaded, user]);
+
+  if (!isLoaded) return null;
 
   return (
     <div className="dashboard-container">
       <main className="dashboard-main">
-        {/* Top welcome / intro */}
         <section className="dashboard-welcome">
           <p className="dashboard-eyebrow">Student Portal</p>
           <h1 className="dashboard-title">Hello, {firstName}</h1>
@@ -42,12 +41,10 @@ export default function StudentDashboard() {
           </p>
         </section>
 
-        {/* Card grid */}
         <section className="dashboard-section">
           <h2 className="dashboard-section-title">Quick actions</h2>
 
           <div className="dashboard-cards">
-            {/* Create Report */}
             <Link href="/Student/CreateReport" className="card1">
               <div className="card-inner">
                 <div className="card-icon-badge">
@@ -55,13 +52,11 @@ export default function StudentDashboard() {
                 </div>
                 <h3 className="card-title">Create Report</h3>
                 <p className="card-text">
-                  Submit a new BFMO request or concern, including building,
-                  room, and a clear description of the issue.
+                  Submit a new BFMO request or concern.
                 </p>
               </div>
             </Link>
 
-            {/* View Reports */}
             <Link href="/Student/ViewReports" className="card1">
               <div className="card-inner">
                 <div className="card-icon-badge">
@@ -69,8 +64,7 @@ export default function StudentDashboard() {
                 </div>
                 <h3 className="card-title">My Reports</h3>
                 <p className="card-text">
-                  Track the status of your submitted reports and see which
-                  issues are in progress or resolved.
+                  Track the status of your submitted reports.
                 </p>
               </div>
             </Link>

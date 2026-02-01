@@ -198,3 +198,16 @@ html.dark .layout {
     height: 3.5rem;
   }
 }
+
+.page-center {
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.student-layout-content {
+  padding: 24px;
+}

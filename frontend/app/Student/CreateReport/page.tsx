@@ -16,6 +16,44 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useTheme } from "@/app/ThemeProvider";
 
+/* ===============================
+   IMAGE VALIDATION (STRICT)
+=============================== */
+
+const ALLOWED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+  "image/gif",
+];
+
+const ALLOWED_IMAGE_EXTENSIONS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "heic",
+  "heif",
+  "webp",
+  "gif",
+];
+
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+
+const isValidImageFile = (file: File): boolean => {
+  const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(file.type);
+  const ext =
+    file.name.split(".").pop()?.toLowerCase() ?? "";
+  const extValid = ALLOWED_IMAGE_EXTENSIONS.includes(ext);
+
+  const sizeValid = file.size <= MAX_IMAGE_SIZE_BYTES;
+
+  return (mimeValid || extValid) && sizeValid;
+};
+
+
 /* Types */
 interface PanelProps {
   title?: string;
@@ -532,11 +570,27 @@ export default function Create() {
     const target = e.target as HTMLInputElement;
 
     if (target.files && target.files[0]) {
-      const f = target.files[0];
-      setFormData((prev) => ({ ...prev, ImageFile: f }));
-      setPreview(URL.createObjectURL(f));
-      return;
-    }
+  const file = target.files[0];
+
+  // ❌ Reject unsupported files
+  if (!isValidImageFile(file)) {
+    showMsg(
+      "error",
+      "Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP)."
+    );
+
+    // Reset input
+    target.value = "";
+    setFormData((prev) => ({ ...prev, ImageFile: null }));
+    setPreview(null);
+    return;
+  }
+
+  setFormData((prev) => ({ ...prev, ImageFile: file }));
+  setPreview(URL.createObjectURL(file));
+  return;
+}
+
 
     setFormData((prev) => {
       const next: FormDataState = { ...prev, [name]: value } as FormDataState;
@@ -568,15 +622,25 @@ if (name === "room" && value !== "Other") {
   };
 
   const onDrop = (e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.classList.remove("is-dragover");
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      setFormData((prev) => ({ ...prev, ImageFile: file }));
-      setPreview(URL.createObjectURL(file));
-    }
-  };
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.classList.remove("is-dragover");
+
+  const file = e.dataTransfer.files?.[0];
+  if (!file) return;
+
+  if (!isValidImageFile(file)) {
+    showMsg(
+      "error",
+      "Unsupported file type. Only image files are allowed."
+    );
+    return;
+  }
+
+  setFormData((prev) => ({ ...prev, ImageFile: file }));
+  setPreview(URL.createObjectURL(file));
+};
+
 
   const onDragOver = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
@@ -861,6 +925,15 @@ if (needsOtherRoom) req.push("otherRoom");
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) {
+  showMsg(
+    "error",
+    "Invalid attachment detected. Please upload a valid image file."
+  );
+  return;
+}
+
 
     if (!formData.ImageFile) {
       showMsg("error", "Please attach an image before submitting.");
@@ -1530,12 +1603,13 @@ if (needsOtherRoom) req.push("otherRoom");
                   onDragLeave={onDragLeave}
                 >
                   <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleChange}
-                    name="ImageFile"
-                    required={!formData.ImageFile}
-                  />
+  type="file"
+  name="ImageFile"
+  accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
+  onChange={handleChange}
+  required={!formData.ImageFile}
+/>
+
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path
