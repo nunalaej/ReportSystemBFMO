@@ -802,3 +802,4 @@ html:not(.dark) .pa-card__base {
   background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(2,6,23,0.85));
   backdrop-filter: blur(10px);
 }
+

@@ -115,7 +115,7 @@ const getCollegeColor = (name: string, index: number) => {
 };
 
 const getConcernBaseFromLabel = (
-  fullLabel: string
+  fullLabel: string,
 ): { base: string; sub: string } => {
   const [baseRaw, subRaw] = fullLabel.split(" : ");
   const base = (baseRaw || "Unspecified").trim();
@@ -256,8 +256,8 @@ const Analytics: FC = () => {
       const list: Report[] = Array.isArray(data)
         ? data
         : Array.isArray(data.reports)
-        ? data.reports
-        : [];
+          ? data.reports
+          : [];
 
       setReports(list);
     } catch (e: any) {
@@ -345,17 +345,17 @@ const Analytics: FC = () => {
 
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
     () =>
-      new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"])
+      new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"]),
   );
 
   const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
   const [selectedConcerns, setSelectedConcerns] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
   const [selectedColleges, setSelectedColleges] = useState<Set<string>>(
-    () => new Set()
+    () => new Set(),
   );
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -626,7 +626,7 @@ const Analytics: FC = () => {
         if (aSel !== bSel) return aSel ? -1 : 1;
         return a.localeCompare(b);
       }),
-    [availableStatusFilters, selectedStatuses]
+    [availableStatusFilters, selectedStatuses],
   );
 
   const sortedBuildings = useMemo(
@@ -637,7 +637,7 @@ const Analytics: FC = () => {
         if (aSel !== bSel) return aSel ? -1 : 1;
         return a.localeCompare(b);
       }),
-    [availableBuildings, selectedBuildings]
+    [availableBuildings, selectedBuildings],
   );
 
   const sortedConcerns = useMemo(
@@ -648,7 +648,7 @@ const Analytics: FC = () => {
         if (aSel !== bSel) return aSel ? -1 : 1;
         return a.localeCompare(b);
       }),
-    [availableConcerns, selectedConcerns]
+    [availableConcerns, selectedConcerns],
   );
 
   const sortedColleges = useMemo(
@@ -659,7 +659,7 @@ const Analytics: FC = () => {
         if (aSel !== bSel) return aSel ? -1 : 1;
         return a.localeCompare(b);
       }),
-    [availableColleges, selectedColleges]
+    [availableColleges, selectedColleges],
   );
 
   const activeFilterCount = useMemo(() => {
@@ -696,8 +696,7 @@ const Analytics: FC = () => {
     filtered.forEach((r) => {
       const s = (r.status || "").trim().toLowerCase();
       if (s === "pending") map.pending++;
-      else if (s === "waiting for materials" || s === "waiting")
-        map.waiting++;
+      else if (s === "waiting for materials" || s === "waiting") map.waiting++;
       else if (s === "in progress") map.progress++;
       else if (s === "resolved") map.resolved++;
       else if (s === "archived") map.archived++;
@@ -718,7 +717,7 @@ const Analytics: FC = () => {
           color: STATUS_COLORS[key],
         }))
         .filter((entry) => entry.value > 0),
-    [statusCounts, selectedStatuses]
+    [statusCounts, selectedStatuses],
   );
 
   const agg = useCallback(
@@ -738,10 +737,13 @@ const Analytics: FC = () => {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
     },
-    []
+    [],
   );
 
-  const buildingData = useMemo(() => agg(filtered, "building"), [filtered, agg]);
+  const buildingData = useMemo(
+    () => agg(filtered, "building"),
+    [filtered, agg],
+  );
 
   const concernData = useMemo<ConcernChartDatum[]>(() => {
     const m = new Map<string, ConcernChartDatum>();
@@ -883,14 +885,20 @@ const Analytics: FC = () => {
 
     filtered.forEach((r) => {
       const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
-      concernBaseCounts.set(baseConcern, (concernBaseCounts.get(baseConcern) || 0) + 1);
+      concernBaseCounts.set(
+        baseConcern,
+        (concernBaseCounts.get(baseConcern) || 0) + 1,
+      );
 
       const concernLabel = formatConcernLabel(r);
       const concernKey = concernLabel || "Unspecified";
       concernCounts.set(concernKey, (concernCounts.get(concernKey) || 0) + 1);
 
       const buildingKey = (r.building || "Unspecified").trim() || "Unspecified";
-      buildingCounts.set(buildingKey, (buildingCounts.get(buildingKey) || 0) + 1);
+      buildingCounts.set(
+        buildingKey,
+        (buildingCounts.get(buildingKey) || 0) + 1,
+      );
     });
 
     const concernBaseStatsHtml =
@@ -914,7 +922,9 @@ const Analytics: FC = () => {
     const rowsHtml = filtered
       .map((r, idx) => {
         const concernLabel = formatConcernLabel(r);
-        const created = r.createdAt ? new Date(r.createdAt).toLocaleString() : "";
+        const created = r.createdAt
+          ? new Date(r.createdAt).toLocaleString()
+          : "";
         const safe = (v?: string) => (v ? String(v) : "");
         return `
           <tr>
@@ -932,65 +942,217 @@ const Analytics: FC = () => {
       })
       .join("");
 
+    const printedDate = new Date().toLocaleString();
+
     const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>BFMO Analytics Report</title>
-          <style>
-            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; color: #111827; padding: 16px; }
-            h1 { font-size: 20px; margin-bottom: 4px; }
-            h2 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-            h3 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
-            .meta { font-size: 12px; color: #4b5563; margin-bottom: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; vertical-align: top; }
-            thead { background: #f3f4f6; }
-            ul { margin: 4px 0 8px 16px; padding: 0; }
-            li { margin: 2px 0; }
-          </style>
-        </head>
-        <body>
-          <h1>BFMO Analytics - Tabular Report</h1>
-          <div class="meta">
-            Generated at: ${new Date().toLocaleString()}<br />
-            Records shown: ${filtered.length}
-          </div>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BFMO Analytics Report</title>
+    <style>
+      body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 8px;
+    color: #111827;
+    padding: 10px;
+  }
 
-          <h2>Summary Statistics</h2>
+  .doc-header {
+  margin-bottom: 20px;
+}
 
-          <h3>By Concern (Base)</h3>
-          <ul>${concernBaseStatsHtml}</ul>
+/* CENTER TABLE */
+.doc-table {
+  width: 100%;
+  margin: 0 auto; /* ✅ centers table */
+  border-collapse: collapse;
+}
 
-          <h3>By Concern (Detailed)</h3>
-          <ul>${concernStatsHtml}</ul>
+/* LOGO CELL */
+.logo-cell {
+  width: 90px;
+  text-align: center;
+}
 
-          <h3>By Building</h3>
-          <ul>${buildingStatsHtml}</ul>
+.logo-cell img {
+  width: 64px;
+  height: 64px;
+  padding-top: 12px;
+  object-fit: contain;
+}
 
-          <h2>Detailed Report</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Date Created</th>
-                <th>Status</th>
-                <th>Building</th>
-                <th>Concern</th>
-                <th>College</th>
-                <th>Floor</th>
-                <th>Room</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
+/* HEADER TITLE ROW */
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;               /* ✅ white text */
+  background: #029006;          /* ✅ light green */
+  border-bottom: 1px solid #000;
+  padding: 8px;
+}
+
+/* DATA ROWS */
+.row-line {
+  border-bottom: 1px solid #000; /* ✅ underline only */
+  padding-bottom: 4px;
+}
+
+.label {
+  font-weight: 600;
+}
+
+      h1 {
+        font-size: 18px;
+        margin: 16px 0 4px;
+      }
+
+      h2 {
+        font-size: 15px;
+        margin-top: 16px;
+        margin-bottom: 4px;
+      }
+
+      h3 {
+        font-size: 13px;
+        margin-top: 10px;
+        margin-bottom: 4px;
+      }
+
+      .meta {
+        font-size: 11px;
+        color: #374151;
+        margin-bottom: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+
+      th, td {
+        border: 1px solid #d1d5db;
+        padding: 4px 6px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      thead {
+        background: #f3f4f6;
+      }
+
+      ul {
+        margin: 4px 0 8px 16px;
+        padding: 0;
+      }
+
+      li {
+        margin: 2px 0;
+      }
+
+      @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+    </style>
+  </head>
+
+  <body>
+
+    <!-- DOCUMENT HEADER -->
+    <div class="doc-header">
+  <table class="doc-table">
+
+    <tr>
+      <td class="logo-cell" rowspan="5">
+        <img src="/logo-dlsud.png" alt="BFMO Logo" />
+      </td>
+      <td colspan="2" class="title">
+        Building Facilities Maintenance Office : Report Analytics
+      </td>
+    </tr>
+
+    <tr>
+      <td class="row-line">
+        <span class="label">Document Reference:</span>
+        BFMO Report System
+      </td>
+      <td class="row-line">
+        <span class="label">Printed Date:</span>
+        ${printedDate}
+      </td>
+    </tr>
+
+    <tr>
+      <td class="row-line">
+        <span class="label">Confidentiality Level:</span>
+        Research Purpose
+      </td>
+      <td class="row-line">
+        <span class="label">Approval Date:</span>
+      </td>
+    </tr>
+
+    <tr>
+      <td class="row-line">
+        <span class="label">Review Cycle:</span>
+        Monthly
+      </td>
+      <td class="row-line">
+        <span class="label">Effectivity Date:</span>
+      </td>
+    </tr>
+
+  </table>
+</div>
+
+
+
+    <h1>BFMO Analytics - Tabular Report</h1>
+
+    <div class="meta">
+      Records shown: ${filtered.length}
+    </div>
+
+    <h2>Summary Statistics</h2>
+
+    <h3>By Concern (Base)</h3>
+    <ul>${concernBaseStatsHtml}</ul>
+
+    <h3>By Concern (Detailed)</h3>
+    <ul>${concernStatsHtml}</ul>
+
+    <h3>By Building</h3>
+    <ul>${buildingStatsHtml}</ul>
+
+    <h2>Detailed Report</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date Created</th>
+          <th>Status</th>
+          <th>Building</th>
+          <th>Concern</th>
+          <th>College</th>
+          <th>Floor</th>
+          <th>Room</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
+      </tbody>
+    </table>
+
+  </body>
+</html>
+`;
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;
@@ -1009,7 +1171,7 @@ const Analytics: FC = () => {
   const STORAGE_KEY = "todoLists_v1";
   const uid = useCallback(
     () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-    []
+    [],
   );
 
   const defaultLists = useCallback((): List[] => {
@@ -1038,7 +1200,9 @@ const Analytics: FC = () => {
     }
   }, []);
 
-  const [lists, setLists] = useState<List[]>(() => loadLocal() || defaultLists());
+  const [lists, setLists] = useState<List[]>(
+    () => loadLocal() || defaultLists(),
+  );
 
   useEffect(() => {
     try {
@@ -1064,7 +1228,9 @@ const Analytics: FC = () => {
 
   const toggleCollapse = (listId: string) =>
     setLists((prev) =>
-      prev.map((l) => (l.id === listId ? { ...l, collapsed: !l.collapsed } : l))
+      prev.map((l) =>
+        l.id === listId ? { ...l, collapsed: !l.collapsed } : l,
+      ),
     );
 
   const addTask = (listId: string, text: string) => {
@@ -1072,9 +1238,15 @@ const Analytics: FC = () => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
-          ? { ...l, tasks: [...l.tasks, { id: uid(), text: text.trim(), done: false }] }
-          : l
-      )
+          ? {
+              ...l,
+              tasks: [
+                ...l.tasks,
+                { id: uid(), text: text.trim(), done: false },
+              ],
+            }
+          : l,
+      ),
     );
   };
 
@@ -1082,17 +1254,24 @@ const Analytics: FC = () => {
     setLists((prev) =>
       prev.map((l) =>
         l.id === listId
-          ? { ...l, tasks: l.tasks.map((t) => (t.id === taskId ? { ...t, done: !t.done } : t)) }
-          : l
-      )
+          ? {
+              ...l,
+              tasks: l.tasks.map((t) =>
+                t.id === taskId ? { ...t, done: !t.done } : t,
+              ),
+            }
+          : l,
+      ),
     );
   };
 
   const deleteTask = (listId: string, taskId: string) => {
     setLists((prev) =>
       prev.map((l) =>
-        l.id === listId ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) } : l
-      )
+        l.id === listId
+          ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) }
+          : l,
+      ),
     );
   };
 
@@ -1169,7 +1348,11 @@ const Analytics: FC = () => {
               )}
             </button>
 
-            <button className="pa-btn" type="button" onClick={() => setListsOpen(true)}>
+            <button
+              className="pa-btn"
+              type="button"
+              onClick={() => setListsOpen(true)}
+            >
               Open Lists Panel
             </button>
 
@@ -1178,20 +1361,31 @@ const Analytics: FC = () => {
             </button>
 
             {/* Optional manual refresh (keeps your layout) */}
-            <button className="pa-btn" type="button" onClick={() => fetchReports()}>
+            <button
+              className="pa-btn"
+              type="button"
+              onClick={() => fetchReports()}
+            >
               Refresh Data
             </button>
           </div>
         </header>
 
         {filtersOpen && (
-          <section id="filters-panel" className="filters card" aria-label="Filters">
+          <section
+            id="filters-panel"
+            className="filters card"
+            aria-label="Filters"
+          >
             <div className="filters-row">
               <div className="filter-block">
                 <h4>Status</h4>
                 <div className="chips">
                   {sortedStatusFilters.map((s) => (
-                    <label key={s} className={`chip ${selectedStatuses.has(s) ? "is-on" : ""}`}>
+                    <label
+                      key={s}
+                      className={`chip ${selectedStatuses.has(s) ? "is-on" : ""}`}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedStatuses.has(s)}
@@ -1207,7 +1401,10 @@ const Analytics: FC = () => {
                 <h4>Building</h4>
                 <div className="chips scroll">
                   {sortedBuildings.map((b) => (
-                    <label key={b} className={`chip ${selectedBuildings.has(b) ? "is-on" : ""}`}>
+                    <label
+                      key={b}
+                      className={`chip ${selectedBuildings.has(b) ? "is-on" : ""}`}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedBuildings.has(b)}
@@ -1223,7 +1420,10 @@ const Analytics: FC = () => {
                 <h4>Concern</h4>
                 <div className="chips scroll">
                   {sortedConcerns.map((c) => (
-                    <label key={c} className={`chip ${selectedConcerns.has(c) ? "is-on" : ""}`}>
+                    <label
+                      key={c}
+                      className={`chip ${selectedConcerns.has(c) ? "is-on" : ""}`}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedConcerns.has(c)}
@@ -1239,7 +1439,10 @@ const Analytics: FC = () => {
                 <h4>College</h4>
                 <div className="chips scroll">
                   {sortedColleges.map((col) => (
-                    <label key={col} className={`chip ${selectedColleges.has(col) ? "is-on" : ""}`}>
+                    <label
+                      key={col}
+                      className={`chip ${selectedColleges.has(col) ? "is-on" : ""}`}
+                    >
                       <input
                         type="checkbox"
                         checked={selectedColleges.has(col)}
@@ -1254,16 +1457,32 @@ const Analytics: FC = () => {
               <div className="filter-block">
                 <h4>Date</h4>
                 <div className="dates">
-                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                  />
                   <span>to</span>
-                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                  />
                 </div>
 
                 <div className="quick-dates">
-                  <button type="button" className="quick-date-btn" onClick={() => setLastDays(7)}>
+                  <button
+                    type="button"
+                    className="quick-date-btn"
+                    onClick={() => setLastDays(7)}
+                  >
                     Last 7 days
                   </button>
-                  <button type="button" className="quick-date-btn" onClick={() => setLastDays(30)}>
+                  <button
+                    type="button"
+                    className="quick-date-btn"
+                    onClick={() => setLastDays(30)}
+                  >
                     Last 30 days
                   </button>
                   <button
@@ -1301,7 +1520,15 @@ const Analytics: FC = () => {
             <div className="chart-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={statusPieData} cx="50%" cy="50%" outerRadius="80%" labelLine={false} label={false} dataKey="value">
+                  <Pie
+                    data={statusPieData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius="80%"
+                    labelLine={false}
+                    label={false}
+                    dataKey="value"
+                  >
                     {statusPieData.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
                     ))}
@@ -1373,10 +1600,33 @@ const Analytics: FC = () => {
                   />
                   <Legend
                     content={() => (
-                      <div style={{ justifyContent: "center", display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8, fontSize: 12 }}>
+                      <div
+                        style={{
+                          justifyContent: "center",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          marginTop: 8,
+                          fontSize: 12,
+                        }}
+                      >
                         {buildingData.map((b, idx) => (
-                          <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getBuildingColor(b.name, idx) }} />
+                          <div
+                            key={b.name}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                backgroundColor: getBuildingColor(b.name, idx),
+                              }}
+                            />
                             {b.name}
                           </div>
                         ))}
@@ -1385,7 +1635,10 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {buildingData.map((entry, index) => (
-                      <Cell key={entry.name} fill={getBuildingColor(entry.name, index)} />
+                      <Cell
+                        key={entry.name}
+                        fill={getBuildingColor(entry.name, index)}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1411,7 +1664,9 @@ const Analytics: FC = () => {
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                     labelFormatter={(_, payload) => {
-                      const p = (payload && payload[0]?.payload) as ConcernChartDatum | undefined;
+                      const p = (payload && payload[0]?.payload) as
+                        | ConcernChartDatum
+                        | undefined;
                       if (!p) return "";
                       return `${p.name}`;
                     }}
@@ -1421,12 +1676,39 @@ const Analytics: FC = () => {
                     content={() => {
                       const bases = ["Civil", "Mechanical", "Electrical"];
                       return (
-                        <div style={{ justifyContent: "center", alignItems: "center", display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                        <div
+                          style={{
+                            justifyContent: "center",
+                            alignItems: "center",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: 8,
+                            marginTop: 8,
+                          }}
+                        >
                           {bases
-                            .filter((base) => concernData.some((d) => d.base === base))
+                            .filter((base) =>
+                              concernData.some((d) => d.base === base),
+                            )
                             .map((base) => (
-                              <div key={base} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-                                <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getConcernColorFromBase(base) }} />
+                              <div
+                                key={base}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: 12,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: 999,
+                                    backgroundColor:
+                                      getConcernColorFromBase(base),
+                                  }}
+                                />
                                 <span>{base}</span>
                               </div>
                             ))}
@@ -1436,7 +1718,10 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {concernData.map((entry) => (
-                      <Cell key={`${entry.base}-${entry.name}`} fill={getConcernColorFromBase(entry.base)} />
+                      <Cell
+                        key={`${entry.base}-${entry.name}`}
+                        fill={getConcernColorFromBase(entry.base)}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1464,10 +1749,33 @@ const Analytics: FC = () => {
                   />
                   <Legend
                     content={() => (
-                      <div style={{ justifyContent: "center", display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8, fontSize: 12 }}>
+                      <div
+                        style={{
+                          justifyContent: "center",
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 10,
+                          marginTop: 8,
+                          fontSize: 12,
+                        }}
+                      >
                         {collegeData.map((col, idx) => (
-                          <div key={col.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getCollegeColor(col.name, idx) }} />
+                          <div
+                            key={col.name}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 10,
+                                height: 10,
+                                borderRadius: 999,
+                                backgroundColor: getCollegeColor(col.name, idx),
+                              }}
+                            />
                             {col.name}
                           </div>
                         ))}
@@ -1476,7 +1784,10 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {collegeData.map((entry, index) => (
-                      <Cell key={entry.name} fill={getCollegeColor(entry.name, index)} />
+                      <Cell
+                        key={entry.name}
+                        fill={getCollegeColor(entry.name, index)}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1488,16 +1799,32 @@ const Analytics: FC = () => {
             <div className="time-header">
               <h3>Reports Over Time</h3>
               <div className="time-mode-toggle">
-                <button type="button" className={`time-mode-btn ${timeMode === "day" ? "is-active" : ""}`} onClick={() => setTimeMode("day")}>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${timeMode === "day" ? "is-active" : ""}`}
+                  onClick={() => setTimeMode("day")}
+                >
                   Days
                 </button>
-                <button type="button" className={`time-mode-btn ${timeMode === "week" ? "is-active" : ""}`} onClick={() => setTimeMode("week")}>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${timeMode === "week" ? "is-active" : ""}`}
+                  onClick={() => setTimeMode("week")}
+                >
                   Weeks
                 </button>
-                <button type="button" className={`time-mode-btn ${timeMode === "month" ? "is-active" : ""}`} onClick={() => setTimeMode("month")}>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${timeMode === "month" ? "is-active" : ""}`}
+                  onClick={() => setTimeMode("month")}
+                >
                   Months
                 </button>
-                <button type="button" className={`time-mode-btn ${timeMode === "year" ? "is-active" : ""}`} onClick={() => setTimeMode("year")}>
+                <button
+                  type="button"
+                  className={`time-mode-btn ${timeMode === "year" ? "is-active" : ""}`}
+                  onClick={() => setTimeMode("year")}
+                >
                   Years
                 </button>
               </div>
@@ -1507,10 +1834,24 @@ const Analytics: FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeSeriesData}>
                   <defs>
-                    <linearGradient id="reportsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient
+                      id="reportsGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
                       <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
-                      <stop offset="60%" stopColor="#0ea5e9" stopOpacity={0.6} />
-                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                      <stop
+                        offset="60%"
+                        stopColor="#0ea5e9"
+                        stopOpacity={0.6}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="#6366f1"
+                        stopOpacity={0.2}
+                      />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -1527,7 +1868,15 @@ const Analytics: FC = () => {
                     itemStyle={{ color: "#000000" }}
                     formatter={(value) => [`${value}`, "Reports"]}
                   />
-                  <Area type="monotone" dataKey="value" stroke="#22c55e" fill="url(#reportsGradient)" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#22c55e"
+                    fill="url(#reportsGradient)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1535,10 +1884,19 @@ const Analytics: FC = () => {
         </div>
       </div>
 
-      <div className={`sidepanel ${listsOpen ? "is-open" : ""}`} role="dialog" aria-modal="true" aria-label="Lists with Progress">
+      <div
+        className={`sidepanel ${listsOpen ? "is-open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Lists with Progress"
+      >
         <div className="sidepanel-head">
           <h3>Lists with Progress</h3>
-          <button className="sidepanel-close" onClick={() => setListsOpen(false)} aria-label="Close">
+          <button
+            className="sidepanel-close"
+            onClick={() => setListsOpen(false)}
+            aria-label="Close"
+          >
             ×
           </button>
         </div>
@@ -1573,7 +1931,10 @@ const Analytics: FC = () => {
                     <div className="list-left">
                       <div className="list-title-row">
                         <h3 className="list-title">{list.title}</h3>
-                        <button className="small-btn collapse" onClick={() => toggleCollapse(list.id)}>
+                        <button
+                          className="small-btn collapse"
+                          onClick={() => toggleCollapse(list.id)}
+                        >
                           {list.collapsed ? "Expand" : "Panel"}
                         </button>
                       </div>
@@ -1581,7 +1942,10 @@ const Analytics: FC = () => {
                       <div className="progress-wrap">
                         <div className="muted">{pct}%</div>
                         <div className="progress-bar small">
-                          <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})` }} />
+                          <div
+                            className="progress-fill"
+                            style={{ transform: `scaleX(${pct / 100})` }}
+                          />
                         </div>
                       </div>
                     </div>
@@ -1591,7 +1955,8 @@ const Analytics: FC = () => {
                         className="small-btn"
                         onClick={() => {
                           const text = prompt("Task name:");
-                          if (text && text.trim()) addTask(list.id, text.trim());
+                          if (text && text.trim())
+                            addTask(list.id, text.trim());
                         }}
                       >
                         + Task
@@ -1618,7 +1983,8 @@ const Analytics: FC = () => {
                               const v = (e.currentTarget.value || "").trim();
                               if (v) {
                                 addTask(list.id, v);
-                                (e.currentTarget as HTMLInputElement).value = "";
+                                (e.currentTarget as HTMLInputElement).value =
+                                  "";
                               }
                             }
                           }}
@@ -1626,7 +1992,8 @@ const Analytics: FC = () => {
                         <button
                           className="small-btn"
                           onClick={(e) => {
-                            const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            const input = e.currentTarget
+                              .previousElementSibling as HTMLInputElement | null;
                             if (input && input.value.trim()) {
                               addTask(list.id, input.value.trim());
                               input.value = "";
@@ -1643,13 +2010,26 @@ const Analytics: FC = () => {
                         ) : (
                           list.tasks.map((task) => (
                             <div key={task.id} className="task-row">
-                              <input type="checkbox" checked={!!task.done} onChange={() => toggleTask(list.id, task.id)} />
-                              <label style={{ textDecoration: task.done ? "line-through" : "none" }}>{task.text}</label>
+                              <input
+                                type="checkbox"
+                                checked={!!task.done}
+                                onChange={() => toggleTask(list.id, task.id)}
+                              />
+                              <label
+                                style={{
+                                  textDecoration: task.done
+                                    ? "line-through"
+                                    : "none",
+                                }}
+                              >
+                                {task.text}
+                              </label>
                               <button
                                 className="small-btn"
                                 title="Delete task"
                                 onClick={() => {
-                                  if (confirm("Delete task?")) deleteTask(list.id, task.id);
+                                  if (confirm("Delete task?"))
+                                    deleteTask(list.id, task.id);
                                 }}
                               >
                                 ×
@@ -1667,7 +2047,13 @@ const Analytics: FC = () => {
         </div>
       </div>
 
-      {listsOpen && <div className="sidepanel-backdrop" onClick={() => setListsOpen(false)} aria-hidden="true" />}
+      {listsOpen && (
+        <div
+          className="sidepanel-backdrop"
+          onClick={() => setListsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 };

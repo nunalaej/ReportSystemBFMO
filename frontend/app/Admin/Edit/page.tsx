@@ -207,8 +207,10 @@ export default function AdminEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMsg, setSaveMsg] = useState("");
-  const [searchBuilding, setSearchBuilding] = useState("");
-  const [searchConcern, setSearchConcern] = useState("");
+  
+  // Selected items for editing
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string>("");
+  const [selectedConcernId, setSelectedConcernId] = useState<string>("");
 
   const role = useMemo(() => {
     if (!isLoaded || !isSignedIn || !user) return "guest";
@@ -284,6 +286,14 @@ export default function AdminEditPage() {
 
         setBuildings(incomingBuildings);
         setConcerns(incomingConcerns);
+        
+        // Auto-select first items
+        if (incomingBuildings.length > 0 && !selectedBuildingId) {
+          setSelectedBuildingId(incomingBuildings[0].id);
+        }
+        if (incomingConcerns.length > 0 && !selectedConcernId) {
+          setSelectedConcernId(incomingConcerns[0].id);
+        }
       } catch (err: any) {
         console.error(err);
         if (mode === "preferDefaults") {
@@ -303,14 +313,14 @@ export default function AdminEditPage() {
         setLoading(false);
       }
     },
-    []
+    [selectedBuildingId, selectedConcernId]
   );
 
   useEffect(() => {
     loadMeta("preferDefaults");
-  }, [loadMeta]);
+  }, []);
 
-  const handleSave = async (scope?: "building" | "concern") => {
+  const handleSave = async () => {
     setSaving(true);
     setError("");
     setSaveMsg("");
@@ -459,68 +469,11 @@ export default function AdminEditPage() {
       const data = await res.json().catch(() => null);
 
       if (data?.buildings && data?.concerns) {
-        setBuildings(
-          (data.buildings as any[]).map((b: any, idx: number) => {
-            const name = String(b.name || "").trim();
-            const id =
-              String(b.id || "").trim() ||
-              norm(name).replace(/\s+/g, "-") ||
-              `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
-            const hasRooms = b.hasRooms === false ? false : true;
-
-            const floors =
-              typeof b.floors === "number" && b.floors > 0
-                ? Math.round(b.floors)
-                : 1;
-            const roomsPerFloor =
-              typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
-                ? Math.round(b.roomsPerFloor)
-                : 1;
-
-            const singleLocationLabel =
-              typeof b.singleLocationLabel === "string"
-                ? String(b.singleLocationLabel).trim()
-                : "";
-
-            return {
-              id,
-              name: name || "Unnamed",
-              floors,
-              roomsPerFloor,
-              hasRooms,
-              singleLocationLabel,
-            };
-          })
-        );
-
-        setConcerns(
-          (data.concerns as any[]).map((c: any, idx: number) => {
-            const label = String(c.label || "").trim();
-            const id =
-              String(c.id || "").trim() ||
-              norm(label).replace(/\s+/g, "-") ||
-              `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-            const subs: string[] = Array.isArray(c.subconcerns)
-              ? c.subconcerns.map((s: unknown) => String(s || "").trim())
-              : [];
-
-            return {
-              id,
-              label: label || "Unnamed concern",
-              subconcerns: subs.filter((s: string) => s.length > 0),
-            };
-          })
-        );
+        setBuildings(normalizeBuildingsFromDb(data.buildings));
+        setConcerns(normalizeConcernsFromDb(data.concerns));
       }
 
-      if (scope === "building") {
-        setSaveMsg("Building changes saved.");
-      } else if (scope === "concern") {
-        setSaveMsg("Concern changes saved.");
-      } else {
-        setSaveMsg("All changes saved.");
-      }
+      setSaveMsg("All changes saved successfully.");
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Failed to save changes.");
@@ -529,154 +482,157 @@ export default function AdminEditPage() {
     }
   };
 
-  // building handlers
-  const handleBuildingChange = (index: number, value: string) => {
-    setBuildings((prev) => {
-      const next = [...prev];
-      const current = next[index];
-      next[index] = {
-        ...current,
-        name: value,
-      };
-      return next;
-    });
+  // Get selected building and concern
+  const selectedBuilding = useMemo(
+    () => buildings.find((b) => b.id === selectedBuildingId),
+    [buildings, selectedBuildingId]
+  );
+
+  const selectedConcern = useMemo(
+    () => concerns.find((c) => c.id === selectedConcernId),
+    [concerns, selectedConcernId]
+  );
+
+  // Building handlers
+  const handleBuildingNameChange = (value: string) => {
+    setBuildings((prev) =>
+      prev.map((b) =>
+        b.id === selectedBuildingId ? { ...b, name: value } : b
+      )
+    );
   };
 
-  const handleBuildingFloorsChange = (index: number, value: string) => {
+  const handleBuildingHasRoomsToggle = () => {
+    setBuildings((prev) =>
+      prev.map((b) =>
+        b.id === selectedBuildingId
+          ? { ...b, hasRooms: b.hasRooms === false ? true : false }
+          : b
+      )
+    );
+  };
+
+  const handleBuildingFloorsChange = (value: string) => {
     const num = parseInt(value, 10);
-    setBuildings((prev) => {
-      const next = [...prev];
-      const current = next[index];
-      next[index] = {
-        ...current,
-        floors: Number.isNaN(num) || num <= 0 ? 1 : num,
-      };
-      return next;
-    });
+    setBuildings((prev) =>
+      prev.map((b) =>
+        b.id === selectedBuildingId
+          ? { ...b, floors: Number.isNaN(num) || num <= 0 ? 1 : num }
+          : b
+      )
+    );
   };
 
-  const handleBuildingRoomsChange = (index: number, value: string) => {
+  const handleBuildingRoomsChange = (value: string) => {
     const num = parseInt(value, 10);
-    setBuildings((prev) => {
-      const next = [...prev];
-      const current = next[index];
-      next[index] = {
-        ...current,
-        roomsPerFloor: Number.isNaN(num) || num <= 0 ? 1 : num,
-      };
-      return next;
-    });
-  };
-
-  const handleBuildingHasRoomsToggle = (index: number) => {
-    setBuildings((prev) => {
-      const next = [...prev];
-      const current = next[index];
-      next[index] = {
-        ...current,
-        hasRooms: current.hasRooms === false ? true : false,
-      };
-      return next;
-    });
-  };
-
-  const handleBuildingPositionChange = (index: number, value: string) => {
-    setBuildings((prev) => {
-      const next = [...prev];
-      const current = next[index];
-      next[index] = {
-        ...current,
-        singleLocationLabel: value,
-      };
-      return next;
-    });
+    setBuildings((prev) =>
+      prev.map((b) =>
+        b.id === selectedBuildingId
+          ? { ...b, roomsPerFloor: Number.isNaN(num) || num <= 0 ? 1 : num }
+          : b
+      )
+    );
   };
 
   const handleAddBuilding = () => {
     const newBuilding: BuildingMeta = {
       id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: "",
+      name: "New Building",
       floors: 1,
       roomsPerFloor: 1,
       hasRooms: true,
       singleLocationLabel: "",
     };
-    setBuildings((prev) => [newBuilding, ...prev]);
+    setBuildings((prev) => [...prev, newBuilding]);
+    setSelectedBuildingId(newBuilding.id);
   };
 
-  const handleRemoveBuilding = (index: number) => {
-    setBuildings((prev) => prev.filter((_, i) => i !== index));
+  const handleDeleteBuilding = () => {
+    if (!selectedBuildingId) return;
+    const idx = buildings.findIndex((b) => b.id === selectedBuildingId);
+    setBuildings((prev) => prev.filter((b) => b.id !== selectedBuildingId));
+    
+    // Select next or previous building
+    const remaining = buildings.filter((b) => b.id !== selectedBuildingId);
+    if (remaining.length > 0) {
+      if (idx < remaining.length) {
+        setSelectedBuildingId(remaining[idx].id);
+      } else {
+        setSelectedBuildingId(remaining[remaining.length - 1].id);
+      }
+    } else {
+      setSelectedBuildingId("");
+    }
   };
 
-  // concern handlers
-  const handleConcernLabelChange = (index: number, value: string) => {
+  // Concern handlers
+  const handleConcernLabelChange = (value: string) => {
     setConcerns((prev) =>
-      prev.map((c, i) => (i === index ? { ...c, label: value } : c))
+      prev.map((c) =>
+        c.id === selectedConcernId ? { ...c, label: value } : c
+      )
     );
   };
 
   const handleAddConcern = () => {
     const newConcern: ConcernMeta = {
       id: `concern-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      label: "",
-      subconcerns: [""],
+      label: "New Concern",
+      subconcerns: [],
     };
-    setConcerns((prev) => [newConcern, ...prev]);
+    setConcerns((prev) => [...prev, newConcern]);
+    setSelectedConcernId(newConcern.id);
   };
 
-  const handleRemoveConcern = (index: number) => {
-    setConcerns((prev) => prev.filter((_, i) => i !== index));
+  const handleDeleteConcern = () => {
+    if (!selectedConcernId) return;
+    const idx = concerns.findIndex((c) => c.id === selectedConcernId);
+    setConcerns((prev) => prev.filter((c) => c.id !== selectedConcernId));
+    
+    // Select next or previous concern
+    const remaining = concerns.filter((c) => c.id !== selectedConcernId);
+    if (remaining.length > 0) {
+      if (idx < remaining.length) {
+        setSelectedConcernId(remaining[idx].id);
+      } else {
+        setSelectedConcernId(remaining[remaining.length - 1].id);
+      }
+    } else {
+      setSelectedConcernId("");
+    }
   };
 
-  const handleSubconcernChange = (
-    concernIndex: number,
-    subIndex: number,
-    value: string
-  ) => {
+  const handleSubconcernChange = (subIndex: number, value: string) => {
     setConcerns((prev) =>
-      prev.map((c, ci) => {
-        if (ci !== concernIndex) return c;
-        const subs = Array.isArray(c.subconcerns) ? [...c.subconcerns] : [];
+      prev.map((c) => {
+        if (c.id !== selectedConcernId) return c;
+        const subs = [...(c.subconcerns || [])];
         subs[subIndex] = value;
         return { ...c, subconcerns: subs };
       })
     );
   };
 
-  const handleAddSubconcern = (concernIndex: number) => {
+  const handleAddSubconcern = () => {
     setConcerns((prev) =>
-      prev.map((c, ci) =>
-        ci === concernIndex
+      prev.map((c) =>
+        c.id === selectedConcernId
           ? { ...c, subconcerns: [...(c.subconcerns || []), ""] }
           : c
       )
     );
   };
 
-  const handleRemoveSubconcern = (concernIndex: number, subIndex: number) => {
+  const handleDeleteSubconcern = (subIndex: number) => {
     setConcerns((prev) =>
-      prev.map((c, ci) => {
-        if (ci !== concernIndex) return c;
-        const subs = Array.isArray(c.subconcerns) ? [...c.subconcerns] : [];
+      prev.map((c) => {
+        if (c.id !== selectedConcernId) return c;
+        const subs = [...(c.subconcerns || [])];
         subs.splice(subIndex, 1);
         return { ...c, subconcerns: subs };
       })
     );
   };
-
-  const buildingRows = useMemo(() => {
-    const term = norm(searchBuilding);
-    return buildings
-      .map((b, index) => ({ index, building: b }))
-      .filter(({ building }) => norm(building.name).includes(term));
-  }, [buildings, searchBuilding]);
-
-  const concernRows = useMemo(() => {
-    const term = norm(searchConcern);
-    return concerns
-      .map((c, index) => ({ index, concern: c }))
-      .filter(({ concern }) => norm(concern.label).includes(term));
-  }, [concerns, searchConcern]);
 
   if (!isLoaded || !isSignedIn) {
     return (
@@ -700,10 +656,10 @@ export default function AdminEditPage() {
         <header className="admin-edit__page-head">
           <div className="admin-edit__heading">
             <h1 className="admin-edit__page-title">
-              Buildings, concerns, and subconcerns
+              Buildings & Concerns Configuration
             </h1>
             <p className="admin-edit__page-subtitle">
-              Configure options that appear in the report form. Changes affect how students select locations and concerns when submitting tickets.
+              Select a building or concern from the dropdown to edit its details
             </p>
             <p className="admin-edit__meta">
               {buildings.length} buildings · {concerns.length} concerns
@@ -719,28 +675,32 @@ export default function AdminEditPage() {
                 setConcerns(DEFAULT_CONCERNS);
                 setSaveMsg("");
                 setError("");
+                if (DEFAULT_BUILDINGS.length > 0) {
+                  setSelectedBuildingId(DEFAULT_BUILDINGS[0].id);
+                }
+                if (DEFAULT_CONCERNS.length > 0) {
+                  setSelectedConcernId(DEFAULT_CONCERNS[0].id);
+                }
               }}
               disabled={saving || loading}
-              title="Reset to recommended default values"
             >
-              Load defaults
+              Load Defaults
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={() => loadMeta("dbOnly")}
               disabled={saving || loading}
-              title="Reload the values stored in the database"
             >
-              Load database
+              Load Database
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => handleSave()}
+              onClick={handleSave}
               disabled={saving || loading}
             >
-              {saving ? "Saving..." : "Save all changes"}
+              {saving ? "Saving..." : "Save All Changes"}
             </button>
           </div>
         </header>
@@ -761,305 +721,229 @@ export default function AdminEditPage() {
           <p className="admin-edit__loading">Loading options...</p>
         ) : (
           <div className="admin-edit__grid">
+            {/* Buildings Section */}
             <Panel
               title="Buildings"
-              subtitle="These fill the building dropdown. Mark if a building has floors and rooms, or if it is a specific position only."
-              actions={
-                <>
-                  <input
-                    type="text"
-                    className="admin-edit__input admin-edit__search"
-                    placeholder="Search buildings"
-                    value={searchBuilding}
-                    onChange={(e) => setSearchBuilding(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleAddBuilding}
-                  >
-                    + Add building
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSave("building")}
-                    disabled={saving || loading}
-                  >
-                    Save buildings
-                  </button>
-                </>
-              }
+              subtitle="Select a building to edit its configuration"
             >
-              {buildingRows.length === 0 && (
-                <p className="admin-edit__empty">
-                  No buildings match your search.
-                </p>
-              )}
+              <div className="admin-edit__selector-row">
+                <div className="admin-edit__field-group" style={{ flex: 1 }}>
+                  <label className="admin-edit__label">Select Building</label>
+                  <select
+                    className="admin-edit__input"
+                    value={selectedBuildingId}
+                    onChange={(e) => setSelectedBuildingId(e.target.value)}
+                  >
+                    <option value="">-- Select a building --</option>
+                    {buildings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleAddBuilding}
+                >
+                  + Add New Building
+                </button>
+              </div>
 
-              <div className="admin-edit__list">
-                {buildingRows.map(({ index, building }) => {
-                  const hasRooms = building.hasRooms !== false;
-                  const totalRooms =
-                    hasRooms
-                      ? (building.floors || 0) * (building.roomsPerFloor || 0)
-                      : 0;
+              {selectedBuilding && (
+                <div className="admin-edit__editor-card">
+                  <div className="admin-edit__field-group">
+                    <label className="admin-edit__label">Building Name</label>
+                    <input
+                      type="text"
+                      className="admin-edit__input"
+                      value={selectedBuilding.name}
+                      placeholder="Example: CBAA"
+                      onChange={(e) => handleBuildingNameChange(e.target.value)}
+                    />
+                  </div>
 
-                  return (
-                    <div
-                      key={building.id || index}
-                      className="admin-edit__list-row"
-                    >
-                      <div className="admin-edit__field-group admin-edit__field-group-wide">
-                        <label className="admin-edit__label">
-                          Building name
-                        </label>
-                        <input
-                          type="text"
-                          className="admin-edit__input"
-                          value={building.name}
-                          placeholder="Example: CBAA"
-                          onChange={(e) =>
-                            handleBuildingChange(index, e.target.value)
-                          }
-                        />
-                      </div>
+                  <div className="admin-edit__field-group">
+                    <label className="admin-edit__switch">
+                      <input
+                        type="checkbox"
+                        checked={selectedBuilding.hasRooms !== false}
+                        onChange={handleBuildingHasRoomsToggle}
+                      />
+                      <span className="admin-edit__switch-pill">
+                        <span className="admin-edit__switch-knob" />
+                      </span>
+                      <span className="admin-edit__switch-text">
+                        {selectedBuilding.hasRooms !== false
+                          ? "Has floors and rooms"
+                          : "Specific spot only"}
+                      </span>
+                    </label>
+                  </div>
 
-                      <div className="admin-edit__field-group">
-                        <label className="admin-edit__label">Floors</label>
-                        <input
-                          type="number"
-                          min={1}
-                          className="admin-edit__input admin-edit__input-small"
-                          value={building.floors}
-                          onChange={(e) =>
-                            handleBuildingFloorsChange(index, e.target.value)
-                          }
-                          disabled={!hasRooms}
-                        />
-                      </div>
-
-                      <div className="admin-edit__field-group">
-                        <label className="admin-edit__label">
-                          Rooms / floor
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          className="admin-edit__input admin-edit__input-small"
-                          value={building.roomsPerFloor}
-                          onChange={(e) =>
-                            handleBuildingRoomsChange(index, e.target.value)
-                          }
-                          disabled={!hasRooms}
-                        />
-                      </div>
-
-                      <div className="admin-edit__field-group admin-edit__field-summary">
-                        <span className="admin-edit__summary-label">
-                          Room setup
-                        </span>
-
-                        <label className="admin-edit__switch">
+                  {selectedBuilding.hasRooms !== false && (
+                    <>
+                      <div className="admin-edit__row-two">
+                        <div className="admin-edit__field-group">
+                          <label className="admin-edit__label">
+                            Number of Floors
+                          </label>
                           <input
-                            type="checkbox"
-                            checked={hasRooms}
-                            onChange={() =>
-                              handleBuildingHasRoomsToggle(index)
+                            type="number"
+                            min={1}
+                            className="admin-edit__input"
+                            value={selectedBuilding.floors}
+                            onChange={(e) =>
+                              handleBuildingFloorsChange(e.target.value)
                             }
                           />
-                          <span className="admin-edit__switch-pill">
-                            <span className="admin-edit__switch-knob" />
-                          </span>
-                          <span className="admin-edit__switch-text">
-                            {hasRooms
-                              ? "Has floors and rooms"
-                              : "Specific position only"}
-                          </span>
-                        </label>
+                        </div>
 
-                        {hasRooms ? (
-                          <>
-                            <span className="admin-edit__summary-label">
-                              Approx. total rooms
-                            </span>
-                            <span className="admin-edit__summary-value">
-                              {totalRooms}
-                            </span>
-                          </>
-                        ) : (
-                          <div className="admin-edit__field-position">
-                            <label className="admin-edit__label">
-                              Position or area label
-                            </label>
-                            <input
-                              type="text"
-                              className="admin-edit__input"
-                              placeholder="Example: Guard post, Kiosk, Open area"
-                              value={building.singleLocationLabel || ""}
-                              onChange={(e) =>
-                                handleBuildingPositionChange(
-                                  index,
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </div>
-                        )}
+                        <div className="admin-edit__field-group">
+                          <label className="admin-edit__label">
+                            Rooms per Floor
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            className="admin-edit__input"
+                            value={selectedBuilding.roomsPerFloor}
+                            onChange={(e) =>
+                              handleBuildingRoomsChange(e.target.value)
+                            }
+                          />
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => handleRemoveBuilding(index)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
+                      <div className="admin-edit__info-box">
+                        <strong>Total Rooms:</strong>{" "}
+                        {selectedBuilding.floors * selectedBuilding.roomsPerFloor}
+                      </div>
+                    </>
+                  )}
 
-            <Panel
-              title="Concerns and subconcerns"
-              subtitle="These fill the concern and subconcern dropdowns used for report categorization."
-              actions={
-                <>
-                  <input
-                    type="text"
-                    className="admin-edit__input admin-edit__search"
-                    placeholder="Search concerns"
-                    value={searchConcern}
-                    onChange={(e) => setSearchConcern(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleAddConcern}
-                  >
-                    + Add concern
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSave("concern")}
-                    disabled={saving || loading}
-                  >
-                    Save concerns
-                  </button>
-                </>
-              }
-            >
-              {concernRows.length === 0 && (
-                <p className="admin-edit__empty">
-                  No concerns match your search.
-                </p>
+                  <div className="admin-edit__actions-row">
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={handleDeleteBuilding}
+                    >
+                      Delete Building
+                    </button>
+                  </div>
+                </div>
               )}
 
-              <div className="admin-edit__concern-list">
-                {concernRows.map(({ index, concern }) => (
-                  <div
-                    key={concern.id || index}
-                    className="admin-edit__concern-card"
+              {!selectedBuilding && (
+                <p className="admin-edit__empty">
+                  Select a building from the dropdown above to edit it
+                </p>
+              )}
+            </Panel>
+
+            {/* Concerns Section */}
+            <Panel
+              title="Concerns"
+              subtitle="Select a concern to edit its subconcerns"
+            >
+              <div className="admin-edit__selector-row">
+                <div className="admin-edit__field-group" style={{ flex: 1 }}>
+                  <label className="admin-edit__label">Select Concern</label>
+                  <select
+                    className="admin-edit__input"
+                    value={selectedConcernId}
+                    onChange={(e) => setSelectedConcernId(e.target.value)}
                   >
-                    <div className="admin-edit__concern-head">
-                      <div className="admin-edit__field-group">
-                        <label className="admin-edit__label">
-                          Concern label
-                        </label>
-                        <input
-                          type="text"
-                          className="admin-edit__input"
-                          value={concern.label}
-                          placeholder="Example: Electrical"
-                          onChange={(e) =>
-                            handleConcernLabelChange(index, e.target.value)
-                          }
-                        />
-                      </div>
+                    <option value="">-- Select a concern --</option>
+                    {concerns.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleAddConcern}
+                >
+                  + Add New Concern
+                </button>
+              </div>
 
-                      <div className="admin-edit__field-group">
-                        <label className="admin-edit__label">
-                          Concern ID
-                          <span className="admin-edit__label-hint">
-                            {" "}
-                            (generated automatically)
-                          </span>
-                        </label>
-                        <input
-                          type="text"
-                          className="admin-edit__input"
-                          value={
-                            concern.id ||
-                            norm(concern.label).replace(/\s+/g, "-")
-                          }
-                          readOnly
-                        />
-                      </div>
+              {selectedConcern && (
+                <div className="admin-edit__editor-card">
+                  <div className="admin-edit__field-group">
+                    <label className="admin-edit__label">Concern Name</label>
+                    <input
+                      type="text"
+                      className="admin-edit__input"
+                      value={selectedConcern.label}
+                      placeholder="Example: Electrical"
+                      onChange={(e) => handleConcernLabelChange(e.target.value)}
+                    />
+                  </div>
 
+                  <div className="admin-edit__subconcerns-section">
+                    <div className="admin-edit__subconcerns-head">
+                      <h4>Subconcerns</h4>
                       <button
                         type="button"
-                        className="btn btn-ghost"
-                        onClick={() => handleRemoveConcern(index)}
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleAddSubconcern}
                       >
-                        Remove
+                        + Add Subconcern
                       </button>
                     </div>
 
-                    <div className="admin-edit__subconcerns">
-                      <div className="admin-edit__subconcerns-head">
-                        <h4>Subconcerns</h4>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => handleAddSubconcern(index)}
-                        >
-                          + Add subconcern
-                        </button>
-                      </div>
+                    {(!selectedConcern.subconcerns ||
+                      selectedConcern.subconcerns.length === 0) && (
+                      <p className="admin-edit__empty">
+                        No subconcerns yet. Click "Add Subconcern" to create one.
+                      </p>
+                    )}
 
-                      {(!concern.subconcerns ||
-                        concern.subconcerns.length === 0) && (
-                        <p className="admin-edit__empty">
-                          No subconcerns yet for this concern.
-                        </p>
-                      )}
-
-                      {Array.isArray(concern.subconcerns) &&
-                        concern.subconcerns.map((s, sIndex) => (
-                          <div
-                            key={sIndex}
-                            className="admin-edit__list-row admin-edit__list-row--compact"
+                    {Array.isArray(selectedConcern.subconcerns) &&
+                      selectedConcern.subconcerns.map((sub, idx) => (
+                        <div key={idx} className="admin-edit__subconcern-row">
+                          <input
+                            type="text"
+                            className="admin-edit__input"
+                            value={sub}
+                            placeholder="Example: Walls"
+                            onChange={(e) =>
+                              handleSubconcernChange(idx, e.target.value)
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => handleDeleteSubconcern(idx)}
                           >
-                            <input
-                              type="text"
-                              className="admin-edit__input"
-                              value={s}
-                              placeholder="Example: Light not working"
-                              onChange={(e) =>
-                                handleSubconcernChange(
-                                  index,
-                                  sIndex,
-                                  e.target.value
-                                )
-                              }
-                            />
-                            <button
-                              type="button"
-                              className="btn btn-ghost"
-                              onClick={() =>
-                                handleRemoveSubconcern(index, sIndex)
-                              }
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ))}
-                    </div>
+                            Delete
+                          </button>
+                        </div>
+                      ))}
                   </div>
-                ))}
-              </div>
+
+                  <div className="admin-edit__actions-row">
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={handleDeleteConcern}
+                    >
+                      Delete Concern
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!selectedConcern && (
+                <p className="admin-edit__empty">
+                  Select a concern from the dropdown above to edit it
+                </p>
+              )}
             </Panel>
           </div>
         )}
