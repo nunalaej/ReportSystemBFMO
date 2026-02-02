@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
-import "@/app/Admin/style/dashboard.css";
+import "@/app/staff/style/dashboard.css";
 
 export default function AdminLayout({
   children,
@@ -28,7 +28,7 @@ export default function AdminLayout({
       ? rawRole[0]?.toLowerCase()
       : rawRole?.toLowerCase();
 
-    if (role !== "admin") {
+    if (role !== "staff") {
       router.replace("/");
     }
   }, [isLoaded, isSignedIn, user, router]);
@@ -40,11 +40,11 @@ export default function AdminLayout({
     ? rawRole[0]?.toLowerCase()
     : rawRole?.toLowerCase();
 
-  if (role !== "admin") return null;
+  if (role !== "staff") return null;
 
   return (
     <>
-      {/* ✅ ADMIN HEADER ONLY */}
+      {/* ✅ STAFF HEADER ONLY */}
       <header className="layout">
         <div className="flex items-center gap-3">
           <img
