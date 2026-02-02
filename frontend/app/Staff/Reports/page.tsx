@@ -243,7 +243,7 @@ export default function ReportPage() {
 
     if (role !== "staff") {
       // Non staff goes to student dashboard
-      router.replace("/Student/Dashboard");
+      router.replace("/Student");
       return;
     }
 

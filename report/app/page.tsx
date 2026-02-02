@@ -23,7 +23,7 @@ export default function Home() {
     if (!isLoaded) return;
 
     if (isSignedIn) {
-      router.replace("/Student/Dashboard");
+      router.replace("/Student");
     }
   }, [isLoaded, isSignedIn, router]);
 
@@ -103,8 +103,8 @@ export default function Home() {
             <SignedOut>
               <SignInButton
                 mode="modal"
-                fallbackRedirectUrl="/Student/Dashboard"
-                signUpFallbackRedirectUrl="/Student/Dashboard"
+                fallbackRedirectUrl="/Student"
+                signUpFallbackRedirectUrl="/Student"
               >
                 <button type="button" className="neonButton">
                   <span className="buttonLabel">Sign In</span>

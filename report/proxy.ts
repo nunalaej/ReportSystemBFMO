@@ -11,7 +11,7 @@ const isPublicRoute = createRouteMatcher([
 
 /* ---------- STUDENT ROUTES ---------- */
 const isStudentDashboard = createRouteMatcher([
-  "/Student/Dashboard(.*)",
+  "/Student(.*)",
 ]);
 
 /* ---------- ANY ROUTE ---------- */
@@ -25,7 +25,7 @@ export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) {
     // If already logged in → go to student dashboard
     if (userId) {
-      return NextResponse.redirect(new URL("/Student/Dashboard", req.url));
+      return NextResponse.redirect(new URL("/Student", req.url));
     }
     return NextResponse.next(); // Allow visitor to stay on login page
   }

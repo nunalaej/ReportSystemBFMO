@@ -136,7 +136,7 @@ export default function ReportPage() {
   }, []);
 
   const handleHome = () => {
-    router.push("/Student/Dashboard");
+    router.push("/Student");
   };
 
   const handleLogout = () => {

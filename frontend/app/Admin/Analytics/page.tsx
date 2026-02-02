@@ -221,7 +221,7 @@ const Analytics: FC = () => {
     }
 
     if (role !== "admin") {
-      router.replace("/Student/Dashboard");
+      router.replace("/Student");
       return;
     }
 
