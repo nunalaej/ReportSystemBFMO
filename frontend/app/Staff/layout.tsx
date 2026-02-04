@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
-import "@/app/staff/style/dashboard.css";
+import "@/app/admin/style/dashboard.css";
 
 export default function AdminLayout({
   children,
