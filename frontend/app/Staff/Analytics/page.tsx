@@ -220,7 +220,7 @@ const Analytics: FC = () => {
       role = rawRole.toLowerCase();
     }
 
-    if (role !== "admin") {
+    if (role !== "staff") {
       router.replace("/Student");
       return;
     }
