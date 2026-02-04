@@ -28,7 +28,7 @@ export default function AdminLayout({
       ? rawRole[0]?.toLowerCase()
       : rawRole?.toLowerCase();
 
-    if (role !== "admin" || role !== "staff") {
+    if (role !== "admin" && role !== "staff") {
       router.replace("/");
     }
   }, [isLoaded, isSignedIn, user, router]);
@@ -39,8 +39,6 @@ export default function AdminLayout({
   const role = Array.isArray(rawRole)
     ? rawRole[0]?.toLowerCase()
     : rawRole?.toLowerCase();
-
-  if (role !== "admin" || role !== "staff") return null;
 
   return (
     <>
