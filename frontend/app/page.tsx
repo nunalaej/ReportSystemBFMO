@@ -5,8 +5,6 @@ import Image from "next/image";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const pathname = usePathname();
-
 import {
   SignedOut,
   SignInButton,
@@ -15,6 +13,8 @@ import {
 
 export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
+  const pathname = usePathname();
+
 
   /* =========================================
      FULL RESET REDIRECT ON LOGIN
