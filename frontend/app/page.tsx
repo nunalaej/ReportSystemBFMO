@@ -3,6 +3,10 @@
 import "./style/login.css";
 import Image from "next/image";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+
+const pathname = usePathname();
+
 import {
   SignedOut,
   SignInButton,
@@ -17,26 +21,29 @@ export default function HomePage() {
      (NO SPA STATE LEFT BEHIND)
   ============================================ */
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !user) return;
+  if (!isLoaded || !isSignedIn || !user) return;
 
-    const rawRole = (user.publicMetadata as any)?.role;
+  // ✅ Only redirect when user is on the home page
+  if (pathname !== "/") return;
 
-    const role = Array.isArray(rawRole)
-      ? rawRole[0]?.toLowerCase()
-      : typeof rawRole === "string"
-      ? rawRole.toLowerCase()
-      : "student";
+  const rawRole = (user.publicMetadata as any)?.role;
 
-    const target =
-      role === "admin"
-        ? "/Admin"
-        : role === "staff"
-        ? "/Staff"
-        : "/Student";
+  const role = Array.isArray(rawRole)
+    ? rawRole[0]?.toLowerCase()
+    : typeof rawRole === "string"
+    ? rawRole.toLowerCase()
+    : "student";
 
-    // ✅ FULL DOCUMENT RELOAD (FIXES ALL UI BUGS)
-    window.location.replace(target);
-  }, [isLoaded, isSignedIn, user]);
+  const target =
+    role === "admin"
+      ? "/Admin"
+      : role === "staff"
+      ? "/Staff"
+      : "/Student";
+
+  window.location.replace(target);
+}, [isLoaded, isSignedIn, user, pathname]);
+
 
   /* =========================================
      LOADING STATE
