@@ -817,111 +817,207 @@ export default function ReportPage() {
       })
       .join("");
 
-    const html = `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>BFMO Reports Analytics</title>
-        <style>
-          body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-size: 12px;
-            color: #111827;
-            padding: 16px;
-          }
-          h1 {
-            font-size: 20px;
-            margin-bottom: 4px;
-          }
-          h2 {
-            font-size: 16px;
-            margin-top: 16px;
-            margin-bottom: 4px;
-          }
-          h3 {
-            font-size: 14px;
-            margin-top: 8px;
-            margin-bottom: 4px;
-          }
-          .meta {
-            font-size: 12px;
-            color: #4b5563;
-            margin-bottom: 12px;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 8px;
-          }
-          th, td {
-            border: 1px solid #d1d5db;
-            padding: 4px 8px;
-            text-align: left;
-            vertical-align: top;
-          }
-          thead {
-            background: #f3f4f6;
-          }
-          ul {
-            margin: 4px 0 8px 16px;
-            padding: 0;
-          }
-          li {
-            margin: 2px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <h1>BFMO Reports - Analytics (Current Filters)</h1>
-        <div class="meta">
-          Generated at: ${new Date().toLocaleString()}<br />
-          Records shown: ${filteredReports.length}<br />
-          Printed by: ${printedBy}
-        </div>
+    const printedDate = new Date().toLocaleString();
 
-        <h2>Summary Statistics</h2>
+const html = `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BFMO Analytics Report</title>
 
-        <h3>By Concern (Base)</h3>
-        <ul>
-          ${concernBaseStatsHtml}
-        </ul>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 8px;
+        color: #111827;
+        padding: 10px;
+      }
 
-        <h3>By Concern (Detailed)</h3>
-        <ul>
-          ${concernStatsHtml}
-        </ul>
+      .doc-header {
+        margin-bottom: 20px;
+      }
 
-        <h3>By Building</h3>
-        <ul>
-          ${buildingStatsHtml}
-        </ul>
+      .doc-table {
+        width: 100%;
+        margin: 0 auto;
+        border-collapse: collapse;
+      }
 
-        <h2>Detailed Report</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Date Created</th>
-              <th>Status</th>
-              <th>Building</th>
-              <th>Concern</th>
-              <th>College</th>
-              <th>Floor</th>
-              <th>Room</th>
-              <th>Email</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              rowsHtml ||
-              '<tr><td colspan="9">No data for current filters.</td></tr>'
-            }
-          </tbody>
-        </table>
-      </body>
-    </html>
-  `;
+      .logo-cell {
+        width: 90px;
+        text-align: center;
+      }
+
+      .logo-cell img {
+        width: 64px;
+        height: 64px;
+        padding-top: 12px;
+        object-fit: contain;
+      }
+
+      .title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #ffffff;
+        background: #029006;
+        border-bottom: 1px solid #000;
+        padding: 8px;
+      }
+
+      .row-line {
+        border-bottom: 1px solid #000;
+        padding-bottom: 4px;
+      }
+
+      .label {
+        font-weight: 600;
+      }
+
+      h1 {
+        font-size: 18px;
+        margin: 16px 0 4px;
+      }
+
+      h2 {
+        font-size: 15px;
+        margin-top: 16px;
+        margin-bottom: 4px;
+      }
+
+      h3 {
+        font-size: 13px;
+        margin-top: 10px;
+        margin-bottom: 4px;
+      }
+
+      .meta {
+        font-size: 11px;
+        color: #374151;
+        margin-bottom: 12px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+
+      th, td {
+        border: 1px solid #d1d5db;
+        padding: 4px 6px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      thead {
+        background: #f3f4f6;
+      }
+
+      ul {
+        margin: 4px 0 8px 16px;
+        padding: 0;
+      }
+
+      li {
+        margin: 2px 0;
+      }
+
+      @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+
+    <!-- DOCUMENT HEADER -->
+    <div class="doc-header">
+      <table class="doc-table">
+        <tr>
+          <td class="logo-cell" rowspan="4">
+            <img src="/logo-dlsud.png" alt="BFMO Logo" />
+          </td>
+          <td colspan="2" class="title">
+            Building Facilities Maintenance Office : Report Analytics
+          </td>
+        </tr>
+
+        <tr>
+          <td class="row-line">
+            <span class="label">Document Reference:</span> BFMO Report System
+          </td>
+          <td class="row-line">
+            <span class="label">Printed Date:</span> ${printedDate}
+          </td>
+        </tr>
+
+        <tr>
+          <td class="row-line">
+            <span class="label">Confidentiality Level:</span> Research Purpose
+          </td>
+          <td class="row-line">
+            <span class="label">Approval Date:</span>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="row-line">
+            <span class="label">Review Cycle:</span> Monthly
+          </td>
+          <td class="row-line">
+            <span class="label">Effectivity Date:</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <h1>BFMO Analytics – Tabular Report</h1>
+
+    <div class="meta">
+      Records shown: ${filteredReports.length}<br />
+      Printed by: ${printedBy}
+    </div>
+
+    <h2>Summary Statistics</h2>
+
+    <h3>By Concern (Base)</h3>
+    <ul>${concernBaseStatsHtml}</ul>
+
+    <h3>By Concern (Detailed)</h3>
+    <ul>${concernStatsHtml}</ul>
+
+    <h3>By Building</h3>
+    <ul>${buildingStatsHtml}</ul>
+
+    <h2>Detailed Report</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Date Created</th>
+          <th>Status</th>
+          <th>Building</th>
+          <th>Concern</th>
+          <th>College</th>
+          <th>Floor</th>
+          <th>Room</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
+      </tbody>
+    </table>
+
+  </body>
+</html>
+`;
+
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;
