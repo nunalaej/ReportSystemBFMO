@@ -1439,10 +1439,6 @@ const html = `
                       {selectedReport.college || "Unspecified"}
                     </p>
                     <p>
-                      <strong>Email:</strong>{" "}
-                      {selectedReport.email || "Unspecified"}
-                    </p>
-                    <p>
                       <strong>Submitted:</strong>{" "}
                       {selectedReport.createdAt &&
                         new Date(selectedReport.createdAt).toLocaleString()}{" "}
