@@ -521,6 +521,7 @@
 .create-scope__form select,
 .create-scope__form textarea {
   width: 100%;
+  cursor: pointer;
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--outline);
@@ -1136,4 +1137,74 @@ body {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
+}
+
+
+
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 64px;
+  height: 34px;
+}
+
+.theme-switch input {
+  opacity: 0;
+}
+
+.theme-switch .slider {
+  position: absolute;
+  inset: 0;
+  background-color: #73c0fc;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: 0.4s;
+}
+
+.theme-switch .slider::before {
+  content: "";
+  position: absolute;
+  height: 30px;
+  width: 30px;
+  left: 2px;
+  bottom: 2px;
+  background: #e8e8e8;
+  border-radius: 20px;
+  transition: 0.4s;
+}
+
+.theme-switch .sun svg {
+  position: absolute;
+  right: 8px;
+  top: 5px;
+  width: 24px;
+  animation: rotate 15s linear infinite;
+}
+
+.theme-switch .moon svg {
+  position: absolute;
+  left: 8px;
+  top: 5px;
+  width: 22px;
+  fill: #73c0fc;
+  animation: tilt 5s linear infinite;
+}
+
+.theme-switch input:checked + .slider {
+  background-color: #183153;
+}
+
+.theme-switch input:checked + .slider::before {
+  transform: translateX(30px);
+}
+
+@keyframes rotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes tilt {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+  100% { transform: rotate(0deg); }
 }

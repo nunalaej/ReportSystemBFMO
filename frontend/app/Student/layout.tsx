@@ -1,79 +1,79 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useUser, UserButton } from "@clerk/nextjs";
-import Image from "next/image";
+import { ReactNode } from "react";
+import { useUser, SignedIn, UserButton } from "@clerk/nextjs";
+import ThemeToggle from "@/app/ThemeToggle";
+import HeaderNav from "@/app/HeaderNav";
 
 export default function StudentLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const { isLoaded, isSignedIn, user } = useUser();
 
-  // Prevent infinite reload
-  const didReload = useRef(false);
-
   /* ===============================
-     AUTH + ROLE GUARD (HARD RESET)
+     ALWAYS RETURN JSX
   =============================== */
-  useEffect(() => {
-    if (!isLoaded) return;
 
-    // 🔴 LOGOUT → FULL PAGE RESET
-    if (!isSignedIn || !user) {
-      if (!didReload.current) {
-        didReload.current = true;
-        window.location.replace("/"); // ✅ HARD RESET
-      }
-      return;
-    }
+  if (!isLoaded) {
+    return (
+      <div className="page-center">
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
-    // 🔐 ROLE CHECK
-    const rawRole = (user.publicMetadata as any)?.role;
-    const role = Array.isArray(rawRole)
-      ? rawRole[0]?.toLowerCase()
-      : typeof rawRole === "string"
-      ? rawRole.toLowerCase()
-      : "student";
+  if (!isSignedIn || !user) {
+    return (
+      <div className="page-center">
+        <p>Please sign in to continue.</p>
+      </div>
+    );
+  }
 
-    if (role !== "student") {
-      window.location.replace("/"); // ✅ HARD RESET
-    }
-  }, [isLoaded, isSignedIn, user]);
+  const rawRole = (user.publicMetadata as any)?.role;
+  const role = Array.isArray(rawRole)
+    ? rawRole[0]?.toLowerCase()
+    : typeof rawRole === "string"
+    ? rawRole.toLowerCase()
+    : "student";
 
-  /* Prevent flicker */
-  if (!isLoaded || !isSignedIn) return null;
+  if (role !== "student") {
+    return (
+      <div className="page-center">
+        <p>Unauthorized access.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* ===============================
-          STUDENT HEADER
-      =============================== */}
+    <>
+      {/* HEADER */}
       <header className="layout">
         <div className="flex items-center gap-3">
-          <Image
+          <img
             src="/logo-dlsud.png"
             alt="DLSU-D Logo"
-            width={40}
-            height={40}
-            priority
+            className="w-10 h-10 object-contain"
           />
-          <h1 className="text-base sm:text-lg font-semibold">
+          <h1 className="text-base sm:text-lg font-semibold site-title">
             BFMO Report System
           </h1>
         </div>
 
+        <HeaderNav />
+
         <div className="flex items-center gap-3">
-          {/* Clerk sign out */}
-          <UserButton afterSignOutUrl="/" />
+          <ThemeToggle />
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
         </div>
       </header>
 
-      {/* ===============================
-          PAGE CONTENT
-      =============================== */}
-      <main className="flex-1">{children}</main>
-    </div>
+      {/* PAGE CONTENT */}
+      <main className="student-layout-content">{children}</main>
+    </>
   );
 }
