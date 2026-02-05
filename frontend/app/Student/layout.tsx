@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useUser, SignedIn, UserButton } from "@clerk/nextjs";
+import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
 
@@ -13,9 +13,10 @@ export default function StudentLayout({
   const { isLoaded, isSignedIn, user } = useUser();
 
   /* ===============================
-     ALWAYS RETURN JSX
+     AUTH GUARD (NO REDIRECTS)
   =============================== */
 
+  // Wait for Clerk
   if (!isLoaded) {
     return (
       <div className="page-center">
@@ -24,6 +25,7 @@ export default function StudentLayout({
     );
   }
 
+  // Not logged in → block render
   if (!isSignedIn || !user) {
     return (
       <div className="page-center">
@@ -32,13 +34,15 @@ export default function StudentLayout({
     );
   }
 
+  // Role check
   const rawRole = (user.publicMetadata as any)?.role;
   const role = Array.isArray(rawRole)
     ? rawRole[0]?.toLowerCase()
     : typeof rawRole === "string"
     ? rawRole.toLowerCase()
-    : "student";
+    : "student"; // fail-safe
 
+  // Not a student → block render
   if (role !== "student") {
     return (
       <div className="page-center">
@@ -47,10 +51,15 @@ export default function StudentLayout({
     );
   }
 
+  /* ===============================
+     LAYOUT
+  =============================== */
+
   return (
     <>
-      {/* HEADER */}
+      {/* TOP HEADER */}
       <header className="layout">
+        {/* LEFT */}
         <div className="flex items-center gap-3">
           <img
             src="/logo-dlsud.png"
@@ -62,8 +71,10 @@ export default function StudentLayout({
           </h1>
         </div>
 
+        {/* MIDDLE NAV (role-aware inside HeaderNav) */}
         <HeaderNav />
 
+        {/* RIGHT */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <SignedIn>
@@ -73,7 +84,9 @@ export default function StudentLayout({
       </header>
 
       {/* PAGE CONTENT */}
-      <main className="student-layout-content">{children}</main>
+      <main className="student-layout-content">
+        {children}
+      </main>
     </>
   );
 }
