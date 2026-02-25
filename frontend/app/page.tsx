@@ -3,7 +3,7 @@
 import "./style/login.css";
 import Image from "next/image";
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import {
   SignedOut,
@@ -14,6 +14,7 @@ import {
 export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
   const pathname = usePathname();
+  const router = useRouter();
 
 
   /* =========================================
@@ -41,7 +42,7 @@ export default function HomePage() {
       ? "/Staff"
       : "/Student";
 
-  window.location.replace(target);
+  router.replace(target);
 }, [isLoaded, isSignedIn, user, pathname]);
 
 
