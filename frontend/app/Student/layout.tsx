@@ -1,7 +1,8 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
 
@@ -11,6 +12,7 @@ export default function StudentLayout({
   children: ReactNode;
 }) {
   const { isLoaded, isSignedIn, user } = useUser();
+  const router = useRouter();
 
   /* ===============================
      AUTH GUARD (NO REDIRECTS)
@@ -42,14 +44,12 @@ export default function StudentLayout({
     ? rawRole.toLowerCase()
     : "student"; // fail-safe
 
-  // Not a student → block render
-  if (role !== "student") {
-    return (
-      <div className="page-center">
-        <p>Unauthorized access.</p>
-      </div>
-    );
-  }
+  // Not a student → redirect to Admin
+  useEffect(() => {
+    if (role !== "student") {
+      router.replace("/Admin");
+    }
+  }, [role, router]);
 
   /* ===============================
      LAYOUT
