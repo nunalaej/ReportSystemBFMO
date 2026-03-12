@@ -71,9 +71,9 @@ interface List {
 type StatusKey = "pending" | "waiting" | "progress" | "resolved" | "archived";
 
 interface ConcernChartDatum {
-  name: string; // subconcern, for example "Lights"
-  base: string; // base concern, for example "Civil"
-  fullLabel: string; // original "Civil : Lights"
+  name: string;
+  base: string;
+  fullLabel: string;
   value: number;
 }
 
@@ -240,7 +240,6 @@ const Analytics: FC = () => {
       setLoadErr("");
       setLoading(true);
 
-      // Force fresh data (no cache)
       const res = await fetch(`${API_BASE}/api/reports`, {
         cache: "no-store",
         signal,
@@ -318,7 +317,6 @@ const Analytics: FC = () => {
     }
   }, []);
 
-  // Refresh on page load
   useEffect(() => {
     if (!canView) return;
     const ctrl = new AbortController();
@@ -326,7 +324,6 @@ const Analytics: FC = () => {
     return () => ctrl.abort();
   }, [canView, fetchReports]);
 
-  // Optional: refresh when tab becomes active again
   useEffect(() => {
     if (!canView) return;
 
@@ -841,18 +838,8 @@ const Analytics: FC = () => {
       } else if (timeMode === "month") {
         key = `${year}-${month + 1}`;
         const monthNames = [
-          "Jan",
-          "Feb",
-          "Mar",
-          "Apr",
-          "May",
-          "Jun",
-          "Jul",
-          "Aug",
-          "Sep",
-          "Oct",
-          "Nov",
-          "Dec",
+          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
         ];
         label = `${monthNames[month]} ${year.toString().slice(2)}`;
         sortKey = year * 12 + month;
@@ -952,207 +939,78 @@ const Analytics: FC = () => {
     <title>BFMO Analytics Report</title>
     <style>
       body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 8px;
-    color: #111827;
-    padding: 10px;
-  }
-
-  .doc-header {
-  margin-bottom: 20px;
-}
-
-/* CENTER TABLE */
-.doc-table {
-  width: 100%;
-  margin: 0 auto; /* ✅ centers table */
-  border-collapse: collapse;
-}
-
-/* LOGO CELL */
-.logo-cell {
-  width: 90px;
-  text-align: center;
-}
-
-.logo-cell img {
-  width: 64px;
-  height: 64px;
-  padding-top: 12px;
-  object-fit: contain;
-}
-
-/* HEADER TITLE ROW */
-.title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;               /* ✅ white text */
-  background: #029006;          /* ✅ light green */
-  border-bottom: 1px solid #000;
-  padding: 8px;
-}
-
-/* DATA ROWS */
-.row-line {
-  border-bottom: 1px solid #000; /* ✅ underline only */
-  padding-bottom: 4px;
-}
-
-.label {
-  font-weight: 600;
-}
-
-      h1 {
-        font-size: 18px;
-        margin: 16px 0 4px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 8px;
+        color: #111827;
+        padding: 10px;
       }
-
-      h2 {
-        font-size: 15px;
-        margin-top: 16px;
-        margin-bottom: 4px;
-      }
-
-      h3 {
-        font-size: 13px;
-        margin-top: 10px;
-        margin-bottom: 4px;
-      }
-
-      .meta {
-        font-size: 11px;
-        color: #374151;
-        margin-bottom: 12px;
-      }
-
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 8px;
-      }
-
-      th, td {
-        border: 1px solid #d1d5db;
-        padding: 4px 6px;
-        text-align: left;
-        vertical-align: top;
-      }
-
-      thead {
-        background: #f3f4f6;
-      }
-
-      ul {
-        margin: 4px 0 8px 16px;
-        padding: 0;
-      }
-
-      li {
-        margin: 2px 0;
-      }
-
-      @media print {
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-}
-
+      .doc-header { margin-bottom: 20px; }
+      .doc-table { width: 100%; margin: 0 auto; border-collapse: collapse; }
+      .logo-cell { width: 90px; text-align: center; }
+      .logo-cell img { width: 64px; height: 64px; padding-top: 12px; object-fit: contain; }
+      .title { font-size: 14px; font-weight: 700; color: #ffffff; background: #029006; border-bottom: 1px solid #000; padding: 8px; }
+      .row-line { border-bottom: 1px solid #000; padding-bottom: 4px; }
+      .label { font-weight: 600; }
+      h1 { font-size: 18px; margin: 16px 0 4px; }
+      h2 { font-size: 15px; margin-top: 16px; margin-bottom: 4px; }
+      h3 { font-size: 13px; margin-top: 10px; margin-bottom: 4px; }
+      .meta { font-size: 11px; color: #374151; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 6px; text-align: left; vertical-align: top; }
+      thead { background: #f3f4f6; }
+      ul { margin: 4px 0 8px 16px; padding: 0; }
+      li { margin: 2px 0; }
+      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
     </style>
   </head>
-
   <body>
-
-    <!-- DOCUMENT HEADER -->
     <div class="doc-header">
-  <table class="doc-table">
-
-    <tr>
-      <td class="logo-cell" rowspan="5">
-        <img src="/logo-dlsud.png" alt="BFMO Logo" />
-      </td>
-      <td colspan="2" class="title">
-        Building Facilities Maintenance Office : Report Analytics
-      </td>
-    </tr>
-
-    <tr>
-      <td class="row-line">
-        <span class="label">Document Reference:</span>
-        BFMO Report System
-      </td>
-      <td class="row-line">
-        <span class="label">Printed Date:</span>
-        ${printedDate}
-      </td>
-    </tr>
-
-    <tr>
-      <td class="row-line">
-        <span class="label">Confidentiality Level:</span>
-        Research Purpose
-      </td>
-      <td class="row-line">
-        <span class="label">Approval Date:</span>
-      </td>
-    </tr>
-
-    <tr>
-      <td class="row-line">
-        <span class="label">Review Cycle:</span>
-        Monthly
-      </td>
-      <td class="row-line">
-        <span class="label">Effectivity Date:</span>
-      </td>
-    </tr>
-
-  </table>
-</div>
-
-
-
-    <h1>BFMO Analytics - Tabular Report</h1>
-
-    <div class="meta">
-      Records shown: ${filtered.length}
+      <table class="doc-table">
+        <tr>
+          <td class="logo-cell" rowspan="5">
+            <img src="/logo-dlsud.png" alt="BFMO Logo" />
+          </td>
+          <td colspan="2" class="title">
+            Building Facilities Maintenance Office : Report Analytics
+          </td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Document Reference:</span> BFMO Report System</td>
+          <td class="row-line"><span class="label">Printed Date:</span> ${printedDate}</td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Confidentiality Level:</span> Research Purpose</td>
+          <td class="row-line"><span class="label">Approval Date:</span></td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Review Cycle:</span> Monthly</td>
+          <td class="row-line"><span class="label">Effectivity Date:</span></td>
+        </tr>
+      </table>
     </div>
-
+    <h1>BFMO Analytics - Tabular Report</h1>
+    <div class="meta">Records shown: ${filtered.length}</div>
     <h2>Summary Statistics</h2>
-
     <h3>By Concern (Base)</h3>
     <ul>${concernBaseStatsHtml}</ul>
-
     <h3>By Concern (Detailed)</h3>
     <ul>${concernStatsHtml}</ul>
-
     <h3>By Building</h3>
     <ul>${buildingStatsHtml}</ul>
-
     <h2>Detailed Report</h2>
-
     <table>
       <thead>
         <tr>
-          <th>#</th>
-          <th>Date Created</th>
-          <th>Status</th>
-          <th>Building</th>
-          <th>Concern</th>
-          <th>College</th>
-          <th>Floor</th>
-          <th>Room</th>
-          <th>Email</th>
+          <th>#</th><th>Date Created</th><th>Status</th><th>Building</th>
+          <th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th>
         </tr>
       </thead>
       <tbody>
         ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
       </tbody>
     </table>
-
   </body>
-</html>
-`;
+</html>`;
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;
@@ -1167,6 +1025,7 @@ const Analytics: FC = () => {
     LISTS WITH PROGRESS SIDE PANEL
   ========================================================= */
   const [listsOpen, setListsOpen] = useState<boolean>(false);
+  const [listSaveStatus, setListSaveStatus] = useState<string>("");
 
   const STORAGE_KEY = "todoLists_v1";
   const uid = useCallback(
@@ -1204,6 +1063,7 @@ const Analytics: FC = () => {
     () => loadLocal() || defaultLists(),
   );
 
+  // Persist to localStorage whenever lists change
   useEffect(() => {
     try {
       if (typeof window === "undefined") return;
@@ -1275,33 +1135,75 @@ const Analytics: FC = () => {
     );
   };
 
+  // ── FIXED: saveToServer ──────────────────────────────────────────
   const saveToServer = useCallback(async () => {
+    if (!user?.id) {
+      setListSaveStatus("❌ Not signed in");
+      return;
+    }
+
+    setListSaveStatus("Saving…");
     try {
-      const res = await fetch(`${API_BASE}/api/lists/sync`, {
+      const res = await fetch(`${API_BASE}/api/lists`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lists }),
+        body: JSON.stringify({ userId: user.id, lists }),
       });
-      if (!res.ok) throw new Error("Sync failed");
-      alert("Lists saved to server");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to save lists to server");
-    }
-  }, [lists]);
 
-  const loadFromServer = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/lists`);
-      if (!res.ok) throw new Error("Load failed");
-      const data = await res.json();
-      if (Array.isArray(data) && data.length) setLists(data as List[]);
-      else alert("No lists found on server");
-    } catch (e) {
-      console.error(e);
-      alert("Failed to load lists from server");
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Server responded ${res.status}: ${errText}`);
+      }
+
+      setListSaveStatus("✅ Saved!");
+    } catch (e: any) {
+      console.error("saveToServer error:", e);
+      setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
+    } finally {
+      setTimeout(() => setListSaveStatus(""), 3000);
     }
-  }, []);
+  }, [lists, user]);
+
+  // ── FIXED: loadFromServer ────────────────────────────────────────
+  const loadFromServer = useCallback(async () => {
+    if (!user?.id) {
+      setListSaveStatus("❌ Not signed in");
+      return;
+    }
+
+    setListSaveStatus("Loading…");
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        },
+      );
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => res.statusText);
+        throw new Error(`Server responded ${res.status}: ${errText}`);
+      }
+
+      const data = await res.json();
+
+      if (Array.isArray(data) && data.length > 0) {
+        setLists(data as List[]);
+        setListSaveStatus("✅ Loaded!");
+      } else {
+        setListSaveStatus("ℹ️ No lists found on server");
+      }
+    } catch (e: any) {
+      console.error("loadFromServer error:", e);
+      setListSaveStatus(`❌ ${e?.message || "Load failed"}`);
+    } finally {
+      setTimeout(() => setListSaveStatus(""), 3000);
+    }
+  }, [user]);
 
   /* RENDER */
 
@@ -1360,7 +1262,6 @@ const Analytics: FC = () => {
               Print Analytics
             </button>
 
-            {/* Optional manual refresh (keeps your layout) */}
             <button
               className="pa-btn"
               type="button"
@@ -1534,12 +1435,7 @@ const Analytics: FC = () => {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
+                    contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
@@ -1553,25 +1449,21 @@ const Analytics: FC = () => {
                 <span>Resolved</span>
                 <strong>{statusCounts.resolved}</strong>
               </div>
-
               <div className="stat-chip">
                 <span className="stat-dot" style={{ background: "#fbbf24" }} />
                 <span>Pending</span>
                 <strong>{statusCounts.pending}</strong>
               </div>
-
               <div className="stat-chip">
                 <span className="stat-dot" style={{ background: "#60a5fa" }} />
                 <span>Waiting</span>
                 <strong>{statusCounts.waiting}</strong>
               </div>
-
               <div className="stat-chip">
                 <span className="stat-dot" style={{ background: "#6366f1" }} />
                 <span>In Progress</span>
                 <strong>{statusCounts.progress}</strong>
               </div>
-
               <div className="stat-chip">
                 <span className="stat-dot" style={{ background: "#9ca3af" }} />
                 <span>Archived</span>
@@ -1589,44 +1481,16 @@ const Analytics: FC = () => {
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
+                    contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
                   <Legend
                     content={() => (
-                      <div
-                        style={{
-                          justifyContent: "center",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 10,
-                          marginTop: 8,
-                          fontSize: 12,
-                        }}
-                      >
+                      <div style={{ justifyContent: "center", display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8, fontSize: 12 }}>
                         {buildingData.map((b, idx) => (
-                          <div
-                            key={b.name}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                backgroundColor: getBuildingColor(b.name, idx),
-                              }}
-                            />
+                          <div key={b.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getBuildingColor(b.name, idx) }} />
                             {b.name}
                           </div>
                         ))}
@@ -1635,10 +1499,7 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {buildingData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={getBuildingColor(entry.name, index)}
-                      />
+                      <Cell key={entry.name} fill={getBuildingColor(entry.name, index)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1655,18 +1516,11 @@ const Analytics: FC = () => {
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
+                    contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                     labelFormatter={(_, payload) => {
-                      const p = (payload && payload[0]?.payload) as
-                        | ConcernChartDatum
-                        | undefined;
+                      const p = (payload && payload[0]?.payload) as ConcernChartDatum | undefined;
                       if (!p) return "";
                       return `${p.name}`;
                     }}
@@ -1676,39 +1530,12 @@ const Analytics: FC = () => {
                     content={() => {
                       const bases = ["Civil", "Mechanical", "Electrical"];
                       return (
-                        <div
-                          style={{
-                            justifyContent: "center",
-                            alignItems: "center",
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: 8,
-                            marginTop: 8,
-                          }}
-                        >
+                        <div style={{ justifyContent: "center", alignItems: "center", display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                           {bases
-                            .filter((base) =>
-                              concernData.some((d) => d.base === base),
-                            )
+                            .filter((base) => concernData.some((d) => d.base === base))
                             .map((base) => (
-                              <div
-                                key={base}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6,
-                                  fontSize: 12,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    width: 10,
-                                    height: 10,
-                                    borderRadius: 999,
-                                    backgroundColor:
-                                      getConcernColorFromBase(base),
-                                  }}
-                                />
+                              <div key={base} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                                <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getConcernColorFromBase(base) }} />
                                 <span>{base}</span>
                               </div>
                             ))}
@@ -1718,10 +1545,7 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {concernData.map((entry) => (
-                      <Cell
-                        key={`${entry.base}-${entry.name}`}
-                        fill={getConcernColorFromBase(entry.base)}
-                      />
+                      <Cell key={`${entry.base}-${entry.name}`} fill={getConcernColorFromBase(entry.base)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1738,44 +1562,16 @@ const Analytics: FC = () => {
                   <XAxis dataKey="name" tick={false} axisLine={false} />
                   <YAxis allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
+                    contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                   />
                   <Legend
                     content={() => (
-                      <div
-                        style={{
-                          justifyContent: "center",
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 10,
-                          marginTop: 8,
-                          fontSize: 12,
-                        }}
-                      >
+                      <div style={{ justifyContent: "center", display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8, fontSize: 12 }}>
                         {collegeData.map((col, idx) => (
-                          <div
-                            key={col.name}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: 999,
-                                backgroundColor: getCollegeColor(col.name, idx),
-                              }}
-                            />
+                          <div key={col.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: getCollegeColor(col.name, idx) }} />
                             {col.name}
                           </div>
                         ))}
@@ -1784,10 +1580,7 @@ const Analytics: FC = () => {
                   />
                   <Bar dataKey="value">
                     {collegeData.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={getCollegeColor(entry.name, index)}
-                      />
+                      <Cell key={entry.name} fill={getCollegeColor(entry.name, index)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -1799,34 +1592,16 @@ const Analytics: FC = () => {
             <div className="time-header">
               <h3>Reports Over Time</h3>
               <div className="time-mode-toggle">
-                <button
-                  type="button"
-                  className={`time-mode-btn ${timeMode === "day" ? "is-active" : ""}`}
-                  onClick={() => setTimeMode("day")}
-                >
-                  Days
-                </button>
-                <button
-                  type="button"
-                  className={`time-mode-btn ${timeMode === "week" ? "is-active" : ""}`}
-                  onClick={() => setTimeMode("week")}
-                >
-                  Weeks
-                </button>
-                <button
-                  type="button"
-                  className={`time-mode-btn ${timeMode === "month" ? "is-active" : ""}`}
-                  onClick={() => setTimeMode("month")}
-                >
-                  Months
-                </button>
-                <button
-                  type="button"
-                  className={`time-mode-btn ${timeMode === "year" ? "is-active" : ""}`}
-                  onClick={() => setTimeMode("year")}
-                >
-                  Years
-                </button>
+                {(["day", "week", "month", "year"] as TimeMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`time-mode-btn ${timeMode === m ? "is-active" : ""}`}
+                    onClick={() => setTimeMode(m)}
+                  >
+                    {m.charAt(0).toUpperCase() + m.slice(1)}s
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1834,36 +1609,17 @@ const Analytics: FC = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeSeriesData}>
                   <defs>
-                    <linearGradient
-                      id="reportsGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
+                    <linearGradient id="reportsGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
-                      <stop
-                        offset="60%"
-                        stopColor="#0ea5e9"
-                        stopOpacity={0.6}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="#6366f1"
-                        stopOpacity={0.2}
-                      />
+                      <stop offset="60%" stopColor="#0ea5e9" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="label" />
                   <YAxis allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#ffffff",
-                      borderRadius: 8,
-                      border: "1px solid #e5e7eb",
-                      color: "#000000",
-                    }}
+                    contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
                     formatter={(value) => [`${value}`, "Reports"]}
@@ -1884,6 +1640,7 @@ const Analytics: FC = () => {
         </div>
       </div>
 
+      {/* ── SIDE PANEL ── */}
       <div
         className={`sidepanel ${listsOpen ? "is-open" : ""}`}
         role="dialog"
@@ -1911,12 +1668,47 @@ const Analytics: FC = () => {
           >
             + Add List
           </button>
-          <button className="pa-btn" onClick={saveToServer}>
+
+          <button
+            className="pa-btn"
+            onClick={saveToServer}
+            disabled={!user?.id}
+            title={!user?.id ? "Sign in to save" : "Save lists to database"}
+          >
             Save to Server
           </button>
-          <button className="pa-btn" onClick={loadFromServer}>
+
+          <button
+            className="pa-btn"
+            onClick={loadFromServer}
+            disabled={!user?.id}
+            title={!user?.id ? "Sign in to load" : "Load lists from database"}
+          >
             Load from Server
           </button>
+
+          {/* Inline status message — no alert() needed */}
+          {listSaveStatus && (
+            <span
+              style={{
+                fontSize: 12,
+                padding: "4px 8px",
+                borderRadius: 6,
+                background: listSaveStatus.startsWith("✅")
+                  ? "#dcfce7"
+                  : listSaveStatus.startsWith("❌")
+                    ? "#fee2e2"
+                    : "#f3f4f6",
+                color: listSaveStatus.startsWith("✅")
+                  ? "#166534"
+                  : listSaveStatus.startsWith("❌")
+                    ? "#991b1b"
+                    : "#374151",
+              }}
+            >
+              {listSaveStatus}
+            </span>
+          )}
         </div>
 
         <div className="lists-grid panel">
@@ -1955,8 +1747,7 @@ const Analytics: FC = () => {
                         className="small-btn"
                         onClick={() => {
                           const text = prompt("Task name:");
-                          if (text && text.trim())
-                            addTask(list.id, text.trim());
+                          if (text && text.trim()) addTask(list.id, text.trim());
                         }}
                       >
                         + Task
@@ -1983,8 +1774,7 @@ const Analytics: FC = () => {
                               const v = (e.currentTarget.value || "").trim();
                               if (v) {
                                 addTask(list.id, v);
-                                (e.currentTarget as HTMLInputElement).value =
-                                  "";
+                                (e.currentTarget as HTMLInputElement).value = "";
                               }
                             }
                           }}
@@ -1992,8 +1782,7 @@ const Analytics: FC = () => {
                         <button
                           className="small-btn"
                           onClick={(e) => {
-                            const input = e.currentTarget
-                              .previousElementSibling as HTMLInputElement | null;
+                            const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
                             if (input && input.value.trim()) {
                               addTask(list.id, input.value.trim());
                               input.value = "";
@@ -2015,21 +1804,14 @@ const Analytics: FC = () => {
                                 checked={!!task.done}
                                 onChange={() => toggleTask(list.id, task.id)}
                               />
-                              <label
-                                style={{
-                                  textDecoration: task.done
-                                    ? "line-through"
-                                    : "none",
-                                }}
-                              >
+                              <label style={{ textDecoration: task.done ? "line-through" : "none" }}>
                                 {task.text}
                               </label>
                               <button
                                 className="small-btn"
                                 title="Delete task"
                                 onClick={() => {
-                                  if (confirm("Delete task?"))
-                                    deleteTask(list.id, task.id);
+                                  if (confirm("Delete task?")) deleteTask(list.id, task.id);
                                 }}
                               >
                                 ×

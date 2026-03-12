@@ -583,6 +583,7 @@ export default function ReportPage() {
               status: statusValue,
               comments: newComments,
               overwriteComments: true,
+              sendEmail: true,
             }),
           });
 
@@ -629,7 +630,7 @@ export default function ReportPage() {
   const handleArchive = async () => {
     if (!selectedReport) return;
 
-    const payload = { status: "Archived" };
+    const payload = { status: "Archived", sendEmail: true };
 
     try {
       setSaving(true);
