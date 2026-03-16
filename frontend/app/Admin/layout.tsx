@@ -1,6 +1,6 @@
 "use client";
 
-import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import ThemeToggle from "@/app/ThemeToggle";
@@ -44,7 +44,6 @@ export default function AdminLayout({
 
   return (
     <>
-      {/* ✅ ADMIN HEADER ONLY */}
       <header className="layout">
         <div className="flex items-center gap-3">
           <img
@@ -61,9 +60,7 @@ export default function AdminLayout({
 
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <SignedIn>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
+          <UserButton />
         </div>
       </header>
 
