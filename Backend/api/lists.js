@@ -53,11 +53,12 @@ router.post("/", async (req, res) => {
       });
     }
 
-    await UserLists.findOneAndUpdate(
-      { userId },
-      { userId, lists, updatedAt: new Date() },
-      { upsert: true, new: true }
-    );
+    // In api/lists.js — POST route
+await UserLists.findOneAndUpdate(
+  { userId },
+  { $set: { lists, updatedAt: new Date() } },  // ← use $set instead of full replace
+  { upsert: true, new: true }
+);
 
     return res.json({ success: true });
   } catch (err) {

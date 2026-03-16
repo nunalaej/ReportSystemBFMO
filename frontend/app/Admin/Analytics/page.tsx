@@ -960,6 +960,43 @@ const Analytics: FC = () => {
       thead { background: #f3f4f6; }
       ul { margin: 4px 0 8px 16px; padding: 0; }
       li { margin: 2px 0; }
+      .signatories {
+        margin-top: 48px;
+        page-break-inside: avoid;
+      }
+      .signatories h2 {
+        font-size: 13px;
+        margin-bottom: 32px;
+        border-bottom: 1px solid #d1d5db;
+        padding-bottom: 6px;
+      }
+      .sig-row {
+        display: flex;
+        justify-content: space-around;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .sig-block {
+        flex: 1;
+        min-width: 140px;
+        max-width: 200px;
+        text-align: center;
+      }
+      .sig-line {
+        border-top: 1px solid #111827;
+        margin-bottom: 4px;
+        margin-top: 40px;
+      }
+      .sig-name {
+        font-size: 9px;
+        font-weight: 700;
+        color: #111827;
+      }
+      .sig-role {
+        font-size: 8px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
       @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
     </style>
   </head>
@@ -1009,6 +1046,28 @@ const Analytics: FC = () => {
         ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
       </tbody>
     </table>
+
+    <div class="signatories">
+      <h2>Signatories</h2>
+      <div class="sig-row">
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Prepared by</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Reviewed by</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Approved by</div>
+        </div>
+      </div>
+    </div>
+
   </body>
 </html>`;
 

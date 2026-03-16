@@ -1,33 +1,23 @@
-// models/UserLists.js
+// Backend/models/UserLists.js
 const mongoose = require("mongoose");
 
-const TaskSchema = new mongoose.Schema(
-  {
-    id: { type: String, required: true },
-    text: { type: String, required: true },
-    done: { type: Boolean, default: false },
-  },
-  { _id: false }
-);
+const taskSchema = new mongoose.Schema({
+  id:   { type: String },
+  text: { type: String },
+  done: { type: Boolean, default: false },  // ← must be Boolean, not mixed
+}, { _id: false });
 
-const ListSchema = new mongoose.Schema(
-  {
-    id: { type: String, required: true },
-    title: { type: String, required: true },
-    tasks: { type: [TaskSchema], default: [] },
-    collapsed: { type: Boolean, default: false },
-  },
-  { _id: false }
-);
+const listSchema = new mongoose.Schema({
+  id:        { type: String },
+  title:     { type: String },
+  tasks:     { type: [taskSchema], default: [] },
+  collapsed: { type: Boolean, default: false },  // ← must be Boolean
+}, { _id: false });
 
-const UserListsSchema = new mongoose.Schema(
-  {
-    userId: { type: String, required: true, unique: true, index: true },
-    lists: { type: [ListSchema], default: [] },
-    updatedAt: { type: Date, default: Date.now },
-  }
-);
+const userListsSchema = new mongoose.Schema({
+  userId:    { type: String, required: true, unique: true },
+  lists:     { type: [listSchema], default: [] },
+  updatedAt: { type: Date, default: Date.now },
+});
 
-module.exports =
-  mongoose.models.UserLists ||
-  mongoose.model("UserLists", UserListsSchema);
+module.exports = mongoose.model("UserLists", userListsSchema);
