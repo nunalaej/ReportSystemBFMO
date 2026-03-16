@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 
-const UserLists = require("../models/UserLists");
+const UserLists = require("../models/Userlists");
 
 /* ============================================================
    GET LISTS FOR A USER
