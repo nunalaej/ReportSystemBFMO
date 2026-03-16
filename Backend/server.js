@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
+const listsRouter = require("./api/lists.js")
 const Meta = require("./api/meta.js");          // Mongoose model
 const reportsRouter = require("./api/reports"); // router for /api/reports
 const { sendReportStatusEmail } = require("./utils/mailer"); // adjust if needed
@@ -23,6 +24,7 @@ app.use(
 /* -------------------------------
    BASIC MIDDLEWARE
 --------------------------------*/
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -32,6 +34,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 /* -------------------------------
    ROUTES
 --------------------------------*/
+app.use("/api/lists", listsRouter);
 app.use("/api/reports", reportsRouter);
 
 /* -------------------------------
