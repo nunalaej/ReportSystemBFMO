@@ -4,47 +4,33 @@ import "./style/login.css";
 import Image from "next/image";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-
-import {
-  SignedOut,
-  SignInButton,
-  useUser,
-} from "@clerk/nextjs";
+import { SignInButton } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 
 export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
   const pathname = usePathname();
   const router = useRouter();
 
-
   /* =========================================
-     FULL RESET REDIRECT ON LOGIN
-     (NO SPA STATE LEFT BEHIND)
+     REDIRECT ON LOGIN
   ============================================ */
   useEffect(() => {
-  if (!isLoaded || !isSignedIn || !user) return;
+    if (!isLoaded || !isSignedIn || !user) return;
+    if (pathname !== "/") return;
 
-  // ✅ Only redirect when user is on the home page
-  if (pathname !== "/") return;
+    const rawRole = (user.publicMetadata as any)?.role;
+    const role = Array.isArray(rawRole)
+      ? rawRole[0]?.toLowerCase()
+      : typeof rawRole === "string"
+      ? rawRole.toLowerCase()
+      : "student";
 
-  const rawRole = (user.publicMetadata as any)?.role;
+    const target =
+      role === "admin" ? "/Admin" : role === "staff" ? "/Staff" : "/Student";
 
-  const role = Array.isArray(rawRole)
-    ? rawRole[0]?.toLowerCase()
-    : typeof rawRole === "string"
-    ? rawRole.toLowerCase()
-    : "student";
-
-  const target =
-    role === "admin"
-      ? "/Admin"
-      : role === "staff"
-      ? "/Staff"
-      : "/Student";
-
-  router.replace(target);
-}, [isLoaded, isSignedIn, user, pathname]);
-
+    router.replace(target);
+  }, [isLoaded, isSignedIn, user, pathname, router]);
 
   /* =========================================
      LOADING STATE
@@ -62,8 +48,8 @@ export default function HomePage() {
   /* =========================================
      LOGIN PAGE (SIGNED OUT ONLY)
   ============================================ */
-  return (
-    <SignedOut>
+  if (!isSignedIn) {
+    return (
       <div className="create-scope create-scope__layout">
         <main
           className="create-scope__panel login-card"
@@ -80,22 +66,10 @@ export default function HomePage() {
                 priority
               />
               <div>
-                <h1
-                  style={{
-                    margin: 0,
-                    fontSize: 20,
-                    fontWeight: 700,
-                  }}
-                >
+                <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>
                   BFMO Report System
                 </h1>
-                <p
-                  style={{
-                    margin: 0,
-                    marginTop: 4,
-                    fontSize: 12,
-                  }}
-                >
+                <p style={{ margin: 0, marginTop: 4, fontSize: 12 }}>
                   Buildings and Facilities Maintenance Office
                 </p>
               </div>
@@ -119,6 +93,6 @@ export default function HomePage() {
           </section>
         </main>
       </div>
-    </SignedOut>
-  );
+    );
+  }
 }

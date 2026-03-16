@@ -1,10 +1,13 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
-import { SignedIn, UserButton, useUser } from "@clerk/nextjs";
+// Remove SignInButton from import
+import { UserButton, useUser } from "@clerk/nextjs";
+import { SignInButton, } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
+import { ClerkProvider } from "@clerk/nextjs";
 
 export default function StudentLayout({
   children,
@@ -14,11 +17,26 @@ export default function StudentLayout({
   const { isLoaded, isSignedIn, user } = useUser();
   const router = useRouter();
 
+  // ── Derive role before any returns ──────────────────────────────
+  const rawRole = isLoaded && user ? (user.publicMetadata as any)?.role : null;
+  const role = Array.isArray(rawRole)
+    ? rawRole[0]?.toLowerCase()
+    : typeof rawRole === "string"
+    ? rawRole.toLowerCase()
+    : "student";
+
+  // ── All hooks at the top, no conditions ─────────────────────────
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) return;
+    if (role !== "student") {
+      router.replace("/Admin");
+    }
+  }, [isLoaded, isSignedIn, user, role, router]);
+
   /* ===============================
-     AUTH GUARD (NO REDIRECTS)
+     GUARDS (after all hooks)
   =============================== */
 
-  // Wait for Clerk
   if (!isLoaded) {
     return (
       <div className="page-center">
@@ -27,7 +45,6 @@ export default function StudentLayout({
     );
   }
 
-  // Not logged in → block render
   if (!isSignedIn || !user) {
     return (
       <div className="page-center">
@@ -36,20 +53,11 @@ export default function StudentLayout({
     );
   }
 
-  // Role check
-  const rawRole = (user.publicMetadata as any)?.role;
-  const role = Array.isArray(rawRole)
-    ? rawRole[0]?.toLowerCase()
-    : typeof rawRole === "string"
-    ? rawRole.toLowerCase()
-    : "student"; // fail-safe
-
-  // Not a student → redirect to Admin
-  useEffect(() => {
-    if (role !== "student") {
-      router.replace("/Admin");
-    }
-  }, [role, router]);
+  if (role !== "student") {
+    // Redirect is already firing via useEffect above,
+    // show nothing while it navigates
+    return null;
+  }
 
   /* ===============================
      LAYOUT
@@ -71,16 +79,14 @@ export default function StudentLayout({
           </h1>
         </div>
 
-        {/* MIDDLE NAV (role-aware inside HeaderNav) */}
+        {/* MIDDLE NAV */}
         <HeaderNav />
 
-        {/* RIGHT */}
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <SignedIn>
-            <UserButton afterSignOutUrl="/" />
-          </SignedIn>
-        </div>
+         <ClerkProvider afterSignOutUrl="/">
+      <html>
+        <body>{children}</body>
+      </html>
+    </ClerkProvider>
       </header>
 
       {/* PAGE CONTENT */}
