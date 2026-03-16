@@ -146,7 +146,7 @@ html:not(dark) .stat-chip-total {
   gap: 8px;
   padding: 8px 12px;
   border-radius: 999px;
-  background:#162645;
+  background: rgba(233, 233, 233, 0.9);
   color: var(--text);
   border: 1px solid rgba(148,163,184,0.25);
   font-weight: 600;
