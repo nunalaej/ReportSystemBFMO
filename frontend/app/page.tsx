@@ -2,7 +2,7 @@
 
 import "./style/login.css";
 import Image from "next/image";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SignInButton } from "@clerk/nextjs";
 import { useUser } from "@clerk/nextjs";
@@ -11,6 +11,7 @@ export default function HomePage() {
   const { isLoaded, isSignedIn, user } = useUser();
   const pathname = usePathname();
   const router = useRouter();
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   /* =========================================
      REDIRECT ON LOGIN
@@ -29,17 +30,18 @@ export default function HomePage() {
     const target =
       role === "admin" ? "/Admin" : role === "staff" ? "/Staff" : "/Student";
 
+    setIsRedirecting(true);
     router.replace(target);
   }, [isLoaded, isSignedIn, user, pathname, router]);
 
   /* =========================================
-     LOADING STATE
+     LOADING / REDIRECTING STATE
   ============================================ */
-  if (!isLoaded) {
+  if (!isLoaded || isRedirecting) {
     return (
       <div className="create-scope create-scope__layout">
         <main className="create-scope__panel login-card">
-          <p>Checking your session, please wait…</p>
+          <p>{isRedirecting ? "Redirecting, please wait…" : "Checking your session, please wait…"}</p>
         </main>
       </div>
     );
