@@ -86,7 +86,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
             <div>
               <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">BFMO Reports System</h1>
-              <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">Report status notification</p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">Report status notification Testing</p>
             </div>
           </div>
 
