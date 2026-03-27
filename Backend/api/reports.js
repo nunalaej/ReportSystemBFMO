@@ -237,10 +237,11 @@ router.post("/:id/comments", async (req, res) => {
       at: new Date(),
     };
 
+    // ✅ FIX: Use returnDocument instead of deprecated 'new' option
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
       { $push: { comments: newComment } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updated) {
