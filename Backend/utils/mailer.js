@@ -1,15 +1,7 @@
 // utils/mailer.js
 
-const { MJ_APIKEY_PUBLIC, MJ_APIKEY_PRIVATE, FROM_EMAIL, FROM_NAME } = process.env;
+const { RESEND_API_KEY, FROM_EMAIL } = process.env;
 
-// Initialize Mailjet client
-const https = require("https");
-
-// Initialize inside the function
-const mjClient = mailjet.Client({
-  apiKey: MJ_APIKEY_PUBLIC,
-  apiSecret: MJ_APIKEY_PRIVATE,
-});
 /**
  * Send report status update email
  * Only sends when status is Waiting for Materials, In Progress, or Resolved
@@ -41,10 +33,8 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
       return;
     }
 
-    if (!MJ_APIKEY_PUBLIC || !MJ_APIKEY_PRIVATE) {
-      console.warn(
-        "[Mailer] Mailjet API keys are missing. Email not sent."
-      );
+    if (!RESEND_API_KEY) {
+      console.warn("[Mailer] RESEND_API_KEY is missing. Email not sent.");
       return;
     }
 
@@ -127,57 +117,37 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
       </div>
     `;
 
-    console.log("[Mailer] Sending request to Mailjet...");
+    console.log("[Mailer] Sending request to Resend...");
 
-    // Use Mailjet v3.1 API for sending emails
-    const request = mjClient
-      .post("send", { version: "v3.1" })
-      .request({
-        Messages: [
-          {
-            From: {
-              Email: FROM_EMAIL || "noreply@bfmo.local",
-              Name: FROM_NAME || "BFMO Reports",
-            },
-            To: [
-              {
-                Email: to,
-              },
-            ],
-            Subject: subject,
-            TextPart: textBody,
-            HTMLPart: htmlBody,
-            ReplyTo: {
-              Email: "bfmodlsud@gmail.com",
-            },
-          },
-        ],
-      });
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL || "BFMO Reports <onboarding@resend.dev>",
+        to: [to],
+        subject,
+        text: textBody,
+        html: htmlBody,
+        reply_to: "bfmodlsud@gmail.com",
+      }),
+    });
 
-    const result = await request;
-
-    // Check if email was sent successfully
-    if (
-      result.body &&
-      result.body.Messages &&
-      result.body.Messages.length > 0
-    ) {
-      const message = result.body.Messages[0];
-
-      if (message.Status === "success") {
-        console.log("[Mailer] Email sent successfully:", {
-          messageId: message.ID,
-          to,
-        });
-      } else {
-        console.error("[Mailer] Mailjet returned non-success status:", {
-          status: message.Status,
-          to,
-        });
-      }
-    } else {
-      console.error("[Mailer] Unexpected Mailjet response:", result.body);
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      console.error(
+        "[Mailer] Resend API error:",
+        res.status,
+        res.statusText,
+        errorText
+      );
+      return;
     }
+
+    const data = await res.json().catch(() => null);
+    console.log("[Mailer] Email sent successfully:", data);
   } catch (err) {
     console.error("[Mailer] Fatal error sending email:", err);
   }
