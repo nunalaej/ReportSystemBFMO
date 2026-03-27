@@ -83,32 +83,43 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
     const htmlBody = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background-color: #f3f4f6; padding: 24px;">
         <div style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);">
-          <div style="margin-bottom: 16px;">
-            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">BFMO Reports System</h1>
-            <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">New comment notification</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div>
+              <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">BFMO Reports System</h1>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">Report status notification</p>
+            </div>
           </div>
 
           <p style="margin-top: 16px;">Good day,</p>
 
           <p style="margin: 0 0 12px;">
-            A new comment has been added to your facilities concern submitted through the BFMO Reports System.
+            We are writing to inform you that the status of your facilities concern submitted through the BFMO Reports System has been updated.
           </p>
 
           <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #eff6ff; border: 1px solid #dbeafe;">
             <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Report</p>
-            <p style="margin: 0; font-weight: 600;">${title}</p>
-            ${
-              reportId
-                ? `<p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Reference ID: <strong>${reportId}</strong></p>`
-                : ""
-
-            }
+            <p style="margin: 0 0 8px; font-weight: 600;">${title}</p>
+            <p style="margin: 0; font-size: 13px; color: #374151;">
+              Current status:
+              <span style="display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 999px; background-color: #1d4ed8; color: #ffffff; font-size: 12px; font-weight: 500;">
+                ${status}
+              </span>
+            </p>
           </div>
 
-          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f9fafb; border: 1px solid #e5e7eb;">
-            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Comment from ${authorLabel}</p>
-            <p style="margin: 0; font-style: italic; color: #111827;">"${comment}"</p>
-          </div>
+          <p style="margin: 0 0 12px;">
+            Your report ${statusMessage}
+          </p>
+
+          ${
+            reportId
+              ? `<p style="margin: 0 0 12px; font-size: 13px; color: #4b5563;">
+                   Report reference ID: <strong>${reportId}</strong>
+                 </p>`
+              : ""
+          }
+
+          ${commentHtml}
 
           <p style="margin: 0 0 12px;">
             If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.
@@ -224,7 +235,6 @@ async function sendCommentEmail({ to, heading, reportId, comment, by }) {
               reportId
                 ? `<p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Reference ID: <strong>${reportId}</strong></p>`
                 : ""
-
             }
           </div>
 
