@@ -121,6 +121,11 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
 
           ${commentHtml}
 
+          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f9fafb; border: 1px solid #e5e7eb;">
+            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Comment from ${authorLabel}</p>
+            <p style="margin: 0; font-style: italic; color: #111827;">"${comment}"</p>
+          </div>
+
           <p style="margin: 0 0 12px;">
             If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.
           </p>

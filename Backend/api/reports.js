@@ -5,7 +5,7 @@ const multer = require("multer");
 
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary");
-const { sendReportStatusEmail } = require("../utils/mailer");
+const { sendReportStatusEmail, sendCommentEmail } = require("../utils/mailer");
 
 /* ============================================================
    MULTER CONFIG (MEMORY STORAGE)
@@ -196,15 +196,22 @@ router.put("/:id", async (req, res) => {
        EMAIL NOTIFICATION
     ============================ */
     if (status && status !== oldStatus) {
-      sendReportStatusEmail({
-        to: updated.email,
-        heading: updated.heading,
-        status: updated.status,
-        reportId: String(updated._id),
-      }).catch((err) => {
-        console.error("Email send failed:", err);
-      });
+      // After successfully saving the report to MongoDB:
+const updatedReport = await Report.findByIdAndUpdate(id, updateData, { new: true });
+
+// Send status email (comment is optional, passed from frontend body)
+await sendReportStatusEmail({
+  to: updatedReport.email,
+  heading: updatedReport.heading,
+  status: updatedReport.status,
+  reportId: updatedReport._id.toString(),
+  comment: req.body.comment || null,   // ← this is the key missing piece
+});
+
+res.json({ success: true, report: updatedReport });
     }
+
+    
 
     res.json({ success: true, report: updated });
   } catch (err) {
@@ -242,6 +249,19 @@ router.post("/:id/comments", async (req, res) => {
       { $push: { comments: newComment } },
       { new: true }
     );
+
+    // After pushing the comment and saving:
+if (!req.body.skipEmail) {
+  await sendCommentEmail({
+    to: report.email,
+    heading: report.heading,
+    reportId: report._id.toString(),
+    comment: req.body.text,
+    by: req.body.by || "Admin",
+  });
+}
+
+res.json({ success: true, report });
 
     if (!updated) {
       return res.status(404).json({
