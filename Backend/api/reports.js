@@ -170,8 +170,8 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
 ============================================================ */
 router.put("/:id", async (req, res) => {
   try {
-    const { status, overwriteComments, comments } = req.body;
-
+const { status, overwriteComments, comments, comment } = req.body;
+// comment = optional admin note sent from frontend
     const existing = await Report.findById(req.params.id);
     if (!existing) {
       return res.status(404).json({
@@ -193,18 +193,22 @@ router.put("/:id", async (req, res) => {
     const updated = await existing.save();
 
     /* ============================
-       EMAIL NOTIFICATION
-    ============================ */
-    if (status && status !== oldStatus) {
-      sendReportStatusEmail({
-        to: updated.email,
-        heading: updated.heading,
-        status: updated.status,
-        reportId: String(updated._id),
-      }).catch((err) => {
-        console.error("Email send failed:", err);
-      });
-    }
+   EMAIL NOTIFICATION
+   Includes optional admin comment
+============================ */
+if (status && status !== oldStatus) {
+  sendReportStatusEmail({
+    to: updated.email,
+    heading: updated.heading,
+    status: updated.status,
+    reportId: String(updated._id),
+
+    // ✅ NEW: include admin comment in email
+    comment: comment || "",
+  }).catch((err) => {
+    console.error("Email send failed:", err);
+  });
+}
 
     res.json({ success: true, report: updated });
   } catch (err) {

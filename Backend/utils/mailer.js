@@ -2,12 +2,18 @@
 
 const { RESEND_API_KEY, FROM_EMAIL } = process.env;
 
+
 /**
  * Send report status update email
  * Only sends when status is Waiting for Materials, In Progress, or Resolved
  */
-async function sendReportStatusEmail({ to, heading, status, reportId }) {
-  console.log("[Mailer] sendReportStatusEmail called with:", {
+async function sendReportStatusEmail({
+  to,
+  heading,
+  status,
+  reportId,
+  comment, // ✅ NEW: admin/staff comment
+}) {  console.log("[Mailer] sendReportStatusEmail called with:", {
     to,
     heading,
     status,
@@ -48,25 +54,29 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
         ? "is currently in progress and is being attended to by our personnel."
         : "has been tagged as resolved based on the verification conducted by our personnel.";
 
-    const reportRefText = reportId ? `Report reference ID: ${reportId}\n` : "";
+const reportRefText = reportId ? `Report reference ID: ${reportId}\n` : "";
 
+const commentText = comment
+  ? `\nAdditional note from BFMO:\n${comment}\n`
+  : "";
     const textBody = [
-      "Good day,",
-      "",
-      "We are writing to inform you that the status of your facilities concern submitted through the BFMO Reports System has been updated.",
-      "",
-      `Report: ${title}`,
-      `Current status: ${status}`,
-      "",
-      `Your report ${statusMessage}`,
-      reportRefText,
-      "If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.",
-      "",
-      "Thank you.",
-      "BFMO Reports System",
-    ]
-      .filter(Boolean)
-      .join("\n");
+  "Good day,",
+  "",
+  "We are writing to inform you that the status of your facilities concern submitted through the BFMO Reports System has been updated.",
+  "",
+  `Report: ${title}`,
+  `Current status: ${status}`,
+  "",
+  `Your report ${statusMessage}`,
+  reportRefText,
+  commentText, // ✅ ADD HERE
+  "If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.",
+  "",
+  "Thank you.",
+  "BFMO Reports System",
+]
+  .filter(Boolean)
+  .join("\n");
 
     const htmlBody = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background-color: #f3f4f6; padding: 24px;">
@@ -106,6 +116,21 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
                  </p>`
               : ""
           }
+
+          ${
+  comment
+    ? `
+      <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f9fafb; border: 1px solid #e5e7eb;">
+        <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">
+          Additional note from BFMO
+        </p>
+        <p style="margin: 0; font-size: 14px; color: #111827;">
+          ${comment}
+        </p>
+      </div>
+    `
+    : ""
+}
 
           <p style="margin: 0 0 12px;">
             If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.
