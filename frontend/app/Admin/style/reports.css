@@ -246,6 +246,14 @@ html:not(.dark) .archive-btn:hover:not(:disabled) {
   background: #6b7280;
 }
 
+html:not(.dark) .add-comment-btn {
+  background: #059669;
+}
+
+html:not(.dark) .add-comment-btn:hover:not(:disabled) {
+  background: #047857;
+}
+
 /* Back button and group header in light mode */
 html:not(.dark) .group-header h2 {
   color: #111827;
@@ -981,7 +989,8 @@ html:not(.dark) .comments-section h3 {
 
 /* keep buttons */
 .archive-btn,
-.save-comment-btn {
+.save-comment-btn,
+.add-comment-btn {
   border-radius: 999px;
   border: none;
   padding: 0.4rem 0.9rem;
@@ -1021,6 +1030,29 @@ html:not(.dark) .comments-section h3 {
 }
 
 .archive-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Add Comment button */
+.add-comment-btn {
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+  border-radius: 999px;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.add-comment-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.add-comment-btn:disabled {
   opacity: 0.5;
   cursor: default;
 }

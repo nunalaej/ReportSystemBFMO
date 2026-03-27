@@ -542,49 +542,35 @@ export default function ReportPage() {
     }
   };
 
-  /* UPDATE STATUS / COMMENTS
-     when saving, update ALL reports with same building + concern (+ subConcern, + room)
+  /* UPDATE STATUS
+     When saving, update ALL reports with same building + concern (+ subConcern, + room).
+     If a comment is typed, it is included in the status email as an "additional note"
+     AND also saved as a proper comment on the selected report.
   */
-
   const handleSaveChanges = async () => {
     if (!selectedReport) return;
 
-    const trimmed = commentText.trim();
-
     try {
       setSaving(true);
+
+      const trimmedComment = commentText.trim();
 
       // find all reports with the same group key
       const groupKey = getGroupKey(selectedReport);
       const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
-      const nowIso = new Date().toISOString();
-
       const updatedReports = await Promise.all(
         groupReports.map(async (r) => {
-          const existingComments = Array.isArray(r.comments) ? r.comments : [];
-
-          // if there is a new comment, append it (text only now)
-          let newComments = existingComments;
-          if (trimmed) {
-            const newComment: Comment = {
-              text: trimmed,
-              comment: trimmed,
-              by: "Admin",
-              at: nowIso,
-            };
-            newComments = [...existingComments, newComment];
-          }
+          const body: Record<string, any> = {
+            status: statusValue,
+            // Pass comment so the backend can include it in the status email
+            ...(trimmedComment ? { comment: trimmedComment } : {}),
+          };
 
           const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              status: statusValue,
-              comments: newComments,
-              overwriteComments: true,
-              sendEmail: true,
-            }),
+            body: JSON.stringify(body),
           });
 
           const data = await res.json().catch(() => null);
@@ -596,6 +582,35 @@ export default function ReportPage() {
           return data.report as Report;
         })
       );
+
+      // If there's a comment, also save it as a comment entry on the selected report
+      if (trimmedComment) {
+        const commentRes = await fetch(
+          `${API_BASE}/api/reports/${selectedReport._id}/comments`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: trimmedComment,
+              by: "Admin",
+              // Tell the backend NOT to send a separate comment email since
+              // the status email already includes this comment
+              skipEmail: true,
+            }),
+          }
+        );
+
+        const commentData = await commentRes.json().catch(() => null);
+
+        if (commentRes.ok && commentData?.success) {
+          const updatedWithComment = commentData.report as Report;
+          // merge into updatedReports for the selected one
+          const idx = updatedReports.findIndex(
+            (u) => u._id === selectedReport._id
+          );
+          if (idx !== -1) updatedReports[idx] = updatedWithComment;
+        }
+      }
 
       // update all in local state
       setReports((prev) =>
@@ -614,10 +629,13 @@ export default function ReportPage() {
       setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
 
-      // Show success message with email confirmation
       const emailRecipient = selectedReport.email || "the report creator";
+      const emailNote = trimmedComment
+        ? `\n📝 Your comment was also included in the notification.`
+        : "";
+
       alert(
-        `✅ Report(s) updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}`
+        `✅ Report status updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}${emailNote}`
       );
     } catch (err: any) {
       console.error("Error updating reports:", err);
@@ -742,6 +760,62 @@ export default function ReportPage() {
     );
 
     await syncComments(updatedComments);
+  };
+
+  /* ADD INDIVIDUAL COMMENT
+     Posts to /api/reports/:id/comments — the backend handles sending the comment email.
+  */
+  const addIndividualComment = async () => {
+    if (!selectedReport) return;
+
+    const trimmed = commentText.trim();
+    if (!trimmed) {
+      alert("Please enter a comment.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const res = await fetch(
+        `${API_BASE}/api/reports/${selectedReport._id}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: trimmed,
+            by: "Admin",
+          }),
+        }
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to add comment");
+      }
+
+      const updated = data.report as Report;
+
+      // update list in state
+      setReports((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+
+      // update modal
+      setSelectedReport(updated);
+      setCommentText("");
+
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Comment added successfully!\n\n📧 Comment notification email sent to: ${emailRecipient}`
+      );
+    } catch (err: any) {
+      console.error("Error adding comment:", err);
+      alert(err.message || "There was a problem adding the comment.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   /* PRINT ANALYTICS (SUMMARY STATS) FOR CURRENT FILTERS */
@@ -1279,7 +1353,7 @@ export default function ReportPage() {
               className="report-modal"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* HEADER (same for web and mobile, layout handled by CSS) */}
+              {/* HEADER */}
               <div className="modal-header">
                 <div className="modal-header-main">
                   <h2>{selectedReport.heading || "Report details"}</h2>
@@ -1294,9 +1368,8 @@ export default function ReportPage() {
                 </button>
               </div>
 
-              {/* CONTENT (desktop: grid image + info, mobile: column with image on top) */}
+              {/* CONTENT */}
               <div className="modal-content">
-                {/* small thumbnail in the header (can be hidden on desktop via CSS if you want) */}
                 <div className="modal-thumb-mobile">
                   <img
                     src={resolveImageFile(
@@ -1428,7 +1501,6 @@ export default function ReportPage() {
                                 <p className="comment-text">
                                   {c.text || c.comment || String(c)}
                                 </p>
-                                {/* Existing images can still be viewed but no way to add/update */}
                                 {c.imageUrl && (
                                   <img
                                     src={c.imageUrl}
@@ -1482,16 +1554,24 @@ export default function ReportPage() {
                       <p className="no-comments">No comments yet.</p>
                     )}
 
-                    {/* Text-only comment input now */}
                     <textarea
                       className="comment-input"
                       rows={3}
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Type your comment here..."
+                      placeholder="Type your comment here… (optional — included in the status email if you click Update Status)"
                     />
 
                     <div className="modal-actions">
+                      <button
+                        className="add-comment-btn"
+                        onClick={addIndividualComment}
+                        disabled={saving || !commentText.trim()}
+                        type="button"
+                      >
+                        {saving ? "Adding..." : "Add Comment"}
+                      </button>
+
                       {selectedReport.status !== "Archived" && (
                         <button
                           className="archive-btn"
@@ -1512,8 +1592,8 @@ export default function ReportPage() {
                         type="button"
                       >
                         {saving && statusValue !== "Archived"
-                          ? "Saving..."
-                          : "Save changes"}
+                          ? "Updating..."
+                          : "Update Status"}
                       </button>
                     </div>
                   </div>

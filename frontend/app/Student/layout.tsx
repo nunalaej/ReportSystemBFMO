@@ -1,13 +1,10 @@
 "use client";
 
 import { ReactNode, useEffect } from "react";
-// Remove SignInButton from import
-import { UserButton, useUser } from "@clerk/nextjs";
-import { SignInButton, } from "@clerk/nextjs";
+import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
-import { ClerkProvider } from "@clerk/nextjs";
 
 export default function StudentLayout({
   children,
@@ -82,11 +79,10 @@ export default function StudentLayout({
         {/* MIDDLE NAV */}
         <HeaderNav />
 
-         <ClerkProvider afterSignOutUrl="/">
-      <html>
-        <body>{children}</body>
-      </html>
-    </ClerkProvider>
+        <div className="flex items-center gap-3">
+                  <ThemeToggle />
+                  <UserButton />
+        </div>
       </header>
 
       {/* PAGE CONTENT */}
