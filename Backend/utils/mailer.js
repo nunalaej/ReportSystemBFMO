@@ -5,15 +5,13 @@ const { RESEND_API_KEY, FROM_EMAIL } = process.env;
 /**
  * Send report status update email
  * Only sends when status is Waiting for Materials, In Progress, or Resolved
- * Optionally includes a comment in the email body
  */
-async function sendReportStatusEmail({ to, heading, status, reportId, comment }) {
+async function sendReportStatusEmail({ to, heading, status, reportId }) {
   console.log("[Mailer] sendReportStatusEmail called with:", {
     to,
     heading,
     status,
     reportId,
-    comment,
   });
 
   try {
@@ -51,7 +49,6 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
         : "has been tagged as resolved based on the verification conducted by our personnel.";
 
     const reportRefText = reportId ? `Report reference ID: ${reportId}\n` : "";
-    const commentText = comment ? `\nAdditional note from BFMO:\n"${comment}"\n` : "";
 
     const textBody = [
       "Good day,",
@@ -63,22 +60,13 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
       "",
       `Your report ${statusMessage}`,
       reportRefText,
-      commentText,
       "If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.",
       "",
       "Thank you.",
       "BFMO Reports System",
     ]
-      .filter((line) => line !== undefined)
+      .filter(Boolean)
       .join("\n");
-
-    const commentHtml = comment
-      ? `
-        <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f0fdf4; border: 1px solid #bbf7d0;">
-          <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Additional note from BFMO</p>
-          <p style="margin: 0; font-style: italic; color: #111827;">"${comment}"</p>
-        </div>`
-      : "";
 
     const htmlBody = `
       <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background-color: #f3f4f6; padding: 24px;">
@@ -86,7 +74,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
             <div>
               <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">BFMO Reports System</h1>
-              <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">Report status notification Testing</p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">Report status notification</p>
             </div>
           </div>
 
@@ -111,20 +99,13 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
             Your report ${statusMessage}
           </p>
 
-          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #eff6ff; border: 1px solid #dbeafe;">
-            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Report</p>
-            <p style="margin: 0; font-weight: 600;">${title}</p>
-            ${
-              reportId
-                ? `<p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Reference ID: <strong>${reportId}</strong></p>`
-                : ""
-            }
-          </div>
-
-          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f9fafb; border: 1px solid #e5e7eb;">
-            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Comment from ${authorLabel}</p>
-            <p style="margin: 0; font-style: italic; color: #111827;">"${comment}"</p>
-          </div>
+          ${
+            reportId
+              ? `<p style="margin: 0 0 12px; font-size: 13px; color: #4b5563;">
+                   Report reference ID: <strong>${reportId}</strong>
+                 </p>`
+              : ""
+          }
 
           <p style="margin: 0 0 12px;">
             If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.
@@ -136,7 +117,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
       </div>
     `;
 
-    console.log("[Mailer] Sending status email via Resend...");
+    console.log("[Mailer] Sending request to Resend...");
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -166,135 +147,12 @@ async function sendReportStatusEmail({ to, heading, status, reportId, comment })
     }
 
     const data = await res.json().catch(() => null);
-    console.log("[Mailer] Status email sent successfully:", data);
+    console.log("[Mailer] Email sent successfully:", data);
   } catch (err) {
-    console.error("[Mailer] Fatal error sending status email:", err);
-  }
-}
-
-/**
- * Send comment notification email
- * Sent whenever an admin adds a new comment to a report
- */
-async function sendCommentEmail({ to, heading, reportId, comment, by }) {
-  console.log("[Mailer] sendCommentEmail called with:", {
-    to,
-    heading,
-    reportId,
-    comment,
-    by,
-  });
-
-  try {
-    if (!to || !comment) {
-      console.warn("[Mailer] Missing 'to' or 'comment', aborting email.");
-      return;
-    }
-
-    if (!RESEND_API_KEY) {
-      console.warn("[Mailer] RESEND_API_KEY is missing. Email not sent.");
-      return;
-    }
-
-    const subject = `BFMO Report Update: New Comment Added`;
-    const title = heading || "Facilities concern submitted to BFMO";
-    const authorLabel = by || "BFMO Personnel";
-    const reportRefText = reportId ? `Report reference ID: ${reportId}\n` : "";
-
-    const textBody = [
-      "Good day,",
-      "",
-      "A new comment has been added to your facilities concern submitted through the BFMO Reports System.",
-      "",
-      `Report: ${title}`,
-      reportRefText,
-      `Comment from ${authorLabel}:`,
-      `"${comment}"`,
-      "",
-      "If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.",
-      "",
-      "Thank you.",
-      "BFMO Reports System",
-    ]
-      .filter((line) => line !== undefined)
-      .join("\n");
-
-    const htmlBody = `
-      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background-color: #f3f4f6; padding: 24px;">
-        <div style="max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);">
-          <div style="margin-bottom: 16px;">
-            <h1 style="margin: 0; font-size: 18px; font-weight: 600; color: #111827;">BFMO Reports System</h1>
-            <p style="margin: 4px 0 0; font-size: 13px; color: #6b7280;">New comment notification</p>
-          </div>
-
-          <p style="margin-top: 16px;">Good day,</p>
-
-          <p style="margin: 0 0 12px;">
-            A new comment has been added to your facilities concern submitted through the BFMO Reports System.
-          </p>
-
-          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #eff6ff; border: 1px solid #dbeafe;">
-            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Report</p>
-            <p style="margin: 0; font-weight: 600;">${title}</p>
-            ${
-              reportId
-                ? `<p style="margin: 6px 0 0; font-size: 12px; color: #6b7280;">Reference ID: <strong>${reportId}</strong></p>`
-                : ""
-            }
-          </div>
-
-          <div style="margin: 16px 0; padding: 12px 16px; border-radius: 8px; background-color: #f9fafb; border: 1px solid #e5e7eb;">
-            <p style="margin: 0 0 4px; font-size: 13px; color: #6b7280;">Comment from ${authorLabel}</p>
-            <p style="margin: 0; font-style: italic; color: #111827;">"${comment}"</p>
-          </div>
-
-          <p style="margin: 0 0 12px;">
-            If you have additional information or follow up concerns, you may reply to this email or coordinate directly with the BFMO office.
-          </p>
-
-          <p style="margin: 0 0 4px;">Thank you.</p>
-          <p style="margin: 0;">BFMO Reports System</p>
-        </div>
-      </div>
-    `;
-
-    console.log("[Mailer] Sending comment email via Resend...");
-
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: FROM_EMAIL || "BFMO Reports <onboarding@resend.dev>",
-        to: [to],
-        subject,
-        text: textBody,
-        html: htmlBody,
-        reply_to: "bfmodlsud@gmail.com",
-      }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => "");
-      console.error(
-        "[Mailer] Resend API error:",
-        res.status,
-        res.statusText,
-        errorText
-      );
-      return;
-    }
-
-    const data = await res.json().catch(() => null);
-    console.log("[Mailer] Comment email sent successfully:", data);
-  } catch (err) {
-    console.error("[Mailer] Fatal error sending comment email:", err);
+    console.error("[Mailer] Fatal error sending email:", err);
   }
 }
 
 module.exports = {
   sendReportStatusEmail,
-  sendCommentEmail,
 };
