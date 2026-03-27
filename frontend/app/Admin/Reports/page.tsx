@@ -1559,7 +1559,7 @@ export default function ReportPage() {
                       rows={3}
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
-                      placeholder="Type your comment here… (optional — included in the status email if you click Update Status)"
+                      placeholder="Type your comment here…"
                     />
 
                     <div className="modal-actions">
