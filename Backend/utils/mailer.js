@@ -3,7 +3,7 @@
 const { MJ_APIKEY_PUBLIC, MJ_APIKEY_PRIVATE, FROM_EMAIL, FROM_NAME } = process.env;
 
 // Initialize Mailjet client
-const mailjet = require("node-mailjet");
+const https = require("https");
 
 // Initialize inside the function
 const mjClient = mailjet.Client({
