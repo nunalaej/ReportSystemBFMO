@@ -1,12 +1,15 @@
 // utils/mailer.js
 
-const Mailjet = require("node-mailjet");
-
 const { MJ_APIKEY_PUBLIC, MJ_APIKEY_PRIVATE, FROM_EMAIL, FROM_NAME } = process.env;
 
 // Initialize Mailjet client
-const mailjet = Mailjet.connect(MJ_APIKEY_PUBLIC, MJ_APIKEY_PRIVATE);
+const mailjet = require("node-mailjet");
 
+// Initialize inside the function
+const mjClient = mailjet.Client({
+  apiKey: MJ_APIKEY_PUBLIC,
+  apiSecret: MJ_APIKEY_PRIVATE,
+});
 /**
  * Send report status update email
  * Only sends when status is Waiting for Materials, In Progress, or Resolved
@@ -127,7 +130,7 @@ async function sendReportStatusEmail({ to, heading, status, reportId }) {
     console.log("[Mailer] Sending request to Mailjet...");
 
     // Use Mailjet v3.1 API for sending emails
-    const request = mailjet
+    const request = mjClient
       .post("send", { version: "v3.1" })
       .request({
         Messages: [
