@@ -164,7 +164,7 @@ function scheduleAnnualCleanup() {
   });
 
   console.log(
-    "[annualCleanup] Scheduled: runs every year on July 30 at 02:00 AM."
+    "[annualCleanup] Scheduled: runs every year on July 30 at 02:00 AM Delete Every Resolved and Archive."
   );
 }
 
