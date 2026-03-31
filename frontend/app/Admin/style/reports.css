@@ -1371,3 +1371,71 @@ html:not(.dark) .log-list {
   border: 1px solid #475569;
   object-fit: cover;
 }
+
+
+/* ================================================================
+   HOW TO WIRE EVERYTHING INTO YOUR EXPRESS SERVER
+   Add these lines to your  server.js / app.js  after the DB
+   connection is established.
+================================================================
+
+1.  Install the new dependency:
+      npm install node-cron
+
+2.  In server.js, after mongoose.connect(...) resolves, add:
+
+      const { scheduleAnnualCleanup } = require("./jobs/annualCleanup");
+      scheduleAnnualCleanup();
+
+    Full example:
+    ─────────────────────────────────────────────────────────────
+    mongoose.connect(process.env.MONGO_URI)
+      .then(() => {
+        console.log("MongoDB connected");
+
+        // ── NEW: register annual July-30 cleanup ──────────────
+        const { scheduleAnnualCleanup } = require("./jobs/annualCleanup");
+        scheduleAnnualCleanup();
+        // ─────────────────────────────────────────────────────
+
+        app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+      })
+      .catch((err) => { console.error(err); process.exit(1); });
+    ─────────────────────────────────────────────────────────────
+
+3.  Optional environment variables (add to .env):
+      CLEANUP_DRY_RUN=false        # Set true to test without deleting
+      CLEANUP_FORCE_NOW=false      # Set true to run cleanup on startup
+      ADMIN_SECRET=bfmo-admin-2024 # Secret for manual trigger endpoint
+
+4.  Manual cleanup trigger (for testing / early run):
+      POST /api/reports/admin/annual-cleanup
+      Body: { "secret": "bfmo-admin-2024", "dryRun": true }
+
+================================================================ */
+
+.report-id-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.modal-report-id {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* ── Reporter type badge in card ───────────────────────────────── */
+.reporter-type-label {
+  font-size: 12px;
+  color: #6b7280;
+}
