@@ -43,9 +43,6 @@ const ALLOWED_IMAGE_EXTENSIONS = [
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-const REPORTER_TYPE_OPTIONS = ["Student", "Staff/Faculty"] as const;
-type ReporterType = (typeof REPORTER_TYPE_OPTIONS)[number];
-
 const CONCERN_INFO: Record<string, string> = {
   Civil:
     "Environment concerns in campus including paint, cracks, flooring, tiles, bathrooms, walls, ceilings, doors, windows, etc.",
@@ -201,7 +198,6 @@ interface FormDataState {
   otherConcern: string;
   otherBuilding: string;
   otherRoom: string;
-  reporterType: ReporterType; // NEW
 }
 
 interface Report {
@@ -338,6 +334,7 @@ const useBodyScrollLock = (lock: boolean) => {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     }
+
     return () => {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
@@ -380,28 +377,29 @@ export default function Create() {
   const { theme } = useTheme();
   const light = theme === "light";
 
+  // Sidebar state
   const { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen } =
     useSidebarState();
 
+  // Body scroll lock
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   useBodyScrollLock(sidebarOverlayOpen || isConfirming);
 
   // Form state
   const [formData, setFormData] = useState<FormDataState>({
-    email:        "",
-    heading:      "",
-    description:  "",
-    concern:      "",
-    subConcern:   "",
-    building:     "",
-    college:      "",
-    floor:        "",
-    room:         "",
-    ImageFile:    null,
+    email: "",
+    heading: "",
+    description: "",
+    concern: "",
+    subConcern: "",
+    building: "",
+    college: "",
+    floor: "",
+    room: "",
+    ImageFile: null,
     otherConcern: "",
-    otherBuilding:"",
-    otherRoom:    "",
-    reporterType: "Student", // NEW default
+    otherBuilding: "",
+    otherRoom: "",
   });
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -411,6 +409,7 @@ export default function Create() {
   const [specificRoom, setSpecificRoom] = useState<boolean>(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
+  // Data state
   const [existingReports, setExistingReports] = useState<Report[]>([]);
   const [meta, setMeta] = useState<MetaState>({
     buildings: FALLBACK_BUILDINGS,
@@ -418,42 +417,61 @@ export default function Create() {
   });
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError, setMetaError] = useState<string>("");
+
+  // Validation state
   const [hasProfanity, setHasProfanity] = useState<boolean>(false);
 
+  // Clean up preview URL on unmount
   useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview); };
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
   }, [preview]);
 
+  // Set user email from Clerk
   useEffect(() => {
     if (!isLoaded || !user) return;
+
     const emailFromClerk =
       user.primaryEmailAddress?.emailAddress ||
       user.emailAddresses[0]?.emailAddress ||
       "";
+
     if (emailFromClerk) {
       setCurrentUserEmail(emailFromClerk);
       setFormData((f) => ({ ...f, email: emailFromClerk }));
     }
   }, [isLoaded, user]);
 
+  // Load metadata
   useEffect(() => {
     let alive = true;
+
     async function loadMeta() {
       setMetaLoading(true);
       setMetaError("");
       try {
         const res = await fetch(META_URL, { credentials: "omit" });
-        if (!res.ok) throw new Error(`Failed to load options. Status ${res.status}`);
-        const data = await res.json() as { buildings?: unknown; concerns?: unknown };
+        if (!res.ok)
+          throw new Error(`Failed to load options. Status ${res.status}`);
+
+        const data = (await res.json()) as {
+          buildings?: unknown;
+          concerns?: unknown;
+        };
+
         if (!alive) return;
+
         const incomingBuildings: BuildingMetaRaw[] =
           Array.isArray(data.buildings) && data.buildings.length
             ? (data.buildings as BuildingMetaRaw[])
             : FALLBACK_BUILDINGS;
+
         const incomingConcerns: ConcernMeta[] =
           Array.isArray(data.concerns) && data.concerns.length
             ? (data.concerns as ConcernMeta[])
             : FALLBACK_CONCERNS;
+
         setMeta({ buildings: incomingBuildings, concerns: incomingConcerns });
       } catch (err) {
         console.error("Error loading meta:", err);
@@ -464,21 +482,29 @@ export default function Create() {
         if (alive) setMetaLoading(false);
       }
     }
+
     loadMeta();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  // Fetch existing reports for similarity check
   useEffect(() => {
     const fetchReports = async () => {
       try {
         const url = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
         const res = await fetch(url, { credentials: "omit" });
         if (!res.ok) return;
+
         const data = await res.json();
         let list: Report[] = [];
         if (Array.isArray(data)) list = data as Report[];
-        else if (Array.isArray((data as any).reports)) list = (data as any).reports as Report[];
-        else if (Array.isArray((data as any).data)) list = (data as any).data as Report[];
+        else if (Array.isArray((data as any).reports))
+          list = (data as any).reports as Report[];
+        else if (Array.isArray((data as any).data))
+          list = (data as any).data as Report[];
+
         setExistingReports(list);
       } catch (err) {
         console.error("Error fetching reports for similarity:", err);
@@ -487,20 +513,31 @@ export default function Create() {
     fetchReports();
   }, []);
 
+  // Memoized options
   const buildingOptions = useMemo(() => {
     const list = (meta.buildings || [])
-      .map((b) => typeof b === "string" ? b : String((b as { name?: string }).name || "").trim())
+      .map((b) =>
+        typeof b === "string"
+          ? b
+          : String((b as { name?: string }).name || "").trim()
+      )
       .filter((name) => name && name.trim().length > 0);
+
     const others = list.filter((x) => norm(x) === "other");
     const normal = list.filter((x) => norm(x) !== "other");
+
     normal.sort((a, b) => a.localeCompare(b));
     return [...normal, ...others];
   }, [meta.buildings]);
 
   const concernOptions = useMemo(() => {
-    const list = meta.concerns.map((c) => c.label).filter((label) => label && String(label).trim().length > 0);
+    const list = meta.concerns
+      .map((c) => c.label)
+      .filter((label) => label && String(label).trim().length > 0);
+
     const others = list.filter((x) => norm(x) === "other");
     const normal = list.filter((x) => norm(x) !== "other");
+
     normal.sort((a, b) => String(a).localeCompare(String(b)));
     return [...normal, ...others];
   }, [meta.concerns]);
@@ -511,12 +548,14 @@ export default function Create() {
   );
 
   const dynamicSubconcernOptions = useMemo(() => {
-    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns)) return [];
+    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns))
+      return [];
     return selectedConcern.subconcerns;
   }, [selectedConcern]);
 
+  // Building-specific logic
   const isIctc = formData.building === "ICTC";
-  const isCos  = formData.building === "COS";
+  const isCos = formData.building === "COS";
 
   const visibleFloorOptions = useMemo(() => {
     if (isIctc) return ["First Floor", "Second Floor", "Other"];
@@ -532,8 +571,10 @@ export default function Create() {
     if (!allRoomsForBuilding) return null;
     if (isCos) return allRoomsForBuilding;
     if (!specificRoom || !formData.floor) return allRoomsForBuilding;
+
     const floorRanges = FLOOR_ROOM_RANGES[formData.floor];
     if (!floorRanges) return allRoomsForBuilding;
+
     const floorRooms = expandRanges(floorRanges) || [];
     const setAll = new Set(allRoomsForBuilding);
     return floorRooms.filter((r) => setAll.has(r));
@@ -557,22 +598,29 @@ export default function Create() {
     return rooms;
   }, [isIctc, formData.floor]);
 
-  const showSubConcern       = formData.concern && formData.concern !== "Other";
-  const needsOtherConcern    = formData.concern === "Other";
+  // Conditional rendering flags
+  const showSubConcern = formData.concern && formData.concern !== "Other";
+  const needsOtherConcern = formData.concern === "Other";
   const needsOtherSubConcern = formData.subConcern === "Other";
-  const needsOtherBuilding   = formData.building === "Other";
-  const roomIsOther          = formData.room === "Other";
-  const needsOtherRoomText   = specificRoom && !!formData.building && roomIsOther;
-  const needsRoomDropdown    = !isIctc && !isCos && specificRoom && hasRoom;
-  const needsOtherRoom       = !isIctc && specificRoom && !hasRoom && !!formData.building;
-  const ictcHasSpecific      = isIctc && specificRoom;
-  const ictcFirstFloor       = ictcHasSpecific && formData.floor === "First Floor";
-  const ictcSecondFloor      = ictcHasSpecific && formData.floor === "Second Floor";
-  const cosHasSpecificRooms  = isCos && specificRoom && hasRoom;
+  const needsOtherBuilding = formData.building === "Other";
+  const roomIsOther = formData.room === "Other";
+  const needsOtherRoomText = specificRoom && !!formData.building && roomIsOther;
+  const needsRoomDropdown = !isIctc && !isCos && specificRoom && hasRoom;
+  const needsOtherRoom = !isIctc && specificRoom && !hasRoom && !!formData.building;
+  const ictcHasSpecific = isIctc && specificRoom;
+  const ictcFirstFloor = ictcHasSpecific && formData.floor === "First Floor";
+  const ictcSecondFloor = ictcHasSpecific && formData.floor === "Second Floor";
+  const cosHasSpecificRooms = isCos && specificRoom && hasRoom;
 
+  // Required fields calculation
   const requiredNow = useMemo(() => {
     const req: (keyof FormDataState)[] = [
-      "email", "heading", "description", "concern", "building", "college", "reporterType",
+      "email",
+      "heading",
+      "description",
+      "concern",
+      "building",
+      "college",
     ];
     if (showSubConcern) req.push("subConcern");
     if (needsOtherConcern) req.push("otherConcern");
@@ -589,9 +637,17 @@ export default function Create() {
     if (cosHasSpecificRooms) req.push("room");
     return req;
   }, [
-    showSubConcern, needsOtherConcern, needsOtherSubConcern, needsOtherBuilding,
-    needsRoomDropdown, roomIsOther, needsOtherRoom, ictcHasSpecific,
-    ictcFirstFloor, ictcSecondFloor, cosHasSpecificRooms,
+    showSubConcern,
+    needsOtherConcern,
+    needsOtherSubConcern,
+    needsOtherBuilding,
+    needsRoomDropdown,
+    roomIsOther,
+    needsOtherRoom,
+    ictcHasSpecific,
+    ictcFirstFloor,
+    ictcSecondFloor,
+    cosHasSpecificRooms,
   ]);
 
   const filledCount = useMemo(() => {
@@ -615,30 +671,44 @@ export default function Create() {
     return "";
   }, [specificRoom, hasRoom, formData.floor, formData.room, isIctc, isCos]);
 
+  // Similarity check
   const similarReportsCount = useMemo(() => {
     if (!formData.building || !formData.concern) return 0;
+
     const currentKey = getSimilarityKey({
-      building: formData.building === "Other" ? formData.otherBuilding : formData.building,
+      building:
+        formData.building === "Other"
+          ? formData.otherBuilding
+          : formData.building,
       concern: formData.concern,
       subConcern: formData.concern === "Other" ? "" : formData.subConcern,
-      otherConcern: formData.concern === "Other" ? formData.otherConcern : undefined,
+      otherConcern:
+        formData.concern === "Other" ? formData.otherConcern : undefined,
       room: formData.room || undefined,
       otherRoom: formData.room ? undefined : formData.otherRoom || undefined,
     });
+
     if (!currentKey.trim()) return 0;
+
     return existingReports.filter((r) => {
       const status = norm(r.status || "Pending");
       if (status === "archived") return false;
-      return getSimilarityKey(r) === currentKey;
+      const key = getSimilarityKey(r);
+      return key === currentKey;
     }).length;
   }, [
-    existingReports, formData.building, formData.concern, formData.subConcern,
-    formData.otherConcern, formData.room, formData.otherRoom,
+    existingReports,
+    formData.building,
+    formData.concern,
+    formData.subConcern,
+    formData.otherConcern,
+    formData.room,
+    formData.otherRoom,
   ]);
 
+  // Summary text
   const summaryText = useMemo(() => {
     const parts: string[] = [];
-    parts.push(`Reporter Type: ${formData.reporterType || "-"}`); // NEW
     parts.push(`Title: ${formData.heading || "-"}`);
 
     let concernDisplay = formData.concern || "-";
@@ -663,17 +733,23 @@ export default function Create() {
       if (isIctc) {
         if (formData.floor) parts.push(`Floor: ${formData.floor}`);
         let roomDisplay = formData.room || "-";
-        if (formData.room === "Other" && formData.otherRoom) roomDisplay = `Other: ${formData.otherRoom}`;
+        if (formData.room === "Other" && formData.otherRoom) {
+          roomDisplay = `Other: ${formData.otherRoom}`;
+        }
         parts.push(`Room: ${roomDisplay}`);
       } else if (isCos) {
         let roomDisplay = formData.room || "-";
-        if (formData.room === "Other" && formData.otherRoom) roomDisplay = `Other: ${formData.otherRoom}`;
+        if (formData.room === "Other" && formData.otherRoom) {
+          roomDisplay = `Other: ${formData.otherRoom}`;
+        }
         parts.push(`Room: ${roomDisplay}`);
       } else if (needsRoomDropdown) {
         const floorLabel = formData.floor || deriveFloorFromRoom(formData.room);
         if (floorLabel) parts.push(`Floor: ${floorLabel}`);
         let roomDisplay = formData.room || "-";
-        if (formData.room === "Other" && formData.otherRoom) roomDisplay = `Other: ${formData.otherRoom}`;
+        if (formData.room === "Other" && formData.otherRoom) {
+          roomDisplay = `Other: ${formData.otherRoom}`;
+        }
         parts.push(`Room: ${roomDisplay}`);
       } else if (needsOtherRoom) {
         parts.push(`Spot: ${formData.otherRoom || "-"}`);
@@ -687,23 +763,41 @@ export default function Create() {
     if (formData.college) parts.push(`College: ${formData.college}`);
     parts.push(`Photo attached: ${formData.ImageFile ? "Yes" : "No"}`);
     return parts.join("\n");
-  }, [formData, specificRoom, needsRoomDropdown, needsOtherRoom, isIctc, isCos]);
+  }, [
+    formData,
+    specificRoom,
+    needsRoomDropdown,
+    needsOtherRoom,
+    isIctc,
+    isCos,
+  ]);
 
+  // Profanity check
   useEffect(() => {
     const fieldsToCheck = [
-      formData.heading, formData.description, formData.otherConcern,
-      formData.otherBuilding, formData.otherRoom, formData.room,
+      formData.heading,
+      formData.description,
+      formData.otherConcern,
+      formData.otherBuilding,
+      formData.otherRoom,
+      formData.room,
     ];
     setHasProfanity(fieldsToCheck.some((t) => containsProfanity(t)));
   }, [formData]);
 
-  const showMsg = useCallback((type: "success" | "error" | "info", text: string) => {
-    setMessageType(type);
-    setMessage(text);
-  }, []);
+  // Event handlers
+  const showMsg = useCallback(
+    (type: "success" | "error" | "info", text: string) => {
+      setMessageType(type);
+      setMessage(text);
+    },
+    []
+  );
 
   const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    (
+      e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    ) => {
       const { name, value } = e.target;
       const target = e.target as HTMLInputElement;
 
@@ -714,13 +808,18 @@ export default function Create() {
 
       if (target.files && target.files[0]) {
         const file = target.files[0];
+
         if (!isValidImageFile(file)) {
-          showMsg("error", "Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP).");
+          showMsg(
+            "error",
+            "Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP)."
+          );
           target.value = "";
           setFormData((prev) => ({ ...prev, ImageFile: null }));
           setPreview(null);
           return;
         }
+
         setFormData((prev) => ({ ...prev, ImageFile: file }));
         setPreview(URL.createObjectURL(file));
         return;
@@ -728,29 +827,62 @@ export default function Create() {
 
       setFormData((prev) => {
         const next: FormDataState = { ...prev, [name]: value } as FormDataState;
-        if (name === "concern") { next.concern = value; next.subConcern = ""; next.otherConcern = ""; }
-        if (name === "building") { next.building = value; next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
-        if (name === "floor") { next.floor = value; next.room = ""; }
-        if (name === "room" && value !== "Other") { next.otherRoom = ""; }
+
+        if (name === "concern") {
+          next.concern = value;
+          next.subConcern = "";
+          next.otherConcern = "";
+        }
+        if (name === "building") {
+          next.building = value;
+          next.otherBuilding = "";
+          next.floor = "";
+          next.room = "";
+          next.otherRoom = "";
+        }
+        if (name === "floor") {
+          next.floor = value;
+          next.room = "";
+        }
+        if (name === "room" && value !== "Other") {
+          next.otherRoom = "";
+        }
+
         return next;
       });
     },
     [showMsg]
   );
 
-  const onDrop = useCallback((e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.classList.remove("is-dragover");
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    if (!isValidImageFile(file)) { showMsg("error", "Unsupported file type. Only image files are allowed."); return; }
-    setFormData((prev) => ({ ...prev, ImageFile: file }));
-    setPreview(URL.createObjectURL(file));
-  }, [showMsg]);
+  const onDrop = useCallback(
+    (e: DragEvent<HTMLLabelElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.classList.remove("is-dragover");
 
-  const onDragOver  = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.add("is-dragover"); }, []);
-  const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.remove("is-dragover"); }, []);
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+
+      if (!isValidImageFile(file)) {
+        showMsg("error", "Unsupported file type. Only image files are allowed.");
+        return;
+      }
+
+      setFormData((prev) => ({ ...prev, ImageFile: file }));
+      setPreview(URL.createObjectURL(file));
+    },
+    [showMsg]
+  );
+
+  const onDragOver = useCallback((e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.currentTarget.classList.add("is-dragover");
+  }, []);
+
+  const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove("is-dragover");
+  }, []);
 
   const performSubmit = useCallback(async () => {
     setSubmitting(true);
@@ -760,32 +892,46 @@ export default function Create() {
     try {
       const data = new FormData();
 
-      data.append("email",        formData.email);
-      data.append("heading",      formData.heading);
-      data.append("description",  formData.description);
-      data.append("reporterType", formData.reporterType); // NEW
+      data.append("email", formData.email);
+      data.append("heading", formData.heading);
+      data.append("description", formData.description);
 
+      // Handle "Other" concern properly
       if (formData.concern === "Other") {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", "");
+        data.append("concern", formData.concern); // "Other"
+data.append("subConcern", "");
+
       } else {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", formData.subConcern === "Other" ? "Other" : formData.subConcern);
+        data.append("concern", formData.concern);
+        if (formData.subConcern === "Other") {
+data.append("subConcern", "Other");
+        } else {
+          data.append("subConcern", formData.subConcern);
+        }
       }
 
-      data.append("building", formData.building === "Other"
-        ? `Other: ${formData.otherBuilding.trim()}`
-        : formData.building
+      // Handle "Other" building properly
+      data.append(
+        "building",
+        formData.building === "Other"
+          ? `Other: ${formData.otherBuilding.trim()}`
+          : formData.building
       );
-      data.append("college",       formData.college);
-      data.append("floor",         formData.floor);
-      data.append("room",          formData.room === "Other"
-        ? `Other: ${formData.otherRoom.trim()}`
-        : formData.room
+
+      data.append("college", formData.college);
+      data.append("floor", formData.floor);
+
+      // Handle "Other" room properly
+      data.append(
+        "room",
+        formData.room === "Other"
+          ? `Other: ${formData.otherRoom.trim()}`
+          : formData.room
       );
-      data.append("otherConcern",  formData.otherConcern.trim());
+
+data.append("otherConcern", formData.otherConcern.trim());
       data.append("otherBuilding", formData.otherBuilding);
-      data.append("otherRoom",     formData.otherRoom);
+      data.append("otherRoom", formData.otherRoom);
 
       if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
@@ -800,28 +946,30 @@ export default function Create() {
       }
 
       let result: any = {};
-      try { result = raw ? JSON.parse(raw) : {}; } catch {}
+      try {
+        result = raw ? JSON.parse(raw) : {};
+      } catch {}
 
       if (result.success) {
         if (result.report && typeof result.report === "object") {
           setExistingReports((prev) => [...prev, result.report as Report]);
         }
+
         showMsg("success", "Report submitted successfully.");
         setFormData({
-          email:        currentUserEmail || "",
-          heading:      "",
-          description:  "",
-          concern:      "",
-          subConcern:   "",
-          building:     "",
-          college:      "",
-          floor:        "",
-          room:         "",
-          ImageFile:    null,
+          email: currentUserEmail || "",
+          heading: "",
+          description: "",
+          concern: "",
+          subConcern: "",
+          building: "",
+          college: "",
+          floor: "",
+          room: "",
+          ImageFile: null,
           otherConcern: "",
-          otherBuilding:"",
-          otherRoom:    "",
-          reporterType: "Student",
+          otherBuilding: "",
+          otherRoom: "",
         });
         setPreview(null);
         setSpecificRoom(false);
@@ -836,26 +984,40 @@ export default function Create() {
     }
   }, [formData, currentUserEmail, showMsg]);
 
-  const handleSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) {
-      showMsg("error", "Invalid attachment detected. Please upload a valid image file.");
-      return;
-    }
-    if (!formData.ImageFile) {
-      showMsg("error", "Please attach an image before submitting.");
-      return;
-    }
-    if (hasProfanity) {
-      showMsg("error", "Your report contains foul or inappropriate language. Please remove it before submitting.");
-      return;
-    }
-    if (similarReportsCount > 0) {
-      setIsConfirming(true);
-      return;
-    }
-    void performSubmit();
-  }, [formData, hasProfanity, similarReportsCount, showMsg, performSubmit]);
+  const handleSubmit = useCallback(
+    (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+
+      if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) {
+        showMsg(
+          "error",
+          "Invalid attachment detected. Please upload a valid image file."
+        );
+        return;
+      }
+
+      if (!formData.ImageFile) {
+        showMsg("error", "Please attach an image before submitting.");
+        return;
+      }
+
+      if (hasProfanity) {
+        showMsg(
+          "error",
+          "Your report contains foul or inappropriate language. Please remove it before submitting."
+        );
+        return;
+      }
+
+      if (similarReportsCount > 0) {
+        setIsConfirming(true);
+        return;
+      }
+
+      void performSubmit();
+    },
+    [formData, hasProfanity, similarReportsCount, showMsg, performSubmit]
+  );
 
   const copySummary = useCallback(async () => {
     try {
@@ -873,20 +1035,19 @@ export default function Create() {
 
   const resetForm = useCallback(() => {
     setFormData({
-      email:        currentUserEmail || "",
-      heading:      "",
-      description:  "",
-      concern:      "",
-      subConcern:   "",
-      building:     "",
-      college:      "",
-      floor:        "",
-      room:         "",
-      ImageFile:    null,
+      email: currentUserEmail || "",
+      heading: "",
+      description: "",
+      concern: "",
+      subConcern: "",
+      building: "",
+      college: "",
+      floor: "",
+      room: "",
+      ImageFile: null,
       otherConcern: "",
-      otherBuilding:"",
-      otherRoom:    "",
-      reporterType: "Student",
+      otherBuilding: "",
+      otherRoom: "",
     });
     setPreview(null);
     setSpecificRoom(false);
@@ -946,21 +1107,40 @@ export default function Create() {
           border-width: 8px 8px 0;
           border-color: var(--background-light) transparent transparent;
         }
-        .tooltip-container:hover { background: var(--background-dark); color: var(--text-color-dark); box-shadow: 0 0 20px var(--glow-color); }
-        .tooltip-container:hover .tooltip { opacity: 1; visibility: visible; pointer-events: auto; }
-        .concern-label-wrapper { display: flex; align-items: center; gap: 8px; }
+        .tooltip-container:hover {
+          background: var(--background-dark);
+          color: var(--text-color-dark);
+          box-shadow: 0 0 20px var(--glow-color);
+        }
+        .tooltip-container:hover .tooltip {
+          opacity: 1;
+          visibility: visible;
+          pointer-events: auto;
+        }
+        .concern-label-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
       `}</style>
 
-      <div className={`create-scope__layout ${sidebarOpen ? "" : "is-collapsed"}`}>
+      <div
+        className={`create-scope__layout ${sidebarOpen ? "" : "is-collapsed"}`}
+      >
         <aside
           id="app-sidebar"
-          className={`create-scope__sidebar ${sidebarOverlayOpen ? "is-open" : ""}`}
+          className={`create-scope__sidebar ${
+            sidebarOverlayOpen ? "is-open" : ""
+          }`}
           aria-label="Sidebar"
         >
           <div className="create-scope__sidebar-inner">
             <div className="create-scope__brand">
               <div className="create-scope__brand-badge">
-                <img src="https://upload.wikimedia.org/wikipedia/en/8/8c/DLSU-Dasmari%C3%B1as_Seal.png" alt="DLSU-D Logo" />
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/en/8/8c/DLSU-Dasmari%C3%B1as_Seal.png"
+                  alt="DLSU-D Logo"
+                />
               </div>
               <div className="create-scope__brand-title">BFMO</div>
             </div>
@@ -968,7 +1148,13 @@ export default function Create() {
             <Panel title="Quick tips">
               <div className="create-scope__kv">
                 <div>Similar reports</div>
-                <div>{formData.building && formData.concern ? `${similarReportsCount} similar ${similarReportsCount === 1 ? "report" : "reports"}` : "Set building and concern"}</div>
+                <div>
+                  {formData.building && formData.concern
+                    ? `${similarReportsCount} similar ${
+                        similarReportsCount === 1 ? "report" : "reports"
+                      }`
+                    : "Set building and concern"}
+                </div>
                 <div>Attach clear photo</div>
                 <div>Required</div>
                 <div>Include room number</div>
@@ -980,12 +1166,22 @@ export default function Create() {
               title="Summary report"
               subtitle="Auto updates while you type"
               actions={
-                <button type="button" className="create-scope__ghost-btn" onClick={copySummary}>Copy</button>
+                <button
+                  type="button"
+                  className="create-scope__ghost-btn"
+                  onClick={copySummary}
+                >
+                  Copy
+                </button>
               }
             >
               <div className="create-scope__summary">
                 <div className="create-scope__progress">
-                  <div className="create-scope__progress-bar" style={{ width: `${progressPct}%` }} aria-hidden="true" />
+                  <div
+                    className="create-scope__progress-bar"
+                    style={{ width: `${progressPct}%` }}
+                    aria-hidden="true"
+                  />
                 </div>
                 <div className="create-scope__summary-row">
                   <span>Form completeness</span>
@@ -993,35 +1189,106 @@ export default function Create() {
                 </div>
                 <div className="create-scope__summary-row">
                   <span>Ready to submit</span>
-                  <strong className={readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"}>
+                  <strong
+                    className={
+                      readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"
+                    }
+                  >
                     {readyToSubmit && !hasProfanity ? "Yes" : "No"}
                   </strong>
                 </div>
+
                 <hr className="create-scope__summary-rule" />
+
                 <div className="create-scope__summary-kv">
-                  <div>Reporter</div>
-                  <div>{formData.reporterType || "-"}</div>
                   <div>Title</div>
                   <div>{formData.heading || "-"}</div>
                   <div>Concern</div>
                   <div>
                     {formData.concern || "-"}
-                    {formData.concern === "Other" && formData.otherConcern ? `: ${formData.otherConcern}`
-                      : formData.subConcern === "Other" && formData.otherConcern ? ` / Other: ${formData.otherConcern}`
-                      : formData.subConcern ? ` / ${formData.subConcern}` : ""}
+                    {formData.concern === "Other" && formData.otherConcern
+                      ? `: ${formData.otherConcern}`
+                      : formData.subConcern === "Other" && formData.otherConcern
+                      ? ` / Other: ${formData.otherConcern}`
+                      : formData.subConcern
+                      ? ` / ${formData.subConcern}`
+                      : ""}
                   </div>
                   <div>Building</div>
-                  <div>{formData.building || "-"}{formData.building === "Other" && formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}</div>
+                  <div>
+                    {formData.building || "-"}
+                    {formData.building === "Other" && formData.otherBuilding
+                      ? `: ${formData.otherBuilding}`
+                      : ""}
+                  </div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
+
+                  {specificRoom && formData.building === "ICTC" && (
+                    <>
+                      <div>Floor</div>
+                      <div>{formData.floor || "-"}</div>
+                      <div>Room</div>
+                      <div>
+                        {formData.room === "Other" && formData.otherRoom
+                          ? `Other: ${formData.otherRoom}`
+                          : formData.room || "-"}
+                      </div>
+                    </>
+                  )}
+
+                  {specificRoom && isCos && hasRoom && (
+                    <>
+                      <div>Room</div>
+                      <div>
+                        {formData.room === "Other" && formData.otherRoom
+                          ? `Other: ${formData.otherRoom}`
+                          : formData.room || "-"}
+                      </div>
+                    </>
+                  )}
+
+                  {specificRoom &&
+                    formData.building !== "ICTC" &&
+                    !isCos &&
+                    hasRoom && (
+                      <>
+                        <div>Floor</div>
+                        <div>{roomFloorLabel || "-"}</div>
+                        <div>Room</div>
+                        <div>
+                          {formData.room === "Other" && formData.otherRoom
+                            ? `Other: ${formData.otherRoom}`
+                            : formData.room || "-"}
+                        </div>
+                      </>
+                    )}
+
+                  {specificRoom &&
+                    formData.building !== "ICTC" &&
+                    !hasRoom &&
+                    !!formData.building && (
+                      <>
+                        <div>Spot</div>
+                        <div>{formData.otherRoom || "-"}</div>
+                      </>
+                    )}
+
                   <div>College</div>
                   <div>{formData.college || "-"}</div>
                   <div>Photo</div>
                   <div>{formData.ImageFile ? "Attached" : "None"}</div>
                 </div>
+
                 <Panel>
                   <div className="create-scope__preview">
-                    {preview ? <img src={preview} alt="Attachment preview" /> : <div className="create-scope__preview-empty">No image yet</div>}
+                    {preview ? (
+                      <img src={preview} alt="Attachment preview" />
+                    ) : (
+                      <div className="create-scope__preview-empty">
+                        No image yet
+                      </div>
+                    )}
                   </div>
                 </Panel>
               </div>
@@ -1030,15 +1297,24 @@ export default function Create() {
         </aside>
 
         {sidebarOverlayOpen && (
-          <div className="create-scope__scrim is-open" onClick={() => setSidebarOverlayOpen(false)} />
+          <div
+            className="create-scope__scrim is-open"
+            onClick={() => setSidebarOverlayOpen(false)}
+          />
         )}
 
         <main className="create-scope__main">
           <header className="create-scope__topbar">
             <div className="create-scope__topbar-left">
               <label className="burger">
-                <input type="checkbox" checked={sidebarOverlayOpen} onChange={(e) => setSidebarOverlayOpen(e.target.checked)} />
-                <span></span><span></span><span></span>
+                <input
+                  type="checkbox"
+                  checked={sidebarOverlayOpen}
+                  onChange={(e) => setSidebarOverlayOpen(e.target.checked)}
+                />
+                <span></span>
+                <span></span>
+                <span></span>
               </label>
             </div>
           </header>
@@ -1048,14 +1324,33 @@ export default function Create() {
             subtitle="Fill the form and attach a photo if available."
             actions={
               <div className="create-scope__toolbar">
-                <button type="button" className="view-reports-btn" onClick={viewreports} title="View Reports">View Reports</button>
-                <button type="button" className="create-scope__reset-btn" onClick={resetForm}>Reset</button>
+                <button
+                  type="button"
+                  className="view-reports-btn"
+                  onClick={viewreports}
+                  title="View Reports"
+                >
+                  View Reports
+                </button>
+                <button
+                  type="button"
+                  className="create-scope__reset-btn"
+                  onClick={resetForm}
+                >
+                  Reset
+                </button>
               </div>
             }
           >
             {message && (
               <div
-                className={`create-scope__message ${messageType === "error" ? "is-error" : messageType === "success" ? "is-success" : "is-info"}`}
+                className={`create-scope__message ${
+                  messageType === "error"
+                    ? "is-error"
+                    : messageType === "success"
+                      ? "is-success"
+                      : "is-info"
+                }`}
                 role="status"
                 aria-live="polite"
               >
@@ -1063,246 +1358,529 @@ export default function Create() {
               </div>
             )}
 
-            {metaError && <div className="create-scope__message is-info">{metaError}</div>}
+            {metaError && (
+              <div className="create-scope__message is-info">{metaError}</div>
+            )}
 
             <form onSubmit={handleSubmit} className="create-scope__form">
-
-              {/* ── NEW: Reporter Type ─────────────────────────────────────── */}
-              <div className="create-scope__group">
-                <label htmlFor="reporterType">
-                  I am a
-                  <RequiredStar value={formData.reporterType} />
-                </label>
-                <select
-                  id="reporterType"
-                  name="reporterType"
-                  value={formData.reporterType}
-                  onChange={handleChange}
-                  required
-                >
-                  {REPORTER_TYPE_OPTIONS.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-                <p className="create-scope__hint">
-                  Are you reporting as a student or as a staff / faculty member?
-                </p>
-              </div>
-
-              {/* ── Email ─────────────────────────────────────────────────── */}
+              {/* Email Field */}
               <div className="create-scope__group">
                 <label htmlFor="email">
                   Email
                   <RequiredStar value={formData.email} />
                 </label>
                 <input
-                  id="email" type="email" name="email"
+                  id="email"
+                  type="email"
+                  name="email"
                   placeholder="name@dlsud.edu.ph"
                   value={formData.email}
                   onChange={handleChange}
-                  required autoComplete="email"
+                  required
+                  autoComplete="email"
                   readOnly={Boolean(currentUserEmail)}
                 />
                 <p className="create-scope__hint">
-                  {currentUserEmail ? "This email came from your login." : "We may contact you using this email for follow up."}
+                  {currentUserEmail
+                    ? "This email came from your login."
+                    : "We may contact you using this email for follow up."}
                 </p>
               </div>
 
-              {/* ── Heading & College ─────────────────────────────────────── */}
+              {/* Heading & College Row */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
-                  <label htmlFor="heading">Heading<RequiredStar value={formData.heading} /></label>
-                  <input id="heading" type="text" name="heading" placeholder="Short title of the issue" value={formData.heading} onChange={handleChange} required />
+                  <label htmlFor="heading">
+                    Heading
+                    <RequiredStar value={formData.heading} />
+                  </label>
+                  <input
+                    id="heading"
+                    type="text"
+                    name="heading"
+                    placeholder="Short title of the issue"
+                    value={formData.heading}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
+
                 <div className="create-scope__group">
-                  <label htmlFor="college">College<RequiredStar value={formData.college} /></label>
-                  <select id="college" name="college" value={formData.college} onChange={handleChange} required>
+                  <label htmlFor="college">
+                    College
+                    <RequiredStar value={formData.college} />
+                  </label>
+                  <select
+                    id="college"
+                    name="college"
+                    value={formData.college}
+                    onChange={handleChange}
+                    required
+                  >
                     <option value="">Select college</option>
-                    {COLLEGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {COLLEGE_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* ── Description ───────────────────────────────────────────── */}
+              {/* Description */}
               <div className="create-scope__group">
-                <label htmlFor="description">Description<RequiredStar value={formData.description} /></label>
-                <textarea id="description" name="description" placeholder="Describe the issue with details. Include location markers and safety risks." value={formData.description} onChange={handleChange} rows={5} required />
-                <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
+                <label htmlFor="description">
+                  Description
+                  <RequiredStar value={formData.description} />
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  placeholder="Describe the issue with details. Include location markers and safety risks."
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows={5}
+                  required
+                />
+                <p className="create-scope__hint">
+                  Tip: Add steps to reproduce or time observed.
+                </p>
               </div>
 
-              {/* ── Concern & SubConcern ───────────────────────────────────── */}
+              {/* Concern & SubConcern Row */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
                   <div className="concern-label-wrapper">
-                    <label htmlFor="concern">Concern<RequiredStar value={formData.concern} /></label>
+                    <label htmlFor="concern">
+                      Concern
+                      <RequiredStar value={formData.concern} />
+                    </label>
                     {formData.concern && CONCERN_INFO[formData.concern] && (
                       <InfoTooltip text={CONCERN_INFO[formData.concern]} />
                     )}
                   </div>
-                  <select id="concern" name="concern" value={formData.concern} onChange={handleChange} required disabled={metaLoading}>
-                    <option value="">{metaLoading ? "Loading concerns..." : "Select concern"}</option>
-                    {concernOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <select
+                    id="concern"
+                    name="concern"
+                    value={formData.concern}
+                    onChange={handleChange}
+                    required
+                    disabled={metaLoading}
+                  >
+                    <option value="">
+                      {metaLoading ? "Loading concerns..." : "Select concern"}
+                    </option>
+                    {concernOptions.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 {showSubConcern && (
                   <div className="create-scope__group">
-                    <label htmlFor="subConcern">Sub concern<RequiredStar value={formData.subConcern} /></label>
+                    <label htmlFor="subConcern">
+                      Sub concern
+                      <RequiredStar value={formData.subConcern} />
+                    </label>
                     {formData.subConcern === "Other" ? (
                       <div style={{ display: "flex", gap: "8px" }}>
-                        <select id="subConcern" name="subConcern" value={formData.subConcern} onChange={handleChange} required style={{ flex: "0 0 120px" }}>
+                        <select
+                          id="subConcern"
+                          name="subConcern"
+                          value={formData.subConcern}
+                          onChange={handleChange}
+                          required
+                          style={{ flex: "0 0 120px" }}
+                        >
                           <option value="">Select sub concern</option>
-                          {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                          {dynamicSubconcernOptions.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
                         </select>
-                        <input type="text" name="otherConcern" placeholder="Specify sub concern" value={formData.otherConcern} onChange={handleChange} required style={{ flex: "1" }} />
+                        <input
+                          type="text"
+                          name="otherConcern"
+                          placeholder="Specify sub concern"
+                          value={formData.otherConcern}
+                          onChange={handleChange}
+                          required
+                          style={{ flex: "1" }}
+                        />
                       </div>
                     ) : (
-                      <select id="subConcern" name="subConcern" value={formData.subConcern} onChange={handleChange} required>
+                      <select
+                        id="subConcern"
+                        name="subConcern"
+                        value={formData.subConcern}
+                        onChange={handleChange}
+                        required
+                      >
                         <option value="">Select sub concern</option>
-                        {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {dynamicSubconcernOptions.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>
                 )}
               </div>
 
+              {/* Other Concern Input */}
               {needsOtherConcern && (
                 <div className="create-scope__group">
-                  <label htmlFor="otherConcern">Specify concern<RequiredStar value={formData.otherConcern} /></label>
-                  <input id="otherConcern" type="text" name="otherConcern" placeholder="Describe your concern" value={formData.otherConcern} onChange={handleChange} required />
+                  <label htmlFor="otherConcern">
+                    Specify concern
+                    <RequiredStar value={formData.otherConcern} />
+                  </label>
+                  <input
+                    id="otherConcern"
+                    type="text"
+                    name="otherConcern"
+                    placeholder="Describe your concern"
+                    value={formData.otherConcern}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
               )}
 
-              {/* ── Building & Specific Room Toggle ───────────────────────── */}
+              {/* Building & Specific Room Toggle Row */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
-                  <label htmlFor="building">Building<RequiredStar value={formData.building} /></label>
-                  <select id="building" name="building" value={formData.building} onChange={handleChange} required disabled={metaLoading}>
-                    <option value="">{metaLoading ? "Loading buildings..." : "Select building"}</option>
-                    {buildingOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                  <label htmlFor="building">
+                    Building
+                    <RequiredStar value={formData.building} />
+                  </label>
+                  <select
+                    id="building"
+                    name="building"
+                    value={formData.building}
+                    onChange={handleChange}
+                    required
+                    disabled={metaLoading}
+                  >
+                    <option value="">
+                      {metaLoading ? "Loading buildings..." : "Select building"}
+                    </option>
+                    {buildingOptions.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
                   </select>
                 </div>
+
                 <div className="create-scope__group">
                   <label className="create-scope__switch">
-                    <input type="checkbox" checked={specificRoom} onChange={() => {
-                      setSpecificRoom((v) => {
-                        const nv = !v;
-                        if (!nv) setFormData((f) => ({ ...f, floor: "", room: "", otherRoom: "" }));
-                        return nv;
-                      });
-                    }} />
+                    <input
+                      type="checkbox"
+                      checked={specificRoom}
+                      onChange={() => {
+                        setSpecificRoom((v) => {
+                          const nv = !v;
+                          if (!nv) {
+                            setFormData((f) => ({
+                              ...f,
+                              floor: "",
+                              room: "",
+                              otherRoom: "",
+                            }));
+                          }
+                          return nv;
+                        });
+                      }}
+                    />
                     <span className="create-scope__slider" />
-                    <span className="create-scope__switch-label">Is there a specific location / spot / room?</span>
+                    <span className="create-scope__switch-label">
+                      Is there a specific location / spot / room?
+                    </span>
                   </label>
                 </div>
               </div>
 
+              {/* Other Building Input */}
               {needsOtherBuilding && (
                 <div className="create-scope__group">
-                  <label htmlFor="otherBuilding">Specify building<RequiredStar value={formData.otherBuilding} /></label>
-                  <input id="otherBuilding" type="text" name="otherBuilding" placeholder="Specify the building name" value={formData.otherBuilding} onChange={handleChange} required />
+                  <label htmlFor="otherBuilding">
+                    Specify building
+                    <RequiredStar value={formData.otherBuilding} />
+                  </label>
+                  <input
+                    id="otherBuilding"
+                    type="text"
+                    name="otherBuilding"
+                    placeholder="Specify the building name"
+                    value={formData.otherBuilding}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
               )}
 
-              {specificRoom && formData.building !== "ICTC" && !isCos && !hasRoom && !!formData.building && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherRoom">Specify room / spot<RequiredStar value={formData.otherRoom} /></label>
-                  <input id="otherRoom" type="text" name="otherRoom" placeholder="Example: 1st floor near the exit, Main entrance, Hallway C" value={formData.otherRoom} onChange={handleChange} required />
-                  <p className="create-scope__hint">Describe the specific location within {formData.building === "Other" ? "the building" : formData.building}.</p>
-                </div>
-              )}
+              {/* ====== FIX: Room/spot input for buildings without dropdown ====== */}
+              {specificRoom &&
+                formData.building !== "ICTC" &&
+                !isCos &&
+                !hasRoom &&
+                !!formData.building && (
+                  <div className="create-scope__group">
+                    <label htmlFor="otherRoom">
+                      Specify room / spot
+                      <RequiredStar value={formData.otherRoom} />
+                    </label>
+                    <input
+                      id="otherRoom"
+                      type="text"
+                      name="otherRoom"
+                      placeholder="Example: 1st floor near the exit, Main entrance, Hallway C"
+                      value={formData.otherRoom}
+                      onChange={handleChange}
+                      required
+                    />
+                    <p className="create-scope__hint">
+                      Describe the specific location within{" "}
+                      {formData.building === "Other"
+                        ? "the building"
+                        : formData.building}
+                      .
+                    </p>
+                  </div>
+                )}
 
+              {/* ICTC-specific room logic */}
               {ictcHasSpecific && (
                 <>
                   <div className="create-scope__group">
-                    <label htmlFor="floor">Floor<RequiredStar value={formData.floor} /></label>
-                    <select id="floor" name="floor" value={formData.floor} onChange={handleChange} required>
+                    <label htmlFor="floor">
+                      Floor
+                      <RequiredStar value={formData.floor} />
+                    </label>
+                    <select
+                      id="floor"
+                      name="floor"
+                      value={formData.floor}
+                      onChange={handleChange}
+                      required
+                    >
                       <option value="">Select floor</option>
-                      {visibleFloorOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+                      {visibleFloorOptions.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   {ictcFirstFloor && (
                     <div className="create-scope__group">
-                      <label htmlFor="room">Room<RequiredStar value={formData.room} /></label>
-                      <input id="room" type="text" name="room" placeholder="Enter room on 1st floor (e.g. 101, Lab, Lobby)" value={formData.room} onChange={handleChange} required />
+                      <label htmlFor="room">
+                        Room
+                        <RequiredStar value={formData.room} />
+                      </label>
+                      <input
+                        id="room"
+                        type="text"
+                        name="room"
+                        placeholder="Enter room on 1st floor (e.g. 101, Lab, Lobby)"
+                        value={formData.room}
+                        onChange={handleChange}
+                        required
+                      />
                     </div>
                   )}
+
                   {ictcSecondFloor && (
                     <div className="create-scope__group">
-                      <label htmlFor="room">Room<RequiredStar value={formData.room} /></label>
-                      <select id="room" name="room" value={formData.room} onChange={handleChange} required>
+                      <label htmlFor="room">
+                        Room
+                        <RequiredStar value={formData.room} />
+                      </label>
+                      <select
+                        id="room"
+                        name="room"
+                        value={formData.room}
+                        onChange={handleChange}
+                        required
+                      >
                         <option value="">Select room</option>
-                        {ictcSecondFloorRooms.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {ictcSecondFloorRooms.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}
+
                   {formData.floor === "Other" && (
                     <div className="create-scope__group">
-                      <label htmlFor="room">Room or area<RequiredStar value={formData.room} /></label>
-                      <input id="room" type="text" name="room" placeholder="Enter room or specific area" value={formData.room} onChange={handleChange} required />
+                      <label htmlFor="room">
+                        Room or area
+                        <RequiredStar value={formData.room} />
+                      </label>
+                      <input
+                        id="room"
+                        type="text"
+                        name="room"
+                        placeholder="Enter room or specific area"
+                        value={formData.room}
+                        onChange={handleChange}
+                        required
+                      />
                     </div>
                   )}
                 </>
               )}
 
+              {/* COS room dropdown */}
               {cosHasSpecificRooms && (
                 <div className="create-scope__group">
-                  <label htmlFor="room">Room<RequiredStar value={formData.room} /></label>
-                  <select id="room" name="room" value={formData.room} onChange={handleChange} required>
+                  <label htmlFor="room">
+                    Room
+                    <RequiredStar value={formData.room} />
+                  </label>
+                  <select
+                    id="room"
+                    name="room"
+                    value={formData.room}
+                    onChange={handleChange}
+                    required
+                  >
                     <option value="">Select room</option>
-                    {availableRoomsWithOther?.map((r) => <option key={r} value={r}>{r}</option>)}
+                    {availableRoomsWithOther?.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}
 
+              {/* Other buildings with room dropdown */}
               {needsRoomDropdown && (
                 <>
                   <div className="create-scope__group">
-                    <label htmlFor="floor">Floor<RequiredStar value={formData.floor} /></label>
-                    <select id="floor" name="floor" value={formData.floor} onChange={handleChange} required>
+                    <label htmlFor="floor">
+                      Floor
+                      <RequiredStar value={formData.floor} />
+                    </label>
+                    <select
+                      id="floor"
+                      name="floor"
+                      value={formData.floor}
+                      onChange={handleChange}
+                      required
+                    >
                       <option value="">Select floor</option>
-                      {visibleFloorOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+                      {visibleFloorOptions.map((f) => (
+                        <option key={f} value={f}>
+                          {f}
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div className="create-scope__group">
-                    <label htmlFor="room">Room<RequiredStar value={formData.room} /></label>
-                    <select id="room" name="room" value={formData.room} onChange={handleChange} required disabled={!formData.floor}>
-                      <option value="">{formData.floor ? "Select room" : "Select floor first"}</option>
-                      {formData.floor && availableRoomsWithOther?.map((r) => <option key={r} value={r}>{r}</option>)}
+                    <label htmlFor="room">
+                      Room
+                      <RequiredStar value={formData.room} />
+                    </label>
+                    <select
+                      id="room"
+                      name="room"
+                      value={formData.room}
+                      onChange={handleChange}
+                      required
+                      disabled={!formData.floor}
+                    >
+                      <option value="">
+                        {formData.floor ? "Select room" : "Select floor first"}
+                      </option>
+                      {formData.floor &&
+                        availableRoomsWithOther?.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
                     </select>
                   </div>
                 </>
               )}
 
+              {/* When room dropdown shows "Other" */}
               {needsOtherRoomText && (
                 <div className="create-scope__group">
-                  <label htmlFor="otherRoomText">Specify room / spot<RequiredStar value={formData.otherRoom} /></label>
-                  <input id="otherRoomText" type="text" name="otherRoom" placeholder="Example: 1st floor near the exit" value={formData.otherRoom} onChange={handleChange} required />
-                  <p className="create-scope__hint">Please describe the exact room or location.</p>
+                  <label htmlFor="otherRoomText">
+                    Specify room / spot
+                    <RequiredStar value={formData.otherRoom} />
+                  </label>
+                  <input
+                    id="otherRoomText"
+                    type="text"
+                    name="otherRoom"
+                    placeholder="Example: 1st floor near the exit"
+                    value={formData.otherRoom}
+                    onChange={handleChange}
+                    required
+                  />
+                  <p className="create-scope__hint">
+                    Please describe the exact room or location.
+                  </p>
                 </div>
               )}
 
-              {/* ── Image Upload ──────────────────────────────────────────── */}
+              {/* Image Upload */}
               <div className="create-scope__group">
                 <label>Attach an image (Required)</label>
-                <label className="create-scope__dropzone" onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
-                  <input type="file" name="ImageFile" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*" onChange={handleChange} required={!formData.ImageFile} />
+                <label
+                  className="create-scope__dropzone"
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                >
+                  <input
+                    type="file"
+                    name="ImageFile"
+                    accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
+                    onChange={handleChange}
+                    required={!formData.ImageFile}
+                  />
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path
+                        d="M12 5v14M5 12h14"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
                     </svg>
                     <div className="create-scope__hint">PNG, JPG up to 10 MB</div>
                   </div>
                 </label>
-                {preview && <img className="create-scope__preview-img" src={preview} alt="Preview" />}
+                {preview && (
+                  <img
+                    className="create-scope__preview-img"
+                    src={preview}
+                    alt="Preview"
+                  />
+                )}
               </div>
 
+              {/* Profanity Warning */}
               {hasProfanity && (
                 <p className="create-scope__hint create-scope__hint--error">
-                  Profanity or foul words were detected in your text. Please remove them before submitting.
+                  Profanity or foul words were detected in your text. Please remove
+                  them before submitting.
                 </p>
               )}
 
+              {/* Submit Button */}
               <button
                 className="create-scope__btn create-scope__btn--primary create-scope__w-full"
                 type="submit"
@@ -1315,18 +1893,39 @@ export default function Create() {
         </main>
       </div>
 
-      {/* ── Confirmation Modal ───────────────────────────────────────────── */}
+      {/* Confirmation Modal */}
       {isConfirming && similarReportsCount > 0 && (
         <div className="confirm-overlay">
           <div className="card">
             <p className="cookieHeading">Are you sure?</p>
             <p className="cookieDescription">
-              There&apos;s {similarReportsCount} similar report{similarReportsCount === 1 ? "" : "s"} about the same building, room, and concern.
-              <br />Are you sure you want to submit this report?
+              There&apos;s {similarReportsCount} similar report
+              {similarReportsCount === 1 ? "" : "s"} about the same building, room,
+              and concern.
+              <br />
+              Are you sure you want to submit this report?
             </p>
             <div className="buttonContainer">
-              <button type="button" className="acceptButton" onClick={() => void performSubmit()}>Submit</button>
-              <button type="button" className="declineButton" onClick={() => { setIsConfirming(false); showMsg("info", "Submission cancelled. You can adjust your report and try again."); }}>Cancel</button>
+              <button
+                type="button"
+                className="acceptButton"
+                onClick={() => void performSubmit()}
+              >
+                Submit
+              </button>
+              <button
+                type="button"
+                className="declineButton"
+                onClick={() => {
+                  setIsConfirming(false);
+                  showMsg(
+                    "info",
+                    "Submission cancelled. You can adjust your report and try again."
+                  );
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

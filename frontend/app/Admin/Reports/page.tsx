@@ -8,10 +8,12 @@ import { useUser } from "@clerk/nextjs";
 
 const defaultImg = "/default.jpg";
 
+// Backend base URL (Render)
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "";
 
+// Cloudinary – only the cloud name is needed on the frontend
 const CLOUDINARY_CLOUD_NAME =
   process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "";
 
@@ -20,12 +22,11 @@ type Comment = {
   comment?: string;
   at?: string;
   by?: string;
-  imageUrl?: string;
+  imageUrl?: string; // optional image per comment (existing only, read-only now)
 };
 
 type Report = {
   _id: string;
-  reportId?: string;           // NEW – human-readable ID
   email?: string;
   heading?: string;
   description?: string;
@@ -38,15 +39,12 @@ type Report = {
   floor?: string;
   room?: string;
   otherRoom?: string;
-  image?: string;
-  ImageFile?: string;
+  image?: string; // can be Cloudinary URL or public_id
+  ImageFile?: string; // legacy field from backend
   status?: string;
-  reporterType?: string;       // NEW – "Student" | "Staff/Faculty"
   createdAt?: string;
   comments?: Comment[];
 };
-
-/* ── Formatting helpers ─────────────────────────────────────────────────── */
 
 const formatConcern = (report: Report) => {
   const base = report.concern || "Unspecified";
@@ -54,15 +52,19 @@ const formatConcern = (report: Report) => {
   return sub ? `${base} : ${sub}` : base;
 };
 
+// base concern only, for example "Civil", "Electrical", etc.
 const getBaseConcernFromReport = (r: Report) => {
-  return (r.concern || "Unspecified").trim() || "Unspecified";
+  const base = (r.concern || "Unspecified").trim();
+  return base || "Unspecified";
 };
 
 const formatBuilding = (report: Report) => {
   const rawBuilding = report.building || "Unspecified";
+
   const isOther = rawBuilding && rawBuilding.toLowerCase() === "other";
   const buildingLabel =
     isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
+
   const roomOrSpot = report.room || report.otherRoom;
   return roomOrSpot ? `${buildingLabel} : ${roomOrSpot}` : buildingLabel;
 };
@@ -71,19 +73,34 @@ function getRelativeTime(dateString?: string) {
   if (!dateString) return "";
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return "";
+
   const now = new Date();
   let diffMs = now.getTime() - date.getTime();
   if (diffMs < 0) diffMs = 0;
+
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return "just now";
+
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  if (diffMin < 60) {
+    return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  }
+
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
+
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffDays < 30) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
+
   const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+  if (diffMonths < 12) {
+    return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+  }
+
   const diffYears = Math.floor(diffMonths / 12);
   return `${diffYears} year${diffYears === 1 ? "" : "s"} ago`;
 }
@@ -97,90 +114,144 @@ const getStatusClassKey = (statusRaw?: string) => {
   return "pending";
 };
 
-const statusMatchesFilter = (reportStatus: string | undefined, filter: string) => {
+const statusMatchesFilter = (
+  reportStatus: string | undefined,
+  filter: string
+) => {
   const currentStatus = reportStatus || "Pending";
+
+  // When filter is "Archived", only show archived
   if (filter === "Archived") return currentStatus === "Archived";
+
+  // When filter is "Resolved", only show resolved
   if (filter === "Resolved") return currentStatus === "Resolved";
-  if (filter === "All Statuses") return currentStatus !== "Archived" && currentStatus !== "Resolved";
+
+  // "All Statuses" = active only (hide Resolved and Archived)
+  if (filter === "All Statuses") {
+    return currentStatus !== "Archived" && currentStatus !== "Resolved";
+  }
+
+  // For other specific filters (Pending, Waiting for Materials, In Progress)
   return currentStatus === filter;
 };
 
 const REPORTS_PER_PAGE = 12;
 
+// helper to compute the "similar group" key
+// similar if:
+// - same Concern + SubConcern + Building (no room)
+// - same Concern + SubConcern + Building + Room (if there is a room)
 const getGroupKey = (r: Report) => {
-  const building  = (r.building || "").trim();
-  const concern   = (r.concern || "").trim();
+  const building = (r.building || "").trim();
+  const concern = (r.concern || "").trim();
   const subConcern = (r.subConcern || r.otherConcern || "").trim();
-  const room      = (r.room || r.otherRoom || "").trim();
-  return room
-    ? `${building}|${concern}|${subConcern}|${room}`
-    : `${building}|${concern}|${subConcern}`;
+  const room = (r.room || r.otherRoom || "").trim();
+
+  if (room) {
+    return `${building}|${concern}|${subConcern}|${room}`;
+  }
+  return `${building}|${concern}|${subConcern}`;
 };
 
+/**
+ * Resolve the correct image URL.
+ * Priority:
+ * 1. Already full URL (Cloudinary secure_url or other) uses as is
+ * 2. If we have a Cloudinary cloud name and it looks like a public_id builds Cloudinary URL
+ * 3. Else treats it as a path from the backend and prepends API_BASE
+ */
 const resolveImageFile = (raw?: string) => {
   if (!raw) return defaultImg;
+
   const src = raw.trim();
   if (!src) return defaultImg;
-  if (src.startsWith("http://") || src.startsWith("https://")) return src;
+
+  // Case 1: already full URL (Cloudinary secure_url or any http/https)
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    return src;
+  }
+
+  // Case 2: Cloudinary public_id and we know the cloud name
   if (CLOUDINARY_CLOUD_NAME) {
     const publicId = src.replace(/^\/+/, "");
     return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/${publicId}`;
   }
+
+  // Case 3: fallback to backend static file
   if (!API_BASE) return defaultImg;
-  return src.startsWith("/") ? `${API_BASE}${src}` : `${API_BASE}/${src}`;
+
+  if (src.startsWith("/")) {
+    return `${API_BASE}${src}`;
+  }
+
+  return `${API_BASE}/${src}`;
 };
-
-/* ── Reporter type options (matches create form) ────────────────────────── */
-const REPORTER_TYPE_OPTIONS = ["All Types", "Student", "Staff/Faculty"] as const;
-
-/* ============================================================
-   MAIN COMPONENT
-============================================================ */
 
 export default function ReportPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
   const firstName = user?.firstName || "";
 
+  // only true if user is loaded AND role is admin
   const [canView, setCanView] = useState(false);
+
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
-  // Filters
-  const [buildingFilter,      setBuildingFilter]      = useState("All Buildings");
-  const [concernFilter,       setConcernFilter]       = useState("All Concerns");
-  const [collegeFilter,       setCollegeFilter]       = useState("All Colleges");
-  const [statusFilter,        setStatusFilter]        = useState("All Statuses");
-  const [reporterTypeFilter,  setReporterTypeFilter]  = useState("All Types"); // NEW
-  const [showDuplicates,      setShowDuplicates]      = useState(false);
+  const [buildingFilter, setBuildingFilter] = useState("All Buildings");
+  const [concernFilter, setConcernFilter] = useState("All Concerns");
+  const [collegeFilter, setCollegeFilter] = useState("All Colleges");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
-  // Modal
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [statusValue,    setStatusValue]    = useState("Pending");
-  const [commentText,    setCommentText]    = useState("");
-  const [saving,         setSaving]         = useState(false);
+  const [statusValue, setStatusValue] = useState("Pending");
+  const [commentText, setCommentText] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [loadError, setLoadError] = useState("");
 
-  // Comment editing
+  // edit/delete state for comments
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editingText,  setEditingText]  = useState("");
+  const [editingText, setEditingText] = useState("");
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
+
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
-  /* AUTH GUARD */
+  /* AUTH GUARD: only admins can view this page */
+
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn || !user) { router.replace("/"); return; }
+
+    // Not signed in goes to landing
+    if (!isSignedIn || !user) {
+      router.replace("/");
+      return;
+    }
+
+    // role could be "admin" or ["admin"]
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
-    if (Array.isArray(rawRole) && rawRole.length > 0) role = String(rawRole[0]).toLowerCase();
-    else if (typeof rawRole === "string") role = rawRole.toLowerCase();
-    if (role !== "admin") { router.replace("/Student"); return; }
+
+    if (Array.isArray(rawRole) && rawRole.length > 0) {
+      role = String(rawRole[0]).toLowerCase();
+    } else if (typeof rawRole === "string") {
+      role = rawRole.toLowerCase();
+    }
+
+    if (role !== "admin") {
+      // Non admin goes to student dashboard
+      router.replace("/Student");
+      return;
+    }
+
+    // User is admin allow rendering and data fetch
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
+
+  /* FETCH REPORTS (only after auth says canView = true) */
 
   useEffect(() => {
     if (!canView) return;
@@ -191,20 +262,39 @@ export default function ReportPage() {
   const fetchReports = async () => {
     try {
       setLoadError("");
-      const res = await fetch(`${API_BASE}/api/reports`, { cache: "no-store" });
+
+      const res = await fetch(`${API_BASE}/api/reports`, {
+        cache: "no-store",
+      });
+
       const data = await res.json().catch(() => null);
+
       if (!res.ok || !data) {
-        setLoadError(data?.message || "Could not load reports. Check the server response.");
+        console.warn("Failed /api/reports:", data);
+        setLoadError(
+          data?.message || "Could not load reports. Check the server response."
+        );
         setReports([]);
         return;
       }
+
       let list: Report[] = [];
-      if (Array.isArray(data)) list = data;
-      else if (Array.isArray(data.reports)) list = data.reports;
-      else if (Array.isArray(data.data)) list = data.data;
-      else { setLoadError("Could not load reports. Check the server response."); setReports([]); return; }
+
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (Array.isArray(data.reports)) {
+        list = data.reports;
+      } else if (Array.isArray(data.data)) {
+        list = data.data;
+      } else {
+        console.warn("Unexpected /api/reports payload:", data);
+        setLoadError("Could not load reports. Check the server response.");
+        setReports([]);
+        return;
+      }
+
       setReports(list);
-      setCurrentPage(1);
+      setCurrentPage(1); // reset page on new data
     } catch (err) {
       console.error("Error fetching reports:", err);
       setLoadError("Network error while loading reports.");
@@ -213,6 +303,7 @@ export default function ReportPage() {
   };
 
   /* DUPLICATES */
+
   const getDuplicateCounts = (reportsArr: Report[]) => {
     const counts: Record<string, number> = {};
     reportsArr.forEach((report) => {
@@ -235,18 +326,22 @@ export default function ReportPage() {
   };
 
   const reportsToDisplay = showDuplicates ? reports : filterUniqueReports(reports);
-  const getReportsByGroup = (groupKey: string) => reports.filter((r) => getGroupKey(r) === groupKey);
 
-  /* FILTER OPTIONS – now also driven by reporterTypeFilter */
+  const getReportsByGroup = (groupKey: string) =>
+    reports.filter((r) => getGroupKey(r) === groupKey);
+
+  /* FILTER OPTIONS */
+
   const buildingOptions = [
     "All Buildings",
     ...new Set(
       reports
-        .filter((r) =>
-          (concernFilter === "All Concerns" || r.concern === concernFilter) &&
-          (collegeFilter === "All Colleges" || (r.college || "Unspecified") === collegeFilter) &&
-          statusMatchesFilter(r.status, statusFilter) &&
-          (reporterTypeFilter === "All Types" || (r.reporterType || "Student") === reporterTypeFilter)
+        .filter(
+          (r) =>
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
+            (collegeFilter === "All Colleges" ||
+              (r.college || "Unspecified") === collegeFilter) &&
+            statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.building)
         .filter((v): v is string => Boolean(v))
@@ -257,11 +352,13 @@ export default function ReportPage() {
     "All Concerns",
     ...new Set(
       reports
-        .filter((r) =>
-          (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
-          (collegeFilter === "All Colleges" || (r.college || "Unspecified") === collegeFilter) &&
-          statusMatchesFilter(r.status, statusFilter) &&
-          (reporterTypeFilter === "All Types" || (r.reporterType || "Student") === reporterTypeFilter)
+        .filter(
+          (r) =>
+            (buildingFilter === "All Buildings" ||
+              r.building === buildingFilter) &&
+            (collegeFilter === "All Colleges" ||
+              (r.college || "Unspecified") === collegeFilter) &&
+            statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.concern)
         .filter((v): v is string => Boolean(v))
@@ -272,68 +369,110 @@ export default function ReportPage() {
     "All Colleges",
     ...new Set(
       reports
-        .filter((r) =>
-          (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
-          (concernFilter === "All Concerns" || r.concern === concernFilter) &&
-          statusMatchesFilter(r.status, statusFilter) &&
-          (reporterTypeFilter === "All Types" || (r.reporterType || "Student") === reporterTypeFilter)
+        .filter(
+          (r) =>
+            (buildingFilter === "All Buildings" ||
+              r.building === buildingFilter) &&
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
+            statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.college || "Unspecified")
     ),
   ];
 
   const statusOptions = [
-    "All Statuses", "Pending", "Waiting for Materials", "In Progress", "Resolved", "Archived",
+    "All Statuses",
+    "Pending",
+    "Waiting for Materials",
+    "In Progress",
+    "Resolved",
+    "Archived",
   ];
 
   /* KEEP FILTERS VALID */
+
   useEffect(() => {
     const validConcerns = new Set(
       reports
-        .filter((r) =>
-          (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
-          (collegeFilter === "All Colleges" || (r.college || "Unspecified") === collegeFilter) &&
-          statusMatchesFilter(r.status, statusFilter) &&
-          (reporterTypeFilter === "All Types" || (r.reporterType || "Student") === reporterTypeFilter)
+        .filter(
+          (r) =>
+            (buildingFilter === "All Buildings" ||
+              r.building === buildingFilter) &&
+            (collegeFilter === "All Colleges" ||
+              (r.college || "Unspecified") === collegeFilter) &&
+            statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.concern)
     );
-    if (concernFilter !== "All Concerns" && !validConcerns.has(concernFilter)) setConcernFilter("All Concerns");
-  }, [buildingFilter, collegeFilter, statusFilter, reporterTypeFilter, reports, concernFilter]);
+
+    if (concernFilter !== "All Concerns" && !validConcerns.has(concernFilter)) {
+      setConcernFilter("All Concerns");
+    }
+  }, [buildingFilter, collegeFilter, statusFilter, reports, concernFilter]);
 
   useEffect(() => {
     const validBuildings = new Set(
       reports
-        .filter((r) =>
-          (concernFilter === "All Concerns" || r.concern === concernFilter) &&
-          (collegeFilter === "All Colleges" || (r.college || "Unspecified") === collegeFilter) &&
-          statusMatchesFilter(r.status, statusFilter) &&
-          (reporterTypeFilter === "All Types" || (r.reporterType || "Student") === reporterTypeFilter)
+        .filter(
+          (r) =>
+            (concernFilter === "All Concerns" || r.concern === concernFilter) &&
+            (collegeFilter === "All Colleges" ||
+              (r.college || "Unspecified") === collegeFilter) &&
+            statusMatchesFilter(r.status, statusFilter)
         )
         .map((r) => r.building)
     );
-    if (buildingFilter !== "All Buildings" && !validBuildings.has(buildingFilter)) setBuildingFilter("All Buildings");
-  }, [concernFilter, collegeFilter, statusFilter, reporterTypeFilter, reports, buildingFilter]);
+
+    if (
+      buildingFilter !== "All Buildings" &&
+      !validBuildings.has(buildingFilter)
+    ) {
+      setBuildingFilter("All Buildings");
+    }
+  }, [concernFilter, collegeFilter, statusFilter, reports, buildingFilter]);
 
   /* FILTERED REPORTS */
+
   const filteredReports = reportsToDisplay.filter((report) => {
-    const buildingMatch   = buildingFilter === "All Buildings" || report.building === buildingFilter;
-    const concernMatch    = concernFilter === "All Concerns" || report.concern === concernFilter;
-    const collegeMatch    = collegeFilter === "All Colleges" || (report.college || "Unspecified") === collegeFilter;
-    const statusMatch     = statusMatchesFilter(report.status, statusFilter);
-    const reporterMatch   = reporterTypeFilter === "All Types" || (report.reporterType || "Student") === reporterTypeFilter; // NEW
-    return buildingMatch && concernMatch && collegeMatch && statusMatch && reporterMatch;
+    const buildingMatch =
+      buildingFilter === "All Buildings" || report.building === buildingFilter;
+
+    const concernMatch =
+      concernFilter === "All Concerns" || report.concern === concernFilter;
+
+    const collegeMatch =
+      collegeFilter === "All Colleges" ||
+      (report.college || "Unspecified") === collegeFilter;
+
+    const statusMatch = statusMatchesFilter(report.status, statusFilter);
+
+    return buildingMatch && concernMatch && collegeMatch && statusMatch;
   });
 
+  // Reset to first page whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [buildingFilter, concernFilter, collegeFilter, statusFilter, reporterTypeFilter, showDuplicates]);
+  }, [
+    buildingFilter,
+    concernFilter,
+    collegeFilter,
+    statusFilter,
+    showDuplicates,
+  ]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PER_PAGE));
+  // Pagination calculations
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredReports.length / REPORTS_PER_PAGE)
+  );
   const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
-  const paginatedReports = filteredReports.slice(startIndex, startIndex + REPORTS_PER_PAGE);
+  const paginatedReports = filteredReports.slice(
+    startIndex,
+    startIndex + REPORTS_PER_PAGE
+  );
 
   /* CARD & MODAL HANDLERS */
+
   const handleCardClick = (report: Report) => {
     setSelectedReport(report);
     setStatusValue(report.status || "Pending");
@@ -357,24 +496,41 @@ export default function ReportPage() {
     setConcernFilter("All Concerns");
     setCollegeFilter("All Colleges");
     setStatusFilter("All Statuses");
-    setReporterTypeFilter("All Types"); // NEW
     setShowDuplicates(false);
     setCurrentPage(1);
   };
 
+  // helper: send the full updated comments array for THIS report to the backend
   const syncComments = async (updatedComments: Comment[]) => {
     if (!selectedReport) return;
+
     try {
       setSaving(true);
+
       const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: selectedReport.status || "Pending", comments: updatedComments, overwriteComments: true }),
+        body: JSON.stringify({
+          status: selectedReport.status || "Pending",
+          comments: updatedComments,
+          overwriteComments: true,
+        }),
       });
+
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update comments");
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to update comments");
+      }
+
       const updated = data.report as Report;
-      setReports((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
+
+      // update list in state
+      setReports((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+
+      // update modal
       setSelectedReport(updated);
       setEditingIndex(null);
       setEditingText("");
@@ -386,51 +542,101 @@ export default function ReportPage() {
     }
   };
 
+  /* UPDATE STATUS
+     When saving, update ALL reports with same building + concern (+ subConcern, + room).
+     If a comment is typed, it is included in the status email as an "additional note"
+     AND also saved as a proper comment on the selected report.
+  */
   const handleSaveChanges = async () => {
     if (!selectedReport) return;
+
     try {
       setSaving(true);
+
       const trimmedComment = commentText.trim();
+
+      // find all reports with the same group key
       const groupKey = getGroupKey(selectedReport);
       const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
 
       const updatedReports = await Promise.all(
         groupReports.map(async (r) => {
-          const body: Record<string, any> = { status: statusValue, ...(trimmedComment ? { comment: trimmedComment } : {}) };
+          const body: Record<string, any> = {
+            status: statusValue,
+            // Pass comment so the backend can include it in the status email
+            ...(trimmedComment ? { comment: trimmedComment } : {}),
+          };
+
           const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
+
           const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update report");
+
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.message || "Failed to update report");
+          }
+
           return data.report as Report;
         })
       );
 
+      // If there's a comment, also save it as a comment entry on the selected report
       if (trimmedComment) {
-        const commentRes = await fetch(`${API_BASE}/api/reports/${selectedReport._id}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: trimmedComment, by: "Admin", skipEmail: true }),
-        });
+        const commentRes = await fetch(
+          `${API_BASE}/api/reports/${selectedReport._id}/comments`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: trimmedComment,
+              by: "Admin",
+              // Tell the backend NOT to send a separate comment email since
+              // the status email already includes this comment
+              skipEmail: true,
+            }),
+          }
+        );
+
         const commentData = await commentRes.json().catch(() => null);
+
         if (commentRes.ok && commentData?.success) {
           const updatedWithComment = commentData.report as Report;
-          const idx = updatedReports.findIndex((u) => u._id === selectedReport._id);
+          // merge into updatedReports for the selected one
+          const idx = updatedReports.findIndex(
+            (u) => u._id === selectedReport._id
+          );
           if (idx !== -1) updatedReports[idx] = updatedWithComment;
         }
       }
 
-      setReports((prev) => prev.map((r) => { const match = updatedReports.find((u) => u._id === r._id); return match || r; }));
-      const updatedSelected = updatedReports.find((u) => u._id === selectedReport._id) || updatedReports[0];
+      // update all in local state
+      setReports((prev) =>
+        prev.map((r) => {
+          const match = updatedReports.find((u) => u._id === r._id);
+          return match || r;
+        })
+      );
+
+      // keep modal in sync with the selected report
+      const updatedSelected =
+        updatedReports.find((u) => u._id === selectedReport._id) ||
+        updatedReports[0];
+
       setSelectedReport(updatedSelected);
       setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
 
       const emailRecipient = selectedReport.email || "the report creator";
-      const emailNote = trimmedComment ? `\n📝 Your comment was also included in the notification.` : "";
-      alert(`✅ Report status updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}${emailNote}`);
+      const emailNote = trimmedComment
+        ? `\n📝 Your comment was also included in the notification.`
+        : "";
+
+      alert(
+        `✅ Report status updated successfully!\n\n📧 Status update email sent to: ${emailRecipient}${emailNote}`
+      );
     } catch (err: any) {
       console.error("Error updating reports:", err);
       alert(err.message || "There was a problem saving the changes.");
@@ -441,27 +647,54 @@ export default function ReportPage() {
 
   const handleArchive = async () => {
     if (!selectedReport) return;
+
+    const payload = { status: "Archived", sendEmail: true };
+
     try {
       setSaving(true);
+
+      // find all reports with the same group key
       const groupKey = getGroupKey(selectedReport);
       const groupReports = reports.filter((r) => getGroupKey(r) === groupKey);
+
+      // archive all of them on the server
       const updatedReports = await Promise.all(
         groupReports.map(async (r) => {
           const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "Archived", sendEmail: true }),
+            body: JSON.stringify(payload),
           });
           const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to archive report");
+
+          if (!res.ok || !data?.success) {
+            throw new Error(data?.message || "Failed to archive report");
+          }
+
           return data.report as Report;
         })
       );
-      setReports((prev) => prev.map((r) => { const match = updatedReports.find((u) => u._id === r._id); return match || r; }));
-      const updatedSelected = updatedReports.find((u) => u._id === selectedReport._id) || updatedReports[0];
+
+      // update all in local state
+      setReports((prev) =>
+        prev.map((r) => {
+          const match = updatedReports.find((u) => u._id === r._id);
+          return match || r;
+        })
+      );
+
+      const updatedSelected =
+        updatedReports.find((u) => u._id === selectedReport._id) ||
+        updatedReports[0];
+
       setSelectedReport(updatedSelected);
       setStatusValue("Archived");
-      alert(`✅ Report(s) archived successfully!\n\n📧 Status update sent to: ${selectedReport.email || "the report creator"}`);
+
+      // Show success message
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Report(s) archived successfully!\n\n📧 Status update sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error archiving reports:", err);
       alert("There was a problem archiving the report(s).");
@@ -473,10 +706,12 @@ export default function ReportPage() {
   const renderStatusPill = (statusRaw?: string) => {
     const classKey = getStatusClassKey(statusRaw);
     const status = statusRaw || "Pending";
+
     return <span className={`status-pill status-${classKey}`}>{status}</span>;
   };
 
-  /* COMMENT HELPERS */
+  /* COMMENT EDIT / DELETE HELPERS (single report) */
+
   const startEditComment = (index: number) => {
     if (!selectedReport?.comments) return;
     const c = selectedReport.comments[index];
@@ -485,44 +720,96 @@ export default function ReportPage() {
     setEditingText(c.text || c.comment || "");
   };
 
-  const cancelEditComment = () => { setEditingIndex(null); setEditingText(""); };
+  const cancelEditComment = () => {
+    setEditingIndex(null);
+    setEditingText("");
+  };
 
   const saveEditedComment = async (index: number) => {
     if (!selectedReport || !selectedReport.comments) return;
+
     const trimmed = editingText.trim();
-    if (!trimmed) { alert("Comment cannot be empty."); return; }
+    if (!trimmed) {
+      alert("Comment cannot be empty.");
+      return;
+    }
+
     const updatedComments = selectedReport.comments.map((c, i) => {
       if (i !== index) return c;
-      return { ...c, text: trimmed, comment: trimmed, at: new Date().toISOString() };
+      const updated: Comment = { ...c };
+
+      updated.text = trimmed;
+      updated.comment = trimmed;
+      updated.at = new Date().toISOString();
+      // imageUrl left as is, no editing / inserting
+
+      return updated;
     });
+
     await syncComments(updatedComments);
   };
 
   const deleteComment = async (index: number) => {
     if (!selectedReport || !selectedReport.comments) return;
-    if (!window.confirm("Delete this comment?")) return;
-    const updatedComments = selectedReport.comments.filter((_c, i) => i !== index);
+
+    const confirmDelete = window.confirm("Delete this comment?");
+    if (!confirmDelete) return;
+
+    const updatedComments = selectedReport.comments.filter(
+      (_c, i) => i !== index
+    );
+
     await syncComments(updatedComments);
   };
 
+  /* ADD INDIVIDUAL COMMENT
+     Posts to /api/reports/:id/comments — the backend handles sending the comment email.
+  */
   const addIndividualComment = async () => {
     if (!selectedReport) return;
+
     const trimmed = commentText.trim();
-    if (!trimmed) { alert("Please enter a comment."); return; }
+    if (!trimmed) {
+      alert("Please enter a comment.");
+      return;
+    }
+
     try {
       setSaving(true);
-      const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: trimmed, by: "Admin" }),
-      });
+
+      const res = await fetch(
+        `${API_BASE}/api/reports/${selectedReport._id}/comments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: trimmed,
+            by: "Admin",
+          }),
+        }
+      );
+
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to add comment");
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || "Failed to add comment");
+      }
+
       const updated = data.report as Report;
-      setReports((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
+
+      // update list in state
+      setReports((prev) =>
+        prev.map((r) => (r._id === updated._id ? updated : r))
+      );
+
+      // update modal
       setSelectedReport(updated);
       setCommentText("");
-      alert(`✅ Comment added successfully!\n\n📧 Comment notification email sent to: ${selectedReport.email || "the report creator"}`);
+
+      const emailRecipient = selectedReport.email || "the report creator";
+      alert(
+        `✅ Comment added successfully!\n\n📧 Comment notification email sent to: ${emailRecipient}`
+      );
     } catch (err: any) {
       console.error("Error adding comment:", err);
       alert(err.message || "There was a problem adding the comment.");
@@ -531,83 +818,185 @@ export default function ReportPage() {
     }
   };
 
-  /* PRINT */
+  /* PRINT ANALYTICS (SUMMARY STATS) FOR CURRENT FILTERS */
+
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
+
     const printedBy = firstName || "Administrator";
 
+    // statistics based on current filtered reports
     const concernBaseCounts = new Map<string, number>();
-    const concernCounts     = new Map<string, number>();
-    const buildingCounts    = new Map<string, number>();
-    const reporterCounts    = new Map<string, number>(); // NEW
+    const concernCounts = new Map<string, number>();
+    const buildingCounts = new Map<string, number>();
 
     filteredReports.forEach((r) => {
+      // base concern
       const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
-      concernBaseCounts.set(baseConcern, (concernBaseCounts.get(baseConcern) || 0) + 1);
+      concernBaseCounts.set(
+        baseConcern,
+        (concernBaseCounts.get(baseConcern) || 0) + 1
+      );
 
+      // detailed concern (with subConcern)
       const concernLabel = formatConcern(r);
-      concernCounts.set(concernLabel || "Unspecified", (concernCounts.get(concernLabel || "Unspecified") || 0) + 1);
+      const concernKey = concernLabel || "Unspecified";
+      concernCounts.set(concernKey, (concernCounts.get(concernKey) || 0) + 1);
 
+      // building
       const buildingKey = (r.building || "Unspecified").trim() || "Unspecified";
-      buildingCounts.set(buildingKey, (buildingCounts.get(buildingKey) || 0) + 1);
-
-      const rType = r.reporterType || "Student";
-      reporterCounts.set(rType, (reporterCounts.get(rType) || 0) + 1);
+      buildingCounts.set(
+        buildingKey,
+        (buildingCounts.get(buildingKey) || 0) + 1
+      );
     });
 
-    const toList = (m: Map<string, number>) =>
-      [...m.entries()].sort((a, b) => b[1] - a[1]).map(([n, c]) => `<li>${n}: ${c}</li>`).join("") || "<li>None.</li>";
+    const concernBaseStatsHtml =
+      [...concernBaseCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No concerns for current filters.</li>";
 
-    const rowsHtml = filteredReports.map((r, idx) => {
-      const safe = (v?: string) => (v ? String(v) : "");
-      return `<tr>
-        <td>${idx + 1}</td>
-        <td>${r.reportId || "-"}</td>
-        <td>${r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}</td>
-        <td>${safe(r.status)}</td>
-        <td>${safe(r.reporterType)}</td>
-        <td>${safe(r.building)}</td>
-        <td>${safe(formatConcern(r))}</td>
-        <td>${safe(r.college)}</td>
-        <td>${safe(r.floor)}</td>
-        <td>${safe(r.room)}</td>
-        <td>${safe(r.email)}</td>
-      </tr>`;
-    }).join("");
+    const concernStatsHtml =
+      [...concernCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No detailed concerns for current filters.</li>";
 
-    const html = `<!doctype html><html><head><meta charset="utf-8"/>
-    <title>BFMO Reports Analytics</title>
-    <style>
-      body { font-family: system-ui, sans-serif; font-size: 12px; color: #111827; padding: 16px; }
-      h1 { font-size: 20px; margin-bottom: 4px; }
-      h2 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-      h3 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
-      .meta { font-size: 12px; color: #4b5563; margin-bottom: 12px; }
-      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-      th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; vertical-align: top; }
-      thead { background: #f3f4f6; }
-      ul { margin: 4px 0 8px 16px; padding: 0; }
-      li { margin: 2px 0; }
-    </style></head><body>
-    <h1>BFMO Reports - Analytics (Current Filters)</h1>
-    <div class="meta">
-      Generated at: ${new Date().toLocaleString()}<br/>
-      Records shown: ${filteredReports.length}<br/>
-      Printed by: ${printedBy}
-    </div>
-    <h2>Summary Statistics</h2>
-    <h3>By Reporter Type</h3><ul>${toList(reporterCounts)}</ul>
-    <h3>By Concern (Base)</h3><ul>${toList(concernBaseCounts)}</ul>
-    <h3>By Concern (Detailed)</h3><ul>${toList(concernCounts)}</ul>
-    <h3>By Building</h3><ul>${toList(buildingCounts)}</ul>
-    <h2>Detailed Report</h2>
-    <table><thead><tr>
-      <th>#</th><th>Report ID</th><th>Date Created</th><th>Status</th><th>Reporter</th>
-      <th>Building</th><th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th>
-    </tr></thead><tbody>
-      ${rowsHtml || '<tr><td colspan="11">No data for current filters.</td></tr>'}
-    </tbody></table>
-    </body></html>`;
+    const buildingStatsHtml =
+      [...buildingCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`)
+        .join("") || "<li>No buildings for current filters.</li>";
+
+    const rowsHtml = filteredReports
+      .map((r, idx) => {
+        const concernLabel = formatConcern(r);
+        const created = r.createdAt
+          ? new Date(r.createdAt).toLocaleString()
+          : "";
+        const safe = (v?: string) => (v ? String(v) : "");
+        return `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>${created}</td>
+          <td>${safe(r.status)}</td>
+          <td>${safe(r.building)}</td>
+          <td>${safe(concernLabel)}</td>
+          <td>${safe(r.college)}</td>
+          <td>${safe(r.floor)}</td>
+          <td>${safe(r.room)}</td>
+          <td>${safe(r.email)}</td>
+        </tr>
+      `;
+      })
+      .join("");
+
+    const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>BFMO Reports Analytics</title>
+        <style>
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 12px;
+            color: #111827;
+            padding: 16px;
+          }
+          h1 {
+            font-size: 20px;
+            margin-bottom: 4px;
+          }
+          h2 {
+            font-size: 16px;
+            margin-top: 16px;
+            margin-bottom: 4px;
+          }
+          h3 {
+            font-size: 14px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+          }
+          .meta {
+            font-size: 12px;
+            color: #4b5563;
+            margin-bottom: 12px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+          th, td {
+            border: 1px solid #d1d5db;
+            padding: 4px 8px;
+            text-align: left;
+            vertical-align: top;
+          }
+          thead {
+            background: #f3f4f6;
+          }
+          ul {
+            margin: 4px 0 8px 16px;
+            padding: 0;
+          }
+          li {
+            margin: 2px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <h1>BFMO Reports - Analytics (Current Filters)</h1>
+        <div class="meta">
+          Generated at: ${new Date().toLocaleString()}<br />
+          Records shown: ${filteredReports.length}<br />
+          Printed by: ${printedBy}
+        </div>
+
+        <h2>Summary Statistics</h2>
+
+        <h3>By Concern (Base)</h3>
+        <ul>
+          ${concernBaseStatsHtml}
+        </ul>
+
+        <h3>By Concern (Detailed)</h3>
+        <ul>
+          ${concernStatsHtml}
+        </ul>
+
+        <h3>By Building</h3>
+        <ul>
+          ${buildingStatsHtml}
+        </ul>
+
+        <h2>Detailed Report</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Date Created</th>
+              <th>Status</th>
+              <th>Building</th>
+              <th>Concern</th>
+              <th>College</th>
+              <th>Floor</th>
+              <th>Room</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              rowsHtml ||
+              '<tr><td colspan="9">No data for current filters.</td></tr>'
+            }
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `;
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;
@@ -619,10 +1008,17 @@ export default function ReportPage() {
   }, [filteredReports, firstName]);
 
   /* RENDER */
+
+  // While Clerk is still loading, or we have not yet confirmed the user is admin
   if (!isLoaded || !canView) {
-    return <div className="report-wrapper"><p>Checking your permissions…</p></div>;
+    return (
+      <div className="report-wrapper">
+        <p>Checking your permissions…</p>
+      </div>
+    );
   }
 
+  // comments to show: only from the currently selected report
   const commentsToShow: Comment[] = selectedReport?.comments || [];
 
   return (
@@ -631,79 +1027,115 @@ export default function ReportPage() {
         <div className="header">
           <div>
             <h1>Reports</h1>
-            <p className="header-subtitle">Review, update, and archive facility reports in one place.</p>
+            <p className="header-subtitle">
+              Review, update, and archive facility reports in one place.
+            </p>
           </div>
           <div className="header-actions">
-            <button className="printreports-btn" onClick={handlePrint}>Print Analytic Reports</button>
+            <button className="printreports-btn" onClick={handlePrint}>
+              Print Analytic Reports
+            </button>
           </div>
         </div>
 
         {loadError && (
           <div className="load-error-banner">
-            {loadError} <button type="button" onClick={fetchReports}>Retry</button>
+            {loadError}{" "}
+            <button type="button" onClick={fetchReports}>
+              Retry
+            </button>
           </div>
         )}
 
         <div className="filters-card">
           <div className="filters-header-row">
             <span className="filters-title">Filters</span>
-            <button className="clear-filters-btn" type="button" onClick={handleClearFilters}>Clear filters</button>
+            <button
+              className="clear-filters-btn"
+              type="button"
+              onClick={handleClearFilters}
+            >
+              Clear filters
+            </button>
           </div>
 
           <div className="filters">
-            {/* Building */}
             <div className="filter-field">
               <label htmlFor="building-filter">Building</label>
-              <select id="building-filter" value={buildingFilter} onChange={(e) => setBuildingFilter(e.target.value)}>
-                {buildingOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+              <select
+                id="building-filter"
+                value={buildingFilter}
+                onChange={(e) => setBuildingFilter(e.target.value)}
+              >
+                {buildingOptions.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Concern */}
             <div className="filter-field">
               <label htmlFor="concern-filter">Concern</label>
-              <select id="concern-filter" value={concernFilter} onChange={(e) => setConcernFilter(e.target.value)}>
-                {concernOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              <select
+                id="concern-filter"
+                value={concernFilter}
+                onChange={(e) => setConcernFilter(e.target.value)}
+              >
+                {concernOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* College */}
             <div className="filter-field">
               <label htmlFor="college-filter">College</label>
-              <select id="college-filter" value={collegeFilter} onChange={(e) => setCollegeFilter(e.target.value)}>
-                {collegeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              <select
+                id="college-filter"
+                value={collegeFilter}
+                onChange={(e) => setCollegeFilter(e.target.value)}
+              >
+                {collegeOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {/* Status */}
             <div className="filter-field">
               <label htmlFor="status-filter">Status</label>
-              <select id="status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            {/* Reporter Type – NEW */}
-            <div className="filter-field">
-              <label htmlFor="reporter-type-filter">Reporter</label>
               <select
-                id="reporter-type-filter"
-                value={reporterTypeFilter}
-                onChange={(e) => setReporterTypeFilter(e.target.value)}
+                id="status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
               >
-                {REPORTER_TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                {statusOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
 
             <label className="duplicate-toggle">
-              <input type="checkbox" checked={showDuplicates} onChange={() => setShowDuplicates((prev) => !prev)} />
+              <input
+                type="checkbox"
+                checked={showDuplicates}
+                onChange={() => setShowDuplicates((prev) => !prev)}
+              />
               Show duplicates
             </label>
           </div>
         </div>
 
         {filteredReports.length === 0 && !loadError && (
-          <p className="no-reports-msg">No reports found for the current filters. Try submitting a report or clearing filters.</p>
+          <p className="no-reports-msg">
+            No reports found for the current filters. Try submitting a report or
+            clearing filters.
+          </p>
         )}
 
         {filteredReports.length > 0 && (
@@ -711,36 +1143,76 @@ export default function ReportPage() {
             {selectedGroup ? (
               <div className="reports-list">
                 <div className="group-header">
-                  <h2>Similar reports for <em>{selectedGroup}</em></h2>
-                  <button onClick={() => setSelectedGroup(null)} className="back-btn" type="button">Back</button>
+                  <h2>
+                    Similar reports for <em>{selectedGroup}</em>
+                  </h2>
+                  <button
+                    onClick={() => setSelectedGroup(null)}
+                    className="back-btn"
+                    type="button"
+                  >
+                    Back
+                  </button>
                 </div>
+
                 {getReportsByGroup(selectedGroup).map((report) => {
                   const statusKey = getStatusClassKey(report.status);
-                  const imageSrc  = resolveImageFile(report.image || report.ImageFile);
+                  const imageSrc = resolveImageFile(
+                    report.image || report.ImageFile
+                  );
+
                   return (
-                    <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
+                    <div
+                      key={report._id}
+                      className="report"
+                      onClick={() => handleCardClick(report)}
+                    >
                       <div className="report-img-container">
-                        <img src={imageSrc} alt="Report" className="report-img" onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }} />
+                        <img
+                          src={imageSrc}
+                          alt="Report"
+                          className="report-img"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = defaultImg;
+                          }}
+                        />
                       </div>
+
                       <div className="report-body">
                         <div className="report-header-row">
                           <h3>{report.heading || "Untitled report"}</h3>
-                          {report.reportId && <span className="report-id-badge">#{report.reportId}</span>}
                         </div>
-                        <div className={`status-focus-row status-focus-${statusKey}`}>
+
+                        <div
+                          className={`status-focus-row status-focus-${statusKey}`}
+                        >
                           <span className="status-focus-label">Status</span>
                           {renderStatusPill(report.status)}
                         </div>
-                        <p className="report-description">{report.description || "No description provided."}</p>
+
+                        <p className="report-description">
+                          {report.description || "No description provided."}
+                        </p>
+
                         <div className="report-info">
-                          <p><strong>Building:</strong> {formatBuilding(report)}</p>
-                          <p><strong>Concern:</strong> {formatConcern(report)}</p>
-                          <p><strong>College:</strong> {report.college || "Unspecified"}</p>
-                          <p><strong>Reporter:</strong> {report.reporterType || "Student"}</p>
+                          <p>
+                            <strong>Building:</strong>{" "}
+                            {formatBuilding(report)}
+                          </p>
+                          <p>
+                            <strong>Concern:</strong> {formatConcern(report)}
+                          </p>
+                          <p>
+                            <strong>College:</strong>{" "}
+                            {report.college || "Unspecified"}
+                          </p>
                         </div>
                         <p className="submitted-date">
-                          {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
-                          {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+                          {report.createdAt
+                            ? new Date(report.createdAt).toLocaleDateString()
+                            : ""}
+                          {report.createdAt &&
+                            ` (${getRelativeTime(report.createdAt)})`}
                         </p>
                       </div>
                     </div>
@@ -751,39 +1223,77 @@ export default function ReportPage() {
               <>
                 <div className="reports-list">
                   {paginatedReports.map((report) => {
-                    const key        = getGroupKey(report);
+                    const key = getGroupKey(report);
                     const duplicates = (duplicateCounts[key] || 1) - 1;
-                    const statusKey  = getStatusClassKey(report.status);
-                    const imageSrc   = resolveImageFile(report.image || report.ImageFile);
+                    const statusKey = getStatusClassKey(report.status);
+                    const imageSrc = resolveImageFile(
+                      report.image || report.ImageFile
+                    );
 
                     return (
-                      <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
+                      <div
+                        key={report._id}
+                        className="report"
+                        onClick={() => handleCardClick(report)}
+                      >
                         <div className="report-img-container">
-                          <img src={imageSrc} alt="Report" className="report-img" onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }} />
+                          <img
+                            src={imageSrc}
+                            alt="Report"
+                            className="report-img"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = defaultImg;
+                            }}
+                          />
                         </div>
                         <div className="report-body">
                           <div className="report-header-row">
                             <h3>{report.heading || "Untitled report"}</h3>
-                            {report.reportId && <span className="report-id-badge">#{report.reportId}</span>}
                           </div>
-                          <div className={`status-focus-row status-focus-${statusKey}`}>
+
+                          <div
+                            className={`status-focus-row status-focus-${statusKey}`}
+                          >
                             <span className="status-focus-label">Status</span>
                             {renderStatusPill(report.status)}
                           </div>
-                          <p className="report-description">{report.description || "No description provided."}</p>
-                          <div className="report-info">
-                            <p><strong>Building:</strong> {formatBuilding(report)}</p>
-                            <p><strong>Concern:</strong> {formatConcern(report)}</p>
-                            <p><strong>College:</strong> {report.college || "Unspecified"}</p>
-                            <p><strong>Reporter:</strong> {report.reporterType || "Student"}</p>
-                          </div>
-                          <p className="submitted-date">
-                            {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
-                            {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+
+                          <p className="report-description">
+                            {report.description || "No description provided."}
                           </p>
+
+                          <div className="report-info">
+                            <p>
+                              <strong>Building:</strong>{" "}
+                              {formatBuilding(report)}
+                            </p>
+                            <p>
+                              <strong>Concern:</strong> {formatConcern(report)}
+                            </p>
+                            <p>
+                              <strong>College:</strong>{" "}
+                              {report.college || "Unspecified"}
+                            </p>
+                          </div>
+
+                          <p className="submitted-date">
+                            {report.createdAt
+                              ? new Date(report.createdAt).toLocaleDateString()
+                              : ""}
+                            {report.createdAt &&
+                              ` (${getRelativeTime(report.createdAt)})`}
+                          </p>
+
                           {!showDuplicates && duplicates > 0 && (
-                            <p className="duplicate-msg" onClick={(e) => { e.stopPropagation(); setSelectedGroup(key); }}>
-                              Similar type of report: ({duplicates} {duplicates === 1 ? "report" : "reports"})
+                            <p
+                              className="duplicate-msg"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedGroup(key);
+                              }}
+                            >
+                              Similar type of report: ({duplicates}{" "}
+                              {duplicates === 1 ? "report" : "reports"})
                             </p>
                           )}
                         </div>
@@ -792,18 +1302,44 @@ export default function ReportPage() {
                   })}
                 </div>
 
+                {/* Pagination controls */}
                 {totalPages > 1 && (
                   <div className="pagination">
-                    <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Previous</button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </button>
+
                     {Array.from({ length: totalPages }, (_, idx) => {
                       const page = idx + 1;
                       return (
-                        <button key={page} type="button" className={page === currentPage ? "page-btn active" : "page-btn"} onClick={() => setCurrentPage(page)}>
+                        <button
+                          key={page}
+                          type="button"
+                          className={
+                            page === currentPage
+                              ? "page-btn active"
+                              : "page-btn"
+                          }
+                          onClick={() => setCurrentPage(page)}
+                        >
                           {page}
                         </button>
                       );
                     })}
-                    <button type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </button>
                   </div>
                 )}
               </>
@@ -811,64 +1347,104 @@ export default function ReportPage() {
           </>
         )}
 
-        {/* ── MODAL ─────────────────────────────────────────────────────── */}
         {selectedReport && (
           <div className="report-modal-backdrop" onClick={closeDetails}>
-            <div className="report-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="report-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* HEADER */}
               <div className="modal-header">
                 <div className="modal-header-main">
                   <h2>{selectedReport.heading || "Report details"}</h2>
-                  {selectedReport.reportId && (
-                    <span className="report-id-badge modal-report-id">ID #{selectedReport.reportId}</span>
-                  )}
                 </div>
-                <button className="modal-close-btn" onClick={closeDetails} type="button">✕</button>
+
+                <button
+                  className="modal-close-btn"
+                  onClick={closeDetails}
+                  type="button"
+                >
+                  ✕
+                </button>
               </div>
 
+              {/* CONTENT */}
               <div className="modal-content">
                 <div className="modal-thumb-mobile">
                   <img
-                    src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+                    src={resolveImageFile(
+                      selectedReport.ImageFile || selectedReport.image
+                    )}
                     alt="Report"
                     className="report-img report-img-clickable"
                     onClick={() => setIsImageExpanded(true)}
-                    onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultImg;
+                    }}
                   />
                 </div>
 
                 <div className="modal-img-wrapper">
                   <img
-                    src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+                    src={resolveImageFile(
+                      selectedReport.ImageFile || selectedReport.image
+                    )}
                     alt="Report"
                     className="report-img report-img-clickable"
                     onClick={() => setIsImageExpanded(true)}
-                    onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultImg;
+                    }}
                   />
                 </div>
 
                 <div className="modal-info">
-                  <p className="modal-description">{selectedReport.description || "No description provided."}</p>
+                  <p className="modal-description">
+                    {selectedReport.description || "No description provided."}
+                  </p>
 
                   <div className="modal-meta-grid">
-                    <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
-                    <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
-                    <p><strong>College:</strong> {selectedReport.college || "Unspecified"}</p>
-                    <p><strong>Reporter:</strong> {selectedReport.reporterType || "Student"}</p>
-                    <p><strong>Email:</strong> {selectedReport.email || "Unspecified"}</p>
+                    <p>
+                      <strong>Building:</strong>{" "}
+                      {formatBuilding(selectedReport)}
+                    </p>
+                    <p>
+                      <strong>Concern:</strong>{" "}
+                      {formatConcern(selectedReport)}
+                    </p>
+                    <p>
+                      <strong>College:</strong>{" "}
+                      {selectedReport.college || "Unspecified"}
+                    </p>
+                    <p>
+                      <strong>Email:</strong>{" "}
+                      {selectedReport.email || "Unspecified"}
+                    </p>
                     <p>
                       <strong>Submitted:</strong>{" "}
-                      {selectedReport.createdAt && new Date(selectedReport.createdAt).toLocaleString()}{" "}
-                      {selectedReport.createdAt && `(${getRelativeTime(selectedReport.createdAt)})`}
+                      {selectedReport.createdAt &&
+                        new Date(selectedReport.createdAt).toLocaleString()}{" "}
+                      {selectedReport.createdAt &&
+                        `(${getRelativeTime(selectedReport.createdAt)})`}
                     </p>
                   </div>
 
-                  <div className={`status-panel status-focus-${getStatusClassKey(statusValue)}`}>
+                  <div
+                    className={`status-panel status-focus-${getStatusClassKey(
+                      statusValue
+                    )}`}
+                  >
                     <div className="status-panel-header">
                       <span className="status-panel-title">Status</span>
                       {renderStatusPill(statusValue)}
                     </div>
                     <div className="status-row status-row-inline">
-                      <label htmlFor="status-select" className="status-row-label">Update</label>
+                      <label
+                        htmlFor="status-select"
+                        className="status-row-label"
+                      >
+                        Update
+                      </label>
                       <select
                         id="status-select"
                         className="status-select"
@@ -886,30 +1462,87 @@ export default function ReportPage() {
 
                   <div className="comments-section">
                     <h3>Comments</h3>
+
                     {commentsToShow.length > 0 ? (
                       <ul className="comments-list">
                         {commentsToShow.map((c, idx) => (
                           <li key={idx} className="comment-item">
                             {editingIndex === idx ? (
                               <>
-                                <textarea className="comment-edit-input" rows={2} value={editingText} onChange={(e) => setEditingText(e.target.value)} />
+                                <textarea
+                                  className="comment-edit-input"
+                                  rows={2}
+                                  value={editingText}
+                                  onChange={(e) =>
+                                    setEditingText(e.target.value)
+                                  }
+                                />
                                 <div className="comment-actions-row">
-                                  <button type="button" className="comment-btn-save" onClick={() => saveEditedComment(idx)} disabled={saving}>Save</button>
-                                  <button type="button" className="comment-btn-cancel" onClick={cancelEditComment} disabled={saving}>Cancel</button>
+                                  <button
+                                    type="button"
+                                    className="comment-btn-save"
+                                    onClick={() => saveEditedComment(idx)}
+                                    disabled={saving}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="comment-btn-cancel"
+                                    onClick={cancelEditComment}
+                                    disabled={saving}
+                                  >
+                                    Cancel
+                                  </button>
                                 </div>
                               </>
                             ) : (
                               <>
-                                <p className="comment-text">{c.text || c.comment || String(c)}</p>
-                                {c.imageUrl && <img src={c.imageUrl} alt="Comment attachment" className="comment-image" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />}
+                                <p className="comment-text">
+                                  {c.text || c.comment || String(c)}
+                                </p>
+                                {c.imageUrl && (
+                                  <img
+                                    src={c.imageUrl}
+                                    alt="Comment attachment"
+                                    className="comment-image"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display =
+                                        "none";
+                                    }}
+                                  />
+                                )}
                                 <div className="comment-footer">
                                   <div>
-                                    {c.at && <span className="comment-date">{new Date(c.at).toLocaleString()}&nbsp;</span>}
-                                    {c.by && <span className="comment-date">by {c.by}</span>}
+                                    {c.at && (
+                                      <span className="comment-date">
+                                        {new Date(c.at).toLocaleString()}
+                                        &nbsp;
+                                      </span>
+                                    )}
+                                    {c.by && (
+                                      <span className="comment-date">
+                                        by {c.by}
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="comment-actions">
-                                    <button type="button" className="comment-btn-edit" onClick={() => startEditComment(idx)} disabled={saving}>Edit</button>
-                                    <button type="button" className="comment-btn-delete" onClick={() => deleteComment(idx)} disabled={saving}>Delete</button>
+                                    <button
+                                      type="button"
+                                      className="comment-btn-edit"
+                                      onClick={() => startEditComment(idx)}
+                                      disabled={saving}
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="comment-btn-delete"
+                                      onClick={() => deleteComment(idx)}
+                                      disabled={saving}
+                                    >
+                                      Delete
+                                    </button>
                                   </div>
                                 </div>
                               </>
@@ -921,19 +1554,46 @@ export default function ReportPage() {
                       <p className="no-comments">No comments yet.</p>
                     )}
 
-                    <textarea className="comment-input" rows={3} value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Type your comment here…" />
+                    <textarea
+                      className="comment-input"
+                      rows={3}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Type your comment here…"
+                    />
 
                     <div className="modal-actions">
-                      <button className="add-comment-btn" onClick={addIndividualComment} disabled={saving || !commentText.trim()} type="button">
+                      <button
+                        className="add-comment-btn"
+                        onClick={addIndividualComment}
+                        disabled={saving || !commentText.trim()}
+                        type="button"
+                      >
                         {saving ? "Adding..." : "Add Comment"}
                       </button>
+
                       {selectedReport.status !== "Archived" && (
-                        <button className="archive-btn" onClick={handleArchive} disabled={saving} type="button">
-                          {saving && statusValue === "Archived" ? "Archiving..." : "Archive report"}
+                        <button
+                          className="archive-btn"
+                          onClick={handleArchive}
+                          disabled={saving}
+                          type="button"
+                        >
+                          {saving && statusValue === "Archived"
+                            ? "Archiving..."
+                            : "Archive report"}
                         </button>
                       )}
-                      <button className="save-comment-btn" onClick={handleSaveChanges} disabled={saving} type="button">
-                        {saving && statusValue !== "Archived" ? "Updating..." : "Update Status"}
+
+                      <button
+                        className="save-comment-btn"
+                        onClick={handleSaveChanges}
+                        disabled={saving}
+                        type="button"
+                      >
+                        {saving && statusValue !== "Archived"
+                          ? "Updating..."
+                          : "Update Status"}
                       </button>
                     </div>
                   </div>
@@ -941,14 +1601,22 @@ export default function ReportPage() {
               </div>
             </div>
 
+            {/* FULLSCREEN IMAGE OVERLAY */}
             {isImageExpanded && (
-              <div className="image-fullscreen-backdrop" onClick={() => setIsImageExpanded(false)}>
+              <div
+                className="image-fullscreen-backdrop"
+                onClick={() => setIsImageExpanded(false)}
+              >
                 <img
-                  src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+                  src={resolveImageFile(
+                    selectedReport.ImageFile || selectedReport.image
+                  )}
                   alt="Report full view"
                   className="image-fullscreen-img"
                   onClick={(e) => e.stopPropagation()}
-                  onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = defaultImg;
+                  }}
                 />
               </div>
             )}

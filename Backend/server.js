@@ -12,7 +12,6 @@ const { sendReportStatusEmail } = require("./utils/mailer"); // adjust if needed
 
 const app = express();
 
-
 /* -------------------------------
    CORS CONFIG
 --------------------------------*/
