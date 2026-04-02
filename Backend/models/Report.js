@@ -15,6 +15,12 @@ const CommentSchema = new mongoose.Schema(
 
 const ReportSchema = new mongoose.Schema(
   {
+    reportId: {
+  type: String,
+  unique: true,
+  index: true,
+},
+
     email: String,
     heading: String,
     description: String,

@@ -46,6 +46,25 @@ router.get("/", async (req, res) => {
 });
 
 /* ============================================================
+   REPORT ID GENERATOR  →  DDMMYYYYNNN
+============================================================ */
+async function generateReportId() {
+  const now = new Date();
+  const dd   = String(now.getDate()).padStart(2, "0");
+  const mm   = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const prefix = `${dd}${mm}${yyyy}`;          // e.g. "02042026"
+
+  // Count how many reports already have an ID starting with today's prefix
+  const count = await Report.countDocuments({
+    reportId: { $regex: `^${prefix}` },
+  });
+
+  const seq = String(count + 1).padStart(3, "0"); // 001, 002, …
+  return `${prefix}${seq}`;                        // "02042026001"
+}
+
+/* ============================================================
    GET SINGLE REPORT
    GET /api/reports/:id
 ============================================================ */
@@ -91,6 +110,8 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherRoom,
     } = req.body;
 
+    
+
     /* ============================
        IMAGE VALIDATION (SERVER)
     ============================ */
@@ -132,10 +153,13 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
 
     const ImageFile = uploaded.secure_url;
 
+    const reportId = await generateReportId();
+
     /* ============================
        SAVE TO DATABASE
     ============================ */
     const report = await Report.create({
+        reportId,          // ← add this
       email,
       heading,
       description,
