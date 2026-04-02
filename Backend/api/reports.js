@@ -52,8 +52,8 @@ async function generateReportId() {
   const now = new Date();
   const dd   = String(now.getDate()).padStart(2, "0");
   const mm   = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = String(now.getFullYear()).padEnd(2, "0");
-  const prefix = `${dd}${mm}${yyyy}`;          // e.g. "02042026"
+  const yyyy = String(now.getFullYear()).padEnd(2, "0"); 
+  const prefix = `${dd}${mm}${yyyy}`;          // e.g. "020426"
 
   // Count how many reports already have an ID starting with today's prefix
   const count = await Report.countDocuments({
