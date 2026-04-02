@@ -1095,3 +1095,240 @@ html.dark .column-title {
     display: inline;
   }
 }
+
+/* ===================================
+   REPORT ID BADGE STYLING
+=================================== */
+
+.report-id-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+  transition: all 0.2s ease;
+}
+
+.report-id-badge:hover {
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .report-id-badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.5rem;
+    margin-left: 0.35rem;
+  }
+}
+
+/* ===================================
+   MODAL HEADER WITH REPORT ID
+=================================== */
+
+.modal-header-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.modal-header-content h2 {
+  margin: 0;
+  flex: 1;
+}
+
+.modal-report-id {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+/* ===================================
+   REPORT INFO SECTION UPDATES
+=================================== */
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #555;
+  margin: 1rem 0;
+}
+
+.report-info p {
+  margin: 0;
+  padding: 0.35rem 0;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.report-info strong {
+  color: #333;
+  font-weight: 600;
+}
+
+/* ===================================
+   MODAL META GRID UPDATES
+=================================== */
+
+.modal-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.modal-meta-grid p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.modal-meta-grid strong {
+  display: block;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .modal-meta-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+}
+
+/* ===================================
+   REPORT HEADER ROW UPDATES
+=================================== */
+
+.report-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.report-header-row h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .report-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .report-header-row h3 {
+    width: 100%;
+  }
+
+  .report-id-badge {
+    align-self: flex-start;
+  }
+}
+
+/* ===================================
+   STATUS PILL COLOR SCHEME
+=================================== */
+
+.status-pill {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-waiting {
+  background: #dbeafe;
+  color: #0c4a6e;
+}
+
+.status-inprogress {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-completed {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.status-archived {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+/* ===================================
+   USER TYPE DISPLAY
+=================================== */
+
+.report-info p:has(strong:contains("User Type")) {
+  padding: 0.5rem;
+  background: rgba(102, 126, 234, 0.08);
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+  .modal-meta-grid {
+    background: #2a2a2a;
+  }
+
+  .modal-meta-grid p {
+    color: #e0e0e0;
+  }
+
+  .modal-meta-grid strong {
+    color: #f5f5f5;
+  }
+
+  .report-info {
+    color: #ccc;
+  }
+
+  .report-info strong {
+    color: #f0f0f0;
+  }
+}
