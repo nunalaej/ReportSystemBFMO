@@ -108,6 +108,8 @@ const COLLEGE_OPTIONS: string[] = [
   "Staff",
 ];
 
+const USER_TYPE_OPTIONS: string[] = ["Student", "Staff/Faculty"];
+
 const FLOOR_OPTIONS: string[] = [
   "First Floor",
   "Second Floor",
@@ -192,6 +194,7 @@ interface FormDataState {
   subConcern: string;
   building: string;
   college: string;
+  userType: string;
   floor: string;
   room: string;
   ImageFile: File | null;
@@ -201,6 +204,8 @@ interface FormDataState {
 }
 
 interface Report {
+  _id?: string;
+  reportId?: string;
   building?: string;
   concern?: string;
   subConcern?: string;
@@ -394,6 +399,7 @@ export default function Create() {
     subConcern: "",
     building: "",
     college: "",
+    userType: "Student",
     floor: "",
     room: "",
     ImageFile: null,
@@ -408,6 +414,7 @@ export default function Create() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [specificRoom, setSpecificRoom] = useState<boolean>(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
+  const [generatedReportId, setGeneratedReportId] = useState<string>("");
 
   // Data state
   const [existingReports, setExistingReports] = useState<Report[]>([]);
@@ -621,6 +628,7 @@ export default function Create() {
       "concern",
       "building",
       "college",
+      "userType",
     ];
     if (showSubConcern) req.push("subConcern");
     if (needsOtherConcern) req.push("otherConcern");
@@ -728,6 +736,7 @@ export default function Create() {
       buildingDisplay = `Other: ${formData.otherBuilding}`;
     }
     parts.push(`Building: ${buildingDisplay}`);
+    parts.push(`User Type: ${formData.userType || "-"}`);
 
     if (specificRoom) {
       if (isIctc) {
@@ -895,16 +904,16 @@ export default function Create() {
       data.append("email", formData.email);
       data.append("heading", formData.heading);
       data.append("description", formData.description);
+      data.append("userType", formData.userType);
 
       // Handle "Other" concern properly
       if (formData.concern === "Other") {
-        data.append("concern", formData.concern); // "Other"
-data.append("subConcern", "");
-
+        data.append("concern", formData.concern);
+        data.append("subConcern", "");
       } else {
         data.append("concern", formData.concern);
         if (formData.subConcern === "Other") {
-data.append("subConcern", "Other");
+          data.append("subConcern", "Other");
         } else {
           data.append("subConcern", formData.subConcern);
         }
@@ -929,7 +938,7 @@ data.append("subConcern", "Other");
           : formData.room
       );
 
-data.append("otherConcern", formData.otherConcern.trim());
+      data.append("otherConcern", formData.otherConcern.trim());
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom", formData.otherRoom);
 
@@ -953,9 +962,16 @@ data.append("otherConcern", formData.otherConcern.trim());
       if (result.success) {
         if (result.report && typeof result.report === "object") {
           setExistingReports((prev) => [...prev, result.report as Report]);
+          // Store the generated report ID
+          if (result.report.reportId) {
+            setGeneratedReportId(result.report.reportId);
+          }
         }
 
-        showMsg("success", "Report submitted successfully.");
+        showMsg(
+          "success",
+          `Report submitted successfully. Report ID: ${result.report?.reportId || "N/A"}`
+        );
         setFormData({
           email: currentUserEmail || "",
           heading: "",
@@ -964,6 +980,7 @@ data.append("otherConcern", formData.otherConcern.trim());
           subConcern: "",
           building: "",
           college: "",
+          userType: "Student",
           floor: "",
           room: "",
           ImageFile: null,
@@ -1042,6 +1059,7 @@ data.append("otherConcern", formData.otherConcern.trim());
       subConcern: "",
       building: "",
       college: "",
+      userType: "Student",
       floor: "",
       room: "",
       ImageFile: null,
@@ -1052,6 +1070,7 @@ data.append("otherConcern", formData.otherConcern.trim());
     setPreview(null);
     setSpecificRoom(false);
     setIsConfirming(false);
+    setGeneratedReportId("");
     showMsg("info", "Form cleared.");
   }, [currentUserEmail, showMsg]);
 
@@ -1198,6 +1217,16 @@ data.append("otherConcern", formData.otherConcern.trim());
                   </strong>
                 </div>
 
+                {generatedReportId && (
+                  <>
+                    <hr className="create-scope__summary-rule" />
+                    <div className="create-scope__summary-row">
+                      <span>Report ID</span>
+                      <strong className="is-ok">{generatedReportId}</strong>
+                    </div>
+                  </>
+                )}
+
                 <hr className="create-scope__summary-rule" />
 
                 <div className="create-scope__summary-kv">
@@ -1221,6 +1250,8 @@ data.append("otherConcern", formData.otherConcern.trim());
                       ? `: ${formData.otherBuilding}`
                       : ""}
                   </div>
+                  <div>User Type</div>
+                  <div>{formData.userType || "-"}</div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
 
@@ -1425,6 +1456,27 @@ data.append("otherConcern", formData.otherConcern.trim());
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* User Type Row */}
+              <div className="create-scope__group">
+                <label htmlFor="userType">
+                  User Type
+                  <RequiredStar value={formData.userType} />
+                </label>
+                <select
+                  id="userType"
+                  name="userType"
+                  value={formData.userType}
+                  onChange={handleChange}
+                  required
+                >
+                  {USER_TYPE_OPTIONS.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Description */}

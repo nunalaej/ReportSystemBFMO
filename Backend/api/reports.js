@@ -9,6 +9,59 @@ const { upload, validateAndProcessImage } = require("../middleware/imageUpload")
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary");
 const { sendReportStatusEmail } = require("../utils/mailer");
+
+/* ===============================
+   UTILITY FUNCTIONS FOR REPORT ID
+=============================== */
+
+/**
+ * Generates a report ID in format: DDMMYYXXX
+ * DD = day, MM = month, YY = year (2-digit), XXX = 3-digit counter
+ * Counter resets every day
+ * Example: 020426001, 020426002, 030426001
+ */
+async function generateReportId() {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const year = String(now.getFullYear()).slice(-2);
+  
+  const datePrefix = `${day}${month}${year}`;
+  
+  // Find the latest report created today
+  const startOfDay = new Date(now);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  
+  const latestReportToday = await Report.findOne({
+    createdAt: {
+      $gte: startOfDay,
+      $lte: endOfDay,
+    },
+    reportId: {
+      $regex: `^${datePrefix}`,
+    },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+  
+  // Extract counter from the last report ID, or start at 0
+  let counter = 0;
+  if (latestReportToday && latestReportToday.reportId) {
+    const match = latestReportToday.reportId.match(/(\d{3})$/);
+    if (match) {
+      counter = parseInt(match[1], 10);
+    }
+  }
+  
+  // Increment and format the counter
+  counter += 1;
+  const counterStr = String(counter).padStart(3, "0");
+  
+  return `${datePrefix}${counterStr}`;
+}
  
 // ────────────────────────────────────────────────────────────────────
 // GET ALL REPORTS - Only admins can see all
@@ -74,6 +127,7 @@ router.post(
         subConcern,
         building,
         college,
+        userType,
         floor,
         room,
         otherConcern,
@@ -95,8 +149,12 @@ router.post(
         );
         stream.end(req.file.buffer);
       });
+
+      // Generate report ID
+      const reportId = await generateReportId();
  
       const report = await Report.create({
+        reportId,
         email,
         heading,
         description,
@@ -104,6 +162,7 @@ router.post(
         subConcern,
         building,
         college,
+        userType: userType || "Student",
         floor,
         room,
         otherConcern,
