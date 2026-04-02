@@ -56,4 +56,12 @@ const ReportSchema = new mongoose.Schema(
   }
 );
 
+ReportSchema.index({ email: 1 });
+ReportSchema.index({ status: 1 });
+ReportSchema.index({ building: 1 });
+ReportSchema.index({ concern: 1 });
+ReportSchema.index({ createdAt: -1 });
+ReportSchema.index({ status: 1, createdAt: -1 }); // Compound index
+ReportSchema.index({ building: 1, concern: 1 }); // For similarity
+
 module.exports = mongoose.model("Report", ReportSchema);
