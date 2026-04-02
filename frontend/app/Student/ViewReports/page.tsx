@@ -4,6 +4,7 @@ import "@/app/style/reports.css";
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 
 const defaultImg = "/default.jpg";
 
@@ -22,7 +23,6 @@ type Comment = {
 
 type Report = {
   _id: string;
-  reportId?: string;
   email?: string;
   heading?: string;
   description?: string;
@@ -32,7 +32,6 @@ type Report = {
   building?: string;
   otherBuilding?: string;
   college?: string;
-  userType?: string;
   floor?: string;
   room?: string;
   otherRoom?: string;
@@ -51,9 +50,11 @@ const formatConcern = (report: Report) => {
 
 const formatBuilding = (report: Report) => {
   const rawBuilding = report.building || "Unspecified";
-  const isOther = rawBuilding.toLowerCase() === "other";
+  const isOther = rawBuilding && rawBuilding.toLowerCase() === "other";
+
   const buildingLabel =
     isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
+
   const roomOrSpot = report.room || report.otherRoom;
   return roomOrSpot ? `${buildingLabel} : ${roomOrSpot}` : buildingLabel;
 };
@@ -71,17 +72,24 @@ function getRelativeTime(dateString?: string) {
   if (diffSec < 60) return "just now";
 
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  if (diffMin < 60) {
+    return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  }
 
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  }
 
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffDays < 30) {
+    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  }
 
   const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12)
+  if (diffMonths < 12) {
     return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
+  }
 
   const diffYears = Math.floor(diffMonths / 12);
   return `${diffYears} year${diffYears === 1 ? "" : "s"} ago`;
@@ -100,31 +108,18 @@ const REPORTS_PER_PAGE = 12;
 
 export default function ReportPage() {
   const router = useRouter();
+  const { user, isLoaded } = useUser();
 
-  // ── Auth: read email from localStorage (set during login/signup) ──────────
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState<string>("");
 
-  useEffect(() => {
-    const stored = localStorage.getItem("userEmail");
-    if (!stored) {
-      // Not logged in — redirect to login page
-      router.push("/");
-      return;
-    }
-    setUserEmail(stored);
-    setAuthReady(true);
-  }, [router]);
-
-  // ── Reports state ─────────────────────────────────────────────────────────
   const [reports, setReports] = useState<Report[]>([]);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Fullscreen image viewer
+  // NEW: fullscreen image viewer
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
   // Mobile mode
@@ -132,26 +127,57 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     const updateMobile = () => setIsMobile(window.innerWidth <= 768);
+
     updateMobile();
     window.addEventListener("resize", updateMobile);
     return () => window.removeEventListener("resize", updateMobile);
   }, []);
 
-  // ── Fetch reports for this user ───────────────────────────────────────────
+  const handleHome = () => {
+    router.push("/Student");
+  };
+
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("currentUser");
+      sessionStorage.clear();
+      router.push("/");
+    }
+  };
+
   useEffect(() => {
-    if (!authReady || !userEmail) return;
+    if (!isLoaded || !user) return;
 
-    const fetchReports = async () => {
+    const role = user.publicMetadata?.role;
+    if (role === "admin") return router.push("/Admin/");
+    if (role === "staff") return router.push("/Staff/");
+
+    const emailFromClerk =
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses[0]?.emailAddress ||
+      "";
+
+    const usernameFromClerk =
+      user.username ||
+      (user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || "");
+
+    setUserEmail(emailFromClerk);
+    setCurrentUserName(usernameFromClerk);
+  }, [user, isLoaded, router]);
+
+  useEffect(() => {
+    if (!userEmail) return;
+
+    const fetchReportsForUser = async () => {
       try {
-        setLoading(true);
         setLoadError("");
-
-        // Pass email as query param so the server filters server-side
-        const res = await fetch(
-          `${API_BASE}/api/reports?email=${encodeURIComponent(userEmail)}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`${API_BASE}/api/reports`, {
+          cache: "no-store",
+        });
 
         const data = await res.json().catch(() => null);
 
@@ -162,11 +188,11 @@ export default function ReportPage() {
         }
 
         let list: Report[] = [];
+
         if (Array.isArray(data)) list = data;
         else if (Array.isArray(data.reports)) list = data.reports;
         else if (Array.isArray(data.data)) list = data.data;
 
-        // Client-side safety filter: exclude archived, match email
         const filtered = list.filter(
           (r) =>
             r.email?.toLowerCase() === userEmail.toLowerCase() &&
@@ -176,30 +202,17 @@ export default function ReportPage() {
         setReports(filtered);
         setSelectedReport(filtered[0] || null);
         setCurrentPage(1);
-      } catch {
+      } catch (err) {
         setLoadError("Network error loading reports.");
-      } finally {
-        setLoading(false);
       }
     };
 
-    fetchReports();
-  }, [authReady, userEmail]);
+    fetchReportsForUser();
+  }, [userEmail]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("userEmail");
-    sessionStorage.clear();
-    router.push("/");
-  };
-
-  // ── Render helpers ────────────────────────────────────────────────────────
   const renderStatusPill = (statusRaw?: string) => {
     const key = getStatusClassKey(statusRaw);
-    return (
-      <span className={`status-pill status-${key}`}>
-        {statusRaw || "Pending"}
-      </span>
-    );
+    return <span className={`status-pill status-${key}`}>{statusRaw || "Pending"}</span>;
   };
 
   const renderDetailsContent = (report: Report) => (
@@ -207,59 +220,44 @@ export default function ReportPage() {
       <div className="details-header">
         <h3>{report.heading || "Report details"}</h3>
 
-        <div className="modal-img-wrapper">
-          <img
-            src={report.ImageFile || report.image || defaultImg}
-            alt="Report"
-            className="report-img-clickable"
-            onClick={() =>
-              setFullscreenImage(
-                report.ImageFile || report.image || defaultImg
-              )
-            }
-            onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
-          />
-        </div>
-
+        
+      <div className="modal-img-wrapper">
+        <img
+          src={report.ImageFile || report.image || defaultImg}
+          alt="Report"
+          className="report-img-clickable"
+          onClick={() =>
+            setFullscreenImage(report.ImageFile || report.image || defaultImg)
+          }
+          onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
+        />
+      </div>
+      
         {renderStatusPill(report.status)}
       </div>
 
+      
       <p className="modal-description">
         {report.description || "No description provided."}
       </p>
 
       <div className="modal-meta-grid">
-        {report.reportId && (
-          <p>
-            <strong>Report ID:</strong> {report.reportId}
-          </p>
-        )}
-        <p>
-          <strong>Building:</strong> {formatBuilding(report)}
-        </p>
-        <p>
-          <strong>Concern:</strong> {formatConcern(report)}
-        </p>
-        <p>
-          <strong>College:</strong> {report.college || "Unspecified"}
-        </p>
-        {report.userType && (
-  <p className="usertype-highlight">
-    <strong>User Type:</strong> {report.userType}
-  </p>
-)}
-        <p>
-          <strong>Email:</strong> {report.email}
-        </p>
+        <p><strong>Building:</strong> {formatBuilding(report)}</p>
+        <p><strong>Concern:</strong> {formatConcern(report)}</p>
+        <p><strong>College:</strong> {report.college || "Unspecified"}</p>
+        <p><strong>Email:</strong> {report.email}</p>
         <p>
           <strong>Submitted:</strong>{" "}
-          {report.createdAt && new Date(report.createdAt).toLocaleString()}{" "}
+          {report.createdAt &&
+            new Date(report.createdAt).toLocaleString()}{" "}
           {report.createdAt && `(${getRelativeTime(report.createdAt)})`}
         </p>
       </div>
 
+
       <div className="comments-section comments-section--static">
         <h3>Comments</h3>
+
         {Array.isArray(report.comments) && report.comments.length > 0 ? (
           <ul className="comments-list">
             {report.comments.map((c, idx) => (
@@ -285,13 +283,7 @@ export default function ReportPage() {
 
   const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PER_PAGE));
   const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
-  const paginatedReports = reports.slice(
-    startIndex,
-    startIndex + REPORTS_PER_PAGE
-  );
-
-  // Don't render until we've checked localStorage
-  if (!authReady) return null;
+  const paginatedReports = reports.slice(startIndex, startIndex + REPORTS_PER_PAGE);
 
   return (
     <>
@@ -304,27 +296,22 @@ export default function ReportPage() {
             </p>
           </div>
 
-          <div className="header-actions">
-            <a href="/Student/CreateReport" className="create-report-btn">
-              <span className="btn-long">+ Create</span>
-              <span className="btn-short">+ Create Report</span>
-            </a>
-          </div>
+  <div className="header-actions">
+  <a href="/Student/CreateReport" className="create-report-btn">
+    <span className="btn-long">+ Create</span>
+    <span className="btn-short">+ Create Report</span>
+  </a>
+</div>
+
         </div>
 
-        {loading && <p>Loading...</p>}
+        {!isLoaded && <p>Loading...</p>}
 
         {loadError && (
           <div className="load-error-banner">
             {loadError}
-            <button onClick={() => location.reload()}>Retry</button>
+            <button onClick={() => userEmail && location.reload()}>Retry</button>
           </div>
-        )}
-
-        {!loading && reports.length === 0 && !loadError && (
-          <p className="no-reports-message">
-            You have not submitted any reports yet.
-          </p>
         )}
 
         {reports.length > 0 && (
@@ -335,6 +322,7 @@ export default function ReportPage() {
                 {paginatedReports.map((report) => {
                   const isActive =
                     selectedReport && selectedReport._id === report._id;
+
                   const latestComment =
                     report.comments?.[report.comments.length - 1] || null;
 
@@ -344,8 +332,7 @@ export default function ReportPage() {
                       className={`report ${isActive ? "report--active" : ""}`}
                       onClick={() => {
                         setSelectedReport(report);
-                        if (isMobile)
-                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        if (isMobile) window.scrollTo({ top: 0, behavior: "smooth" });
                       }}
                     >
                       <div className="report-img-container">
@@ -362,11 +349,6 @@ export default function ReportPage() {
                       <div className="report-body">
                         <div className="report-header-row">
                           <h3>{report.heading || "Untitled report"}</h3>
-                          {report.reportId && (
-                            <span className="report-id-badge">
-                              {report.reportId}
-                            </span>
-                          )}
                         </div>
 
                         <div
@@ -383,20 +365,9 @@ export default function ReportPage() {
                         </p>
 
                         <div className="report-info">
-                          <p>
-                            <strong>Building:</strong> {formatBuilding(report)}
-                          </p>
-                          <p>
-                            <strong>Concern:</strong> {formatConcern(report)}
-                          </p>
-                          <p>
-                            <strong>College:</strong> {report.college}
-                          </p>
-                          {report.userType && (
-                            <p>
-                              <strong>User Type:</strong> {report.userType}
-                            </p>
-                          )}
+                          <p><strong>Building:</strong> {formatBuilding(report)}</p>
+                          <p><strong>Concern:</strong> {formatConcern(report)}</p>
+                          <p><strong>College:</strong> {report.college}</p>
                         </div>
 
                         <p className="submitted-date">
@@ -431,9 +402,7 @@ export default function ReportPage() {
                   {Array.from({ length: totalPages }, (_, i) => (
                     <button
                       key={i}
-                      className={`page-btn ${
-                        currentPage === i + 1 ? "active" : ""
-                      }`}
+                      className={`page-btn ${currentPage === i + 1 ? "active" : ""}`}
                       onClick={() => setCurrentPage(i + 1)}
                     >
                       {i + 1}
@@ -469,19 +438,9 @@ export default function ReportPage() {
           className="report-modal-backdrop"
           onClick={() => setSelectedReport(null)}
         >
-          <div
-            className="report-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="report-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="modal-header-content">
-                <h2>{selectedReport.heading}</h2>
-                {selectedReport.reportId && (
-                  <span className="modal-report-id">
-                    {selectedReport.reportId}
-                  </span>
-                )}
-              </div>
+              <h2>{selectedReport.heading}</h2>
               <button
                 className="modal-close-btn"
                 onClick={() => setSelectedReport(null)}
@@ -507,9 +466,7 @@ export default function ReportPage() {
                         defaultImg
                     )
                   }
-                  onError={(e) =>
-                    ((e.target as HTMLImageElement).src = defaultImg)
-                  }
+                  onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
                 />
               </div>
 
@@ -531,46 +488,29 @@ export default function ReportPage() {
                 </p>
 
                 <div className="modal-meta-grid">
-                  {selectedReport.reportId && (
-                    <p>
-                      <strong>Report ID:</strong> {selectedReport.reportId}
-                    </p>
-                  )}
-                  <p>
-                    <strong>Building:</strong> {formatBuilding(selectedReport)}
-                  </p>
-                  <p>
-                    <strong>Concern:</strong> {formatConcern(selectedReport)}
-                  </p>
-                  <p>
-                    <strong>College:</strong> {selectedReport.college}
-                  </p>
-                  {selectedReport.userType && (
-                    <p>
-                      <strong>User Type:</strong> {selectedReport.userType}
-                    </p>
-                  )}
-                  <p>
-                    <strong>Email:</strong> {selectedReport.email}
-                  </p>
+                  <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
+                  <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
+                  <p><strong>College:</strong> {selectedReport.college}</p>
+                  <p><strong>Email:</strong> {selectedReport.email}</p>
                 </div>
 
                 <div className="comments-section comments-section--static">
                   <h3>Comments</h3>
+
                   {selectedReport.comments?.length ? (
                     <ul className="comments-list">
                       {selectedReport.comments.map((c, idx) => (
                         <li key={idx} className="comment-item">
-                          <p className="comment-text">{c.text || c.comment}</p>
+                          <p className="comment-text">
+                            {c.text || c.comment}
+                          </p>
                           <div>
                             {c.at && (
                               <span className="comment-date">
                                 {new Date(c.at).toLocaleString()}{" "}
                               </span>
                             )}
-                            {c.by && (
-                              <span className="comment-date">by {c.by}</span>
-                            )}
+                            {c.by && <span className="comment-date">by {c.by}</span>}
                           </div>
                         </li>
                       ))}
@@ -585,7 +525,7 @@ export default function ReportPage() {
         </div>
       )}
 
-      {/* FULLSCREEN IMAGE OVERLAY */}
+      {/* FULLSCREEN IMAGE OVERLAY (DESKTOP + MOBILE) */}
       {fullscreenImage && (
         <div
           className="image-fullscreen-backdrop"
