@@ -1,11 +1,6 @@
 const express = require("express");
 const router = express.Router();
- 
-const { authenticateToken, requireRole } = require("../middleware/auth");
-const { validateReport, validateComment, handleValidationErrors } = require("../middleware/validation");
-const { createReportLimiter, getReportsLimiter, addCommentLimiter, updateStatusLimiter } = require("../middleware/rateLimiter");
-const { upload, validateAndProcessImage } = require("../middleware/imageUpload");
- 
+
 const Report = require("../models/Report");
 const cloudinary = require("../config/cloudinary");
 const { sendReportStatusEmail } = require("../utils/mailer");
