@@ -244,10 +244,10 @@ export default function ReportPage() {
           <strong>College:</strong> {report.college || "Unspecified"}
         </p>
         {report.userType && (
-          <p>
-            <strong>User Type:</strong> {report.userType}
-          </p>
-        )}
+  <p className="usertype-highlight">
+    <strong>User Type:</strong> {report.userType}
+  </p>
+)}
         <p>
           <strong>Email:</strong> {report.email}
         </p>
