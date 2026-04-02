@@ -63,8 +63,6 @@ async function generateReportId() {
 // ────────────────────────────────────────────────────────────────────
 router.get(
   "/",
-  getReportsLimiter,
-  authenticateToken,
   requireRole("admin"),
   async (req, res) => {
     try {
@@ -106,12 +104,7 @@ router.get(
 // ────────────────────────────────────────────────────────────────────
 router.post(
   "/",
-  createReportLimiter,
-  authenticateToken,
   upload.single("ImageFile"),
-  validateAndProcessImage,
-  validateReport,
-  handleValidationErrors,
   async (req, res) => {
     try {
       const {
@@ -185,8 +178,6 @@ router.post(
 // ────────────────────────────────────────────────────────────────────
 router.put(
   "/:id",
-  updateStatusLimiter,
-  authenticateToken,
   requireRole("admin"),
   async (req, res) => {
     try {
@@ -242,11 +233,7 @@ router.put(
 // ────────────────────────────────────────────────────────────────────
 router.post(
   "/:id/comments",
-  addCommentLimiter,
-  authenticateToken,
   requireRole("admin"),
-  validateComment,
-  handleValidationErrors,
   async (req, res) => {
     try {
       const { text, by, skipEmail } = req.body;
@@ -298,7 +285,6 @@ router.post(
 // ────────────────────────────────────────────────────────────────────
 router.delete(
   "/:id/comments/:index",
-  authenticateToken,
   requireRole("admin"),
   async (req, res) => {
     try {
