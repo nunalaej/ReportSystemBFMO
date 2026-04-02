@@ -1411,11 +1411,6 @@ export default function Create() {
                   autoComplete="email"
                   readOnly={Boolean(currentUserEmail)}
                 />
-                <p className="create-scope__hint">
-                  {currentUserEmail
-                    ? "This email came from your login."
-                    : "We may contact you using this email for follow up."}
-                </p>
               </div>
 
               {/* Heading & College Row */}

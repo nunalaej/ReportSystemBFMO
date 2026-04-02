@@ -23,6 +23,7 @@ type Comment = {
 
 type Report = {
   _id: string;
+  reportId?: string;
   email?: string;
   heading?: string;
   description?: string;
@@ -32,6 +33,7 @@ type Report = {
   building?: string;
   otherBuilding?: string;
   college?: string;
+  userType?: string;
   floor?: string;
   room?: string;
   otherRoom?: string;
@@ -242,9 +244,15 @@ export default function ReportPage() {
       </p>
 
       <div className="modal-meta-grid">
+        {report.reportId && (
+          <p><strong>Report ID:</strong> {report.reportId}</p>
+        )}
         <p><strong>Building:</strong> {formatBuilding(report)}</p>
         <p><strong>Concern:</strong> {formatConcern(report)}</p>
         <p><strong>College:</strong> {report.college || "Unspecified"}</p>
+        {report.userType && (
+          <p><strong>User Type:</strong> {report.userType}</p>
+        )}
         <p><strong>Email:</strong> {report.email}</p>
         <p>
           <strong>Submitted:</strong>{" "}
@@ -349,6 +357,9 @@ export default function ReportPage() {
                       <div className="report-body">
                         <div className="report-header-row">
                           <h3>{report.heading || "Untitled report"}</h3>
+                          {report.reportId && (
+                            <span className="report-id-badge">{report.reportId}</span>
+                          )}
                         </div>
 
                         <div
@@ -368,6 +379,9 @@ export default function ReportPage() {
                           <p><strong>Building:</strong> {formatBuilding(report)}</p>
                           <p><strong>Concern:</strong> {formatConcern(report)}</p>
                           <p><strong>College:</strong> {report.college}</p>
+                          {report.userType && (
+                            <p><strong>User Type:</strong> {report.userType}</p>
+                          )}
                         </div>
 
                         <p className="submitted-date">
@@ -440,7 +454,12 @@ export default function ReportPage() {
         >
           <div className="report-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{selectedReport.heading}</h2>
+              <div className="modal-header-content">
+                <h2>{selectedReport.heading}</h2>
+                {selectedReport.reportId && (
+                  <span className="modal-report-id">{selectedReport.reportId}</span>
+                )}
+              </div>
               <button
                 className="modal-close-btn"
                 onClick={() => setSelectedReport(null)}
@@ -488,9 +507,15 @@ export default function ReportPage() {
                 </p>
 
                 <div className="modal-meta-grid">
+                  {selectedReport.reportId && (
+                    <p><strong>Report ID:</strong> {selectedReport.reportId}</p>
+                  )}
                   <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
                   <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
                   <p><strong>College:</strong> {selectedReport.college}</p>
+                  {selectedReport.userType && (
+                    <p><strong>User Type:</strong> {selectedReport.userType}</p>
+                  )}
                   <p><strong>Email:</strong> {selectedReport.email}</p>
                 </div>
 
