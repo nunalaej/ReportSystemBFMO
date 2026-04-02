@@ -158,10 +158,7 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// UPDATE REPORT STATUS - Admin only
-// Attach your own auth middleware before this route in your app, e.g.:
-//   router.use("/:id", requireRole("admin"))
-// or pass it directly:  router.put("/:id", requireRole("admin"), ...)
+// UPDATE REPORT STATUS
 // ────────────────────────────────────────────────────────────────────
 router.put("/:id", async (req, res) => {
   try {
