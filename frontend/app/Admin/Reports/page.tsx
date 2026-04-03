@@ -29,6 +29,7 @@ type Report = {
   _id: string;
   reportId?: string;
   email?: string;
+  userType?: string;
   heading?: string;
   description?: string;
   concern?: string;
@@ -159,6 +160,7 @@ export default function ReportPage() {
 
   // ✅ searchQuery lives here, inside the component
   const [searchQuery, setSearchQuery] = useState("");
+  const [userTypeFilter, setUserTypeFilter] = useState("All");
 
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [statusValue, setStatusValue] = useState("Pending");
@@ -363,6 +365,7 @@ export default function ReportPage() {
 
     const statusMatch = statusMatchesFilter(report.status, statusFilter);
 
+    
     // ✅ searchMatch is actually used in the return now
     const searchMatch =
       !searchQuery.trim() ||
@@ -370,13 +373,16 @@ export default function ReportPage() {
         .toLowerCase()
         .includes(searchQuery.trim().toLowerCase());
 
-    return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMatch;
+    const userTypeMatch =
+  userTypeFilter === "All" || (report.userType || "") === userTypeFilter;
+
+return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMatch && userTypeMatch;
   });
 
   // ✅ searchQuery added to dependency array so page resets when typing
   useEffect(() => {
     setCurrentPage(1);
-  }, [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates, searchQuery]);
+  }, [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates, searchQuery, userTypeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PER_PAGE));
   const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
@@ -410,6 +416,7 @@ export default function ReportPage() {
     setShowDuplicates(false);
     setCurrentPage(1);
     setSearchQuery("");
+    setUserTypeFilter("All");
   };
 
   const syncComments = async (updatedComments: Comment[]) => {
@@ -775,11 +782,25 @@ export default function ReportPage() {
 
         <div className="filters-card">
           <div className="filters-header-row">
-            <span className="filters-title">Filters</span>
-            <button className="clear-filters-btn" type="button" onClick={handleClearFilters}>
-              Clear filters
-            </button>
-          </div>
+  <span className="filters-title">Filters</span>
+  <div className="filters-header-right">
+    <div className="user-type-toggle">
+      {["All", "Student", "Staff/Faculty"].map((type) => (
+        <button
+          key={type}
+          type="button"
+          className={`user-type-btn ${userTypeFilter === type ? "active" : ""}`}
+          onClick={() => setUserTypeFilter(type)}
+        >
+          {type}
+        </button>
+      ))}
+    </div>
+    <button className="clear-filters-btn" type="button" onClick={handleClearFilters}>
+      Clear filters
+    </button>
+  </div>
+</div>
 
           <div className="filters">
             <div className="filter-field">

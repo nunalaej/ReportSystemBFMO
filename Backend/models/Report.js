@@ -21,6 +21,7 @@ const ReportSchema = new mongoose.Schema(
   index: true,
 },
 
+
     email: String,
     heading: String,
     description: String,
@@ -31,6 +32,8 @@ const ReportSchema = new mongoose.Schema(
 
     building: String,
     otherBuilding: { type: String, default: "" },
+
+    userType: { type: String, default: "Student" },
 
     college: { type: String, default: "Unspecified" },
     floor: { type: String, default: "" },
@@ -47,6 +50,8 @@ const ReportSchema = new mongoose.Schema(
         "Archived",
       ],
     },
+
+    
 
     ImageFile: { type: String, default: "" },
 

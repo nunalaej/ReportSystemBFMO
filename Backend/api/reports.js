@@ -108,6 +108,7 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherConcern,
       otherBuilding,
       otherRoom,
+      userType,       // ← add this
     } = req.body;
 
     
@@ -172,6 +173,7 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherConcern,
       otherBuilding,
       otherRoom,
+      userType,       // ← add this
       ImageFile,
     });
 
