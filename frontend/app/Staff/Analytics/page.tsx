@@ -1303,6 +1303,13 @@ const Analytics: FC = () => {
     }
   }, []);
 
+  /* Load from server when user becomes available */
+  useEffect(() => {
+    if (user?.id) {
+      loadFromServer();
+    }
+  }, [user?.id, loadFromServer]);
+
   /* RENDER */
 
   if (!isLoaded || !canView) {

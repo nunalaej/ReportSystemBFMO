@@ -7,8 +7,6 @@ const taskSchema = new mongoose.Schema({
   done: { type: Boolean, default: false },  // ← must be Boolean, not mixed
 }, { _id: false });
 
-
-
 const assignmentSchema = new mongoose.Schema({
   id:            { type: String },
   name:          { type: String },

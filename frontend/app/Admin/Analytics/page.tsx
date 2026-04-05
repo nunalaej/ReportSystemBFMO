@@ -1161,14 +1161,36 @@ const Analytics: FC = () => {
   }, [lists]);
 
   /* Silent auto-save to server */
-  const autoSaveToServer = useCallback((updatedLists: List[]) => {
-    if (!user?.id) return;
-    fetch(`${API_BASE}/api/lists`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, lists: updatedLists }),
-    }).catch(console.error);
-  }, [user]);
+const autoSaveToServer = useCallback((updatedLists: List[]) => {
+  if (!user?.id) return;
+  fetch(`${API_BASE}/api/lists`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId: user.id, lists: updatedLists }),
+  }).catch(console.error);
+}, [user]);
+
+const loadFromServer = useCallback(async () => {
+  if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
+  setListSaveStatus("Loading…");
+  try {
+    const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
+      cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+    });
+    if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) { setLists(data as List[]); setListSaveStatus("✅ Loaded!"); }
+    else setListSaveStatus("ℹ️ No lists found on server");
+  } catch (e: any) { setListSaveStatus(`❌ ${e?.message || "Load failed"}`); }
+  finally { setTimeout(() => setListSaveStatus(""), 3000); }
+}, [user]);
+
+/* Load from server when user becomes available */
+useEffect(() => {
+  if (user?.id) {
+    loadFromServer();
+  }
+}, [user?.id, loadFromServer]);
 
   const computeProgress = useCallback((list: List) => {
     if (!list.tasks || list.tasks.length === 0) return 0;
@@ -1270,20 +1292,12 @@ const Analytics: FC = () => {
     finally { setTimeout(() => setListSaveStatus(""), 3000); }
   }, [lists, user]);
 
-  const loadFromServer = useCallback(async () => {
-    if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
-    setListSaveStatus("Loading…");
-    try {
-      const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
-        cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-      });
-      if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) { setLists(data as List[]); setListSaveStatus("✅ Loaded!"); }
-      else setListSaveStatus("ℹ️ No lists found on server");
-    } catch (e: any) { setListSaveStatus(`❌ ${e?.message || "Load failed"}`); }
-    finally { setTimeout(() => setListSaveStatus(""), 3000); }
-  }, [user]);
+  /* Load from server when user becomes available */
+  useEffect(() => {
+    if (user?.id) {
+      loadFromServer();
+    }
+  }, [user?.id, loadFromServer]);
 
   /* RENDER */
 
