@@ -25,7 +25,7 @@ import { useUser } from "@clerk/nextjs";
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
-  "http://localhost:3000";
+  "http://localhost:5000";
 
 /* ===== Types ===== */
 
