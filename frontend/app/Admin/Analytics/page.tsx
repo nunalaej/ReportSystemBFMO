@@ -1174,7 +1174,7 @@ const loadFromServer = useCallback(async () => {
   if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
   setListSaveStatus("Loading…");
   try {
-    const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
+    const res = await fetch(`${API_BASE}/api/liststask?userId=${encodeURIComponent(user.id)}`, {
       cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
     });
     if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
