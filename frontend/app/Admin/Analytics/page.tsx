@@ -1229,19 +1229,29 @@ useEffect(() => {
     setLists((prev) => prev.map((l) =>
       l.id === listId ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) } : l));
 
-  const createAssignment = useCallback((assignment: Assignment) => {
-    setLists((prev) => {
-      const updated = prev.map((list, index) =>
-        index === 0
-          ? { ...list, assignments: [...(list.assignments || []), { ...assignment, id: uid() }] }
-          : list
-      );
-      autoSaveToServer(updated);
-      setListSaveStatus("✅ Task created & saved!");
-      setTimeout(() => setListSaveStatus(""), 2000);
-      return updated;
+  const createAssignment = useCallback(async (assignment: Assignment) => {
+  if (!user?.id) {
+    setListSaveStatus("❌ Not signed in");
+    return;
+  }
+  setListSaveStatus("Saving…");
+  try {
+    const res = await fetch(`${API_BASE}/api/liststask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, liststask: assignment }),
     });
-  }, [uid, autoSaveToServer]);
+    if (!res.ok) {
+      const t = await res.text().catch(() => res.statusText);
+      throw new Error(`Server responded ${res.status}: ${t}`);
+    }
+    setListSaveStatus("✅ Task created & saved!");
+  } catch (e: any) {
+    setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
+  } finally {
+    setTimeout(() => setListSaveStatus(""), 3000);
+  }
+}, [user]);
 
   const toggleAssignmentTask = useCallback((listId: string, assignmentId: string, taskId: string) => {
     setLists((prev) => {

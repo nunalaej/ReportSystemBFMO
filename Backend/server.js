@@ -6,6 +6,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const listsRouter = require("./api/lists.js")
+const liststaskRouter = require("./api/liststask.js");  // Add this line
 const Meta = require("./api/meta.js");          // Mongoose model
 const reportsRouter = require("./api/reports"); // router for /api/reports
 const { sendReportStatusEmail } = require("./utils/mailer"); // adjust if needed
@@ -36,6 +37,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 --------------------------------*/
 app.use("/api/lists", listsRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/liststask", liststaskRouter);  // Add this line
+
 
 /* -------------------------------
    MONGODB CONNECTION
