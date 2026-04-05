@@ -1,21 +1,26 @@
-const mongoose = require("mongoose");
+const express = require("express");
+const router = express.Router();
 
-const taskSchema = new mongoose.Schema({
-  id: { type: String },
-  text: { type: String },
-  done: { type: Boolean, default: false },
-}, { _id: false });
+const { getListsForUser, saveListsForUser } = require("../modules/createlists");
 
-const liststaskSchema = new mongoose.Schema({
-  id: { type: String },
-  name: { type: String },
-  concernType: { type: String },
-  reportId: { type: String },
-  assignedStaff: { type: [String], default: [] },
-  status: { type: String, default: "Pending" },
-  checklist: { type: [taskSchema], default: [] },
-  userId: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now },
+router.get("/", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const lists = await getListsForUser(userId);
+    return res.json(lists);
+  } catch (err) {
+    console.error("GET /lists error:", err);
+    res.status(500).json({ success: false, message: err.message || "Failed to load lists" });
+  }
 });
 
-module.exports = mongoose.model("Liststask", liststaskSchema);
+router.post("/", async (req, res) => {
+  try {
+    const { userId, lists } = req.body;
+    await saveListsForUser(userId, lists);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("POST /lists error:", err);
+    res.status(500).json({ success: false, message: err.message || "Failed to save lists" });
+  }
+});
