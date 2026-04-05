@@ -10,7 +10,7 @@ router.get("/", async (req, res) => {
     return res.json(lists);
   } catch (err) {
     console.error("GET /lists error:", err);
-    res.status(500).json({ success: false, message: err.message || "Failed to load lists" });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -21,6 +21,8 @@ router.post("/", async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     console.error("POST /lists error:", err);
-    res.status(500).json({ success: false, message: err.message || "Failed to save lists" });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
+
+module.exports = router;
