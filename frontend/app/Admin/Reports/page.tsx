@@ -993,36 +993,73 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
                 </div>
 
                 {totalPages > 1 && (
-                  <div className="pagination">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </button>
-                    {Array.from({ length: totalPages }, (_, idx) => {
-                      const page = idx + 1;
-                      return (
-                        <button
-                          key={page}
-                          type="button"
-                          className={page === currentPage ? "page-btn active" : "page-btn"}
-                          onClick={() => setCurrentPage(page)}
-                        >
-                          {page}
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
+  <div className="pagination">
+    <button
+      type="button"
+      onClick={() => setCurrentPage(1)}
+      disabled={currentPage === 1}
+    >«</button>
+
+    <button
+      type="button"
+      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+      disabled={currentPage === 1}
+    >‹</button>
+
+    {Array.from({ length: totalPages }, (_, i) => i + 1)
+      .filter((p) =>
+        p === 1 ||
+        p === totalPages ||
+        Math.abs(p - currentPage) <= 1
+      )
+      .reduce<(number | "…")[]>((acc, p, i, arr) => {
+        if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push("…");
+        acc.push(p);
+        return acc;
+      }, [])
+      .map((p, i) =>
+        p === "…" ? (
+          <span
+            key={`ellipsis-${i}`}
+            style={{
+              minWidth: 28,
+              textAlign: "center",
+              fontSize: "0.875rem",
+              color: "#6b7280",
+            }}
+          >…</span>
+        ) : (
+          <button
+            key={p}
+            type="button"
+            className={p === currentPage ? "active" : ""}
+            onClick={() => setCurrentPage(p as number)}
+          >{p}</button>
+        )
+      )}
+
+    <button
+      type="button"
+      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+      disabled={currentPage === totalPages}
+    >›</button>
+
+    <button
+      type="button"
+      onClick={() => setCurrentPage(totalPages)}
+      disabled={currentPage === totalPages}
+    >»</button>
+
+    <span style={{
+      marginLeft: 8,
+      fontSize: "0.8rem",
+      color: "#9ca3af",
+      whiteSpace: "nowrap",
+    }}>
+      {startIndex + 1}–{Math.min(startIndex + REPORTS_PER_PAGE, filteredReports.length)} of {filteredReports.length}
+    </span>
+  </div>
+)}
               </>
             )}
           </>

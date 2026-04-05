@@ -1,3 +1,4 @@
+// Frontend/app/Admin/Analytics.tsx - FIXED VERSION
 "use client";
 
 import "@/app/Admin/style/analytics.css";
@@ -35,8 +36,11 @@ interface Comment {
   by?: string;
 }
 
+// ✅ FIXED: Added reportId and userType fields
 interface Report {
   _id?: string;
+  reportId?: string;          // ← ADDED
+  userType?: string;          // ← ADDED
   email?: string;
   heading?: string;
   description?: string;
@@ -61,10 +65,21 @@ interface Task {
   done: boolean;
 }
 
+interface Assignment {
+  id: string;
+  name: string;
+  concernType: "Mechanical" | "Civil" | "Electrical" | "Safety Hazard" | "Other";
+  reportId?: string;
+  assignedStaff: string[];
+  status: "Pending" | "Waiting for Materials" | "In Progress" | "Resolved";
+  checklist: Task[];
+}
+
 interface List {
   id: string;
   title: string;
   tasks: Task[];
+  assignments?: Assignment[];
   collapsed: boolean;
 }
 
@@ -170,12 +185,13 @@ const STATUS_TO_FILTER_LABEL: Record<StatusKey, string> = {
   archived: "Archived",
 };
 
+// ✅ FIXED: Updated to use new orange color for Pending
 const STATUS_COLORS: Record<StatusKey, string> = {
-  pending: "#fbbf24",
-  waiting: "#60a5fa",
-  progress: "#6366f1",
-  resolved: "#22c55e",
-  archived: "#9ca3af",
+  pending: "#f97316",       // ← Changed from #fbbf24 to orange
+  waiting: "#0ea5e9",       // ← Changed from #60a5fa to bright blue
+  progress: "#8b5cf6",      // ← Changed from #6366f1 to purple
+  resolved: "#10b981",      // ← Changed from #22c55e to darker green
+  archived: "#6b7280",      // ← Changed from #9ca3af to darker gray
 };
 
 const getBaseConcernFromReport = (r: Report): string => {
@@ -258,6 +274,7 @@ const Analytics: FC = () => {
           ? data.reports
           : [];
 
+      console.log("Fetched reports:", list);  // ✅ Debug log
       setReports(list);
     } catch (e: any) {
       if (e?.name === "AbortError") return;
@@ -268,6 +285,8 @@ const Analytics: FC = () => {
       const now = new Date().toISOString();
       setReports([
         {
+          reportId: "010426001",  // ✅ ADDED
+          userType: "Student",    // ✅ ADDED
           status: "Pending",
           building: "Building A",
           concern: "Electrical",
@@ -276,6 +295,8 @@ const Analytics: FC = () => {
           createdAt: now,
         },
         {
+          reportId: "010426002",  // ✅ ADDED
+          userType: "Staff/Faculty", // ✅ ADDED
           status: "In Progress",
           building: "Building B",
           concern: "Plumbing",
@@ -283,6 +304,8 @@ const Analytics: FC = () => {
           createdAt: now,
         },
         {
+          reportId: "010426003",  // ✅ ADDED
+          userType: "Student",    // ✅ ADDED
           status: "Resolved",
           building: "Building A",
           concern: "HVAC",
@@ -290,6 +313,8 @@ const Analytics: FC = () => {
           createdAt: now,
         },
         {
+          reportId: "010426004",  // ✅ ADDED
+          userType: "Staff/Faculty", // ✅ ADDED
           status: "Pending",
           building: "Building C",
           concern: "Electrical",
@@ -298,6 +323,8 @@ const Analytics: FC = () => {
           createdAt: now,
         },
         {
+          reportId: "010426005",  // ✅ ADDED
+          userType: "Student",    // ✅ ADDED
           status: "Resolved",
           building: "Building B",
           concern: "Carpentry",
@@ -305,6 +332,8 @@ const Analytics: FC = () => {
           createdAt: now,
         },
         {
+          reportId: "010426006",  // ✅ ADDED
+          userType: "Staff/Faculty", // ✅ ADDED
           status: "In Progress",
           building: "Building C",
           concern: "HVAC",
@@ -916,6 +945,7 @@ const Analytics: FC = () => {
         return `
           <tr>
             <td>${idx + 1}</td>
+            <td>${safe(r.reportId)}</td>
             <td>${created}</td>
             <td>${safe(r.status)}</td>
             <td>${safe(r.building)}</td>
@@ -924,6 +954,7 @@ const Analytics: FC = () => {
             <td>${safe(r.floor)}</td>
             <td>${safe(r.room)}</td>
             <td>${safe(r.email)}</td>
+            <td>${safe(r.userType)}</td>
           </tr>
         `;
       })
@@ -1038,12 +1069,12 @@ const Analytics: FC = () => {
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Date Created</th><th>Status</th><th>Building</th>
-          <th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th>
+          <th>#</th><th>Report ID</th><th>Date Created</th><th>Status</th><th>Building</th>
+          <th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th><th>Reporter Type</th>
         </tr>
       </thead>
       <tbody>
-        ${rowsHtml || '<tr><td colspan="9">No data for current filters.</td></tr>'}
+        ${rowsHtml || '<tr><td colspan="11">No data for current filters.</td></tr>'}
       </tbody>
     </table>
 
@@ -1081,10 +1112,11 @@ const Analytics: FC = () => {
   }, [filtered]);
 
   /* =========================================================
-    LISTS WITH PROGRESS SIDE PANEL
+     LISTS / ASSIGNMENTS — STATE & HELPERS
   ========================================================= */
   const [listsOpen, setListsOpen] = useState<boolean>(false);
   const [listSaveStatus, setListSaveStatus] = useState<string>("");
+  const [showModal, setShowModal] = useState<boolean>(false);
 
   const STORAGE_KEY = "todoLists_v1";
   const uid = useCallback(
@@ -1092,176 +1124,165 @@ const Analytics: FC = () => {
     [],
   );
 
-  const defaultLists = useCallback((): List[] => {
-    return [
-      {
-        id: uid(),
-        title: "Sample BFMO Checklist",
-        tasks: [
-          { id: uid(), text: "Review unresolved reports", done: false },
-          { id: uid(), text: "Coordinate with maintenance team", done: false },
-          { id: uid(), text: "Prepare weekly summary", done: false },
-        ],
-        collapsed: false,
-      },
-    ];
-  }, [uid]);
+  const defaultLists = useCallback((): List[] => [{
+    id: uid(), title: "Sample BFMO Checklist", collapsed: false,
+    tasks: [
+      { id: uid(), text: "Review unresolved reports", done: false },
+      { id: uid(), text: "Coordinate with maintenance team", done: false },
+      { id: uid(), text: "Prepare weekly summary", done: false },
+    ],
+  }], [uid]);
 
   const loadLocal = useCallback((): List[] | null => {
     try {
       if (typeof window === "undefined") return null;
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw) as List[];
-    } catch {
-      return null;
-    }
+      return raw ? JSON.parse(raw) as List[] : null;
+    } catch { return null; }
   }, []);
 
-  const [lists, setLists] = useState<List[]>(
-    () => loadLocal() || defaultLists(),
-  );
+  const [lists, setLists] = useState<List[]>(() => loadLocal() || defaultLists());
 
-  // Persist to localStorage whenever lists change
+  const [newAssignment, setNewAssignment] = useState<Assignment>({
+    id: "",
+    name: "",
+    concernType: "Mechanical",
+    reportId: "",
+    assignedStaff: [],
+    status: "Pending",
+    checklist: [],
+  });
+
+  /* Persist to localStorage whenever lists change */
   useEffect(() => {
     try {
-      if (typeof window === "undefined") return;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
+      if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
     } catch {}
   }, [lists]);
 
+  /* Silent auto-save to server */
+  const autoSaveToServer = useCallback((updatedLists: List[]) => {
+    if (!user?.id) return;
+    fetch(`${API_BASE}/api/lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, lists: updatedLists }),
+    }).catch(console.error);
+  }, [user]);
+
   const computeProgress = useCallback((list: List) => {
     if (!list.tasks || list.tasks.length === 0) return 0;
-    const done = list.tasks.filter((t) => t.done).length;
-    return Math.round((done / list.tasks.length) * 100);
+    return Math.round((list.tasks.filter((t) => t.done).length / list.tasks.length) * 100);
   }, []);
 
   const createList = (title: string) =>
-    setLists((prev) => [
-      { id: uid(), title: title || "Untitled", tasks: [], collapsed: false },
-      ...prev,
-    ]);
+    setLists((prev) => [{ id: uid(), title: title || "Untitled", tasks: [], collapsed: false }, ...prev]);
 
   const deleteList = (listId: string) =>
     setLists((prev) => prev.filter((l) => l.id !== listId));
 
   const toggleCollapse = (listId: string) =>
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId ? { ...l, collapsed: !l.collapsed } : l,
-      ),
-    );
+    setLists((prev) => prev.map((l) => l.id === listId ? { ...l, collapsed: !l.collapsed } : l));
 
   const addTask = (listId: string, text: string) => {
     if (!text) return;
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? {
-              ...l,
-              tasks: [
-                ...l.tasks,
-                { id: uid(), text: text.trim(), done: false },
-              ],
-            }
-          : l,
-      ),
-    );
+    setLists((prev) => prev.map((l) =>
+      l.id === listId ? { ...l, tasks: [...l.tasks, { id: uid(), text: text.trim(), done: false }] } : l));
   };
 
-  const toggleTask = (listId: string, taskId: string) => {
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? {
-              ...l,
-              tasks: l.tasks.map((t) =>
-                t.id === taskId ? { ...t, done: !t.done } : t,
+  const toggleTask = useCallback((listId: string, taskId: string) => {
+    setLists((prev) => {
+      const updated = prev.map((l) =>
+        l.id !== listId ? l : {
+          ...l,
+          tasks: l.tasks.map((t) => t.id === taskId ? { ...t, done: !t.done } : t),
+        }
+      );
+      autoSaveToServer(updated);
+      return updated;
+    });
+  }, [autoSaveToServer]);
+
+  const deleteTask = (listId: string, taskId: string) =>
+    setLists((prev) => prev.map((l) =>
+      l.id === listId ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) } : l));
+
+  const createAssignment = useCallback((assignment: Assignment) => {
+    setLists((prev) => {
+      const updated = prev.map((list, index) =>
+        index === 0
+          ? { ...list, assignments: [...(list.assignments || []), { ...assignment, id: uid() }] }
+          : list
+      );
+      autoSaveToServer(updated);
+      setListSaveStatus("✅ Task created & saved!");
+      setTimeout(() => setListSaveStatus(""), 2000);
+      return updated;
+    });
+  }, [uid, autoSaveToServer]);
+
+  const toggleAssignmentTask = useCallback((listId: string, assignmentId: string, taskId: string) => {
+    setLists((prev) => {
+      const updated = prev.map((l) =>
+        l.id !== listId ? l : {
+          ...l,
+          assignments: (l.assignments || []).map((a) =>
+            a.id !== assignmentId ? a : {
+              ...a,
+              checklist: a.checklist.map((c) =>
+                c.id === taskId ? { ...c, done: !c.done } : c
               ),
             }
-          : l,
-      ),
-    );
-  };
+          ),
+        }
+      );
+      autoSaveToServer(updated);
+      return updated;
+    });
+  }, [autoSaveToServer]);
 
-  const deleteTask = (listId: string, taskId: string) => {
-    setLists((prev) =>
-      prev.map((l) =>
-        l.id === listId
-          ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) }
-          : l,
-      ),
-    );
-  };
+  const updateAssignmentStatus = useCallback((listId: string, assignmentId: string, status: Assignment["status"]) => {
+    setLists((prev) => {
+      const updated = prev.map((l) =>
+        l.id !== listId ? l : {
+          ...l,
+          assignments: (l.assignments || []).map((a) =>
+            a.id !== assignmentId ? a : { ...a, status }
+          ),
+        }
+      );
+      autoSaveToServer(updated);
+      return updated;
+    });
+  }, [autoSaveToServer]);
 
-  // ── FIXED: saveToServer ──────────────────────────────────────────
   const saveToServer = useCallback(async () => {
-    if (!user?.id) {
-      setListSaveStatus("❌ Not signed in");
-      return;
-    }
-
+    if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
     setListSaveStatus("Saving…");
     try {
       const res = await fetch(`${API_BASE}/api/lists`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, lists }),
       });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`Server responded ${res.status}: ${errText}`);
-      }
-
+      if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
       setListSaveStatus("✅ Saved!");
-    } catch (e: any) {
-      console.error("saveToServer error:", e);
-      setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
-    } finally {
-      setTimeout(() => setListSaveStatus(""), 3000);
-    }
+    } catch (e: any) { setListSaveStatus(`❌ ${e?.message || "Save failed"}`); }
+    finally { setTimeout(() => setListSaveStatus(""), 3000); }
   }, [lists, user]);
 
-  // ── FIXED: loadFromServer ────────────────────────────────────────
   const loadFromServer = useCallback(async () => {
-    if (!user?.id) {
-      setListSaveStatus("❌ Not signed in");
-      return;
-    }
-
+    if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
     setListSaveStatus("Loading…");
     try {
-      const res = await fetch(
-        `${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`,
-        {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache",
-            Pragma: "no-cache",
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => res.statusText);
-        throw new Error(`Server responded ${res.status}: ${errText}`);
-      }
-
+      const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
+        cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
+      if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
       const data = await res.json();
-
-      if (Array.isArray(data) && data.length > 0) {
-        setLists(data as List[]);
-        setListSaveStatus("✅ Loaded!");
-      } else {
-        setListSaveStatus("ℹ️ No lists found on server");
-      }
-    } catch (e: any) {
-      console.error("loadFromServer error:", e);
-      setListSaveStatus(`❌ ${e?.message || "Load failed"}`);
-    } finally {
-      setTimeout(() => setListSaveStatus(""), 3000);
-    }
+      if (Array.isArray(data) && data.length > 0) { setLists(data as List[]); setListSaveStatus("✅ Loaded!"); }
+      else setListSaveStatus("ℹ️ No lists found on server");
+    } catch (e: any) { setListSaveStatus(`❌ ${e?.message || "Load failed"}`); }
+    finally { setTimeout(() => setListSaveStatus(""), 3000); }
   }, [user]);
 
   /* RENDER */
@@ -1468,6 +1489,7 @@ const Analytics: FC = () => {
         )}
 
         <div className="analytics-grid">
+          {/* Status Overview - Using FIXED colors */}
           <div className="card analytics-card">
             <div className="header-stats-total">
               <h3>Status Overview</h3>
@@ -1504,27 +1526,27 @@ const Analytics: FC = () => {
 
             <div className="header-stats">
               <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#22c55e" }} />
+                <span className="stat-dot" style={{ background: "#10b981" }} />
                 <span>Resolved</span>
                 <strong>{statusCounts.resolved}</strong>
               </div>
               <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#fbbf24" }} />
+                <span className="stat-dot" style={{ background: "#f97316" }} />
                 <span>Pending</span>
                 <strong>{statusCounts.pending}</strong>
               </div>
               <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#60a5fa" }} />
+                <span className="stat-dot" style={{ background: "#0ea5e9" }} />
                 <span>Waiting</span>
                 <strong>{statusCounts.waiting}</strong>
               </div>
               <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#6366f1" }} />
+                <span className="stat-dot" style={{ background: "#8b5cf6" }} />
                 <span>In Progress</span>
                 <strong>{statusCounts.progress}</strong>
               </div>
               <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#9ca3af" }} />
+                <span className="stat-dot" style={{ background: "#6b7280" }} />
                 <span>Archived</span>
                 <strong>{statusCounts.archived}</strong>
               </div>
@@ -1669,9 +1691,9 @@ const Analytics: FC = () => {
                 <AreaChart data={timeSeriesData}>
                   <defs>
                     <linearGradient id="reportsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.8} />
                       <stop offset="60%" stopColor="#0ea5e9" stopOpacity={0.6} />
-                      <stop offset="100%" stopColor="#6366f1" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.2} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -1686,7 +1708,7 @@ const Analytics: FC = () => {
                   <Area
                     type="monotone"
                     dataKey="value"
-                    stroke="#22c55e"
+                    stroke="#10b981"
                     fill="url(#reportsGradient)"
                     strokeWidth={2}
                     dot={{ r: 3 }}
@@ -1718,15 +1740,10 @@ const Analytics: FC = () => {
         </div>
 
         <div className="lists-controls sticky">
-          <button
-            className="pa-btn"
-            onClick={() => {
-              const title = prompt("List title:");
-              if (title && title.trim()) createList(title.trim());
-            }}
-          >
-            + Add List
-          </button>
+          <button className="pa-btn" onClick={() => {
+            setNewAssignment({ id: uid(), name: "", concernType: "Mechanical", reportId: "", assignedStaff: [], status: "Pending", checklist: [] });
+            setShowModal(true);
+          }}>+ Create Task</button>
 
           <button
             className="pa-btn"
@@ -1746,7 +1763,6 @@ const Analytics: FC = () => {
             Load from Server
           </button>
 
-          {/* Inline status message — no alert() needed */}
           {listSaveStatus && (
             <span
               style={{
@@ -1894,6 +1910,128 @@ const Analytics: FC = () => {
           onClick={() => setListsOpen(false)}
           aria-hidden="true"
         />
+      )}
+
+      {showModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 200,
+            background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            style={{
+              background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16,
+              padding: "1.5rem", width: "100%", maxWidth: 500,
+              display: "flex", flexDirection: "column", gap: "0.75rem",
+              maxHeight: "90vh", overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: 0, fontSize: "1rem", color: "#f9fafb" }}>Create Task</h3>
+
+            <input className="input" placeholder="Task name"
+              value={newAssignment.name}
+              onChange={(e) => setNewAssignment({ ...newAssignment, name: e.target.value })}
+            />
+
+            <select className="input" value={newAssignment.concernType}
+              onChange={(e) => setNewAssignment({ ...newAssignment, concernType: e.target.value as Assignment["concernType"] })}>
+              <option value="Mechanical">Mechanical</option>
+              <option value="Civil">Civil</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Safety Hazard">Safety Hazard</option>
+              <option value="Other">Other</option>
+            </select>
+
+            <select className="input" value={newAssignment.reportId}
+              onChange={(e) => setNewAssignment({ ...newAssignment, reportId: e.target.value })}>
+              <option value="">— Link to Report (optional) —</option>
+              {reports.map((r) => (
+                <option key={r._id} value={r.reportId}>{r.reportId} – {r.concern}</option>
+              ))}
+            </select>
+
+            <input className="input" placeholder="Assigned staff (comma separated)"
+              defaultValue={newAssignment.assignedStaff.join(", ")}
+              onBlur={(e) => setNewAssignment({
+                ...newAssignment,
+                assignedStaff: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+              })}
+            />
+
+            <select className="input" value={newAssignment.status}
+              onChange={(e) => setNewAssignment({ ...newAssignment, status: e.target.value as Assignment["status"] })}>
+              <option value="Pending">Pending</option>
+              <option value="Waiting for Materials">Waiting for Materials</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+
+            <div>
+              <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>
+                Checklist — press Enter to add each item
+              </p>
+              <input className="input" placeholder="Add checklist item…"
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  const val = e.currentTarget.value.trim();
+                  if (!val) return;
+                  setNewAssignment((prev) => ({
+                    ...prev,
+                    checklist: [...prev.checklist, { id: uid(), text: val, done: false }],
+                  }));
+                  e.currentTarget.value = "";
+                }}
+              />
+              {newAssignment.checklist.length > 0 && (
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {newAssignment.checklist.map((item) => (
+                    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input type="checkbox" checked={item.done}
+                        onChange={() => setNewAssignment((prev) => ({
+                          ...prev,
+                          checklist: prev.checklist.map((c) =>
+                            c.id === item.id ? { ...c, done: !c.done } : c
+                          ),
+                        }))}
+                      />
+                      <span style={{
+                        fontSize: 13, color: "#e5e7eb", flex: 1,
+                        textDecoration: item.done ? "line-through" : "none",
+                        opacity: item.done ? 0.5 : 1,
+                      }}>{item.text}</span>
+                      <button className="small-btn"
+                        onClick={() => setNewAssignment((prev) => ({
+                          ...prev,
+                          checklist: prev.checklist.filter((c) => c.id !== item.id),
+                        }))}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              <button className="pa-btn" style={{ flex: 1 }}
+                onClick={() => {
+                  if (!newAssignment.name.trim()) { alert("Please enter a task name."); return; }
+                  createAssignment(newAssignment);
+                  setNewAssignment({ id: uid(), name: "", concernType: "Mechanical", reportId: "", assignedStaff: [], status: "Pending", checklist: [] });
+                  setShowModal(false);
+                }}>
+                Save Task
+              </button>
+              <button className="pa-btn"
+                style={{ background: "linear-gradient(to right,#374151,#4b5563)" }}
+                onClick={() => setShowModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

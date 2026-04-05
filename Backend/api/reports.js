@@ -160,7 +160,7 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
        SAVE TO DATABASE
     ============================ */
     const report = await Report.create({
-        reportId,          // ← add this
+      reportId,          // ← add this
       email,
       heading,
       description,
@@ -325,6 +325,28 @@ router.delete("/:id/comments/:index", async (req, res) => {
       success: false,
       message: "Failed to delete comment",
     });
+  }
+});
+
+/* ============================================================
+   ARCHIVE PURGE
+   DELETE /api/reports/purge-resolved-archived
+   Deletes all Resolved + Archived reports from DB
+============================================================ */
+router.delete("/purge-resolved-archived", async (req, res) => {
+  try {
+    const result = await Report.deleteMany({
+      status: { $in: ["Resolved", "Archived"] },
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `Purged ${result.deletedCount} Resolved/Archived reports.`,
+    });
+  } catch (err) {
+    console.error("DELETE /purge-resolved-archived error:", err);
+    res.status(500).json({ success: false, message: "Purge failed." });
   }
 });
 

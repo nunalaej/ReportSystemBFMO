@@ -226,19 +226,14 @@ html:not(.dark) .stat-chip {
   color: var(--text);
 }
 
-/* chart wrapper ensures padding and no overflow */
 .chart-wrap {
   width: 100%;
-  height: 260px;
-  padding: 6px;
-  box-sizing: border-box;
+  height: 300px; /* REQUIRED */
 }
 
 .bar-wrap {
-  width: 550px;
-  height: 400px;
-  padding: 6px;
-  box-sizing: border-box;
+  width: 100%;
+  height: 300px;
 }
 
 /* make charts resizable */
@@ -799,7 +794,187 @@ html:not(.dark) .pa-card__base {
 
 
 .filters.card {
-  background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(2,6,23,0.85));
   backdrop-filter: blur(10px);
 }
 
+
+
+
+/* ── Light mode: pa-card ── */
+html:not(.dark) .pa-card {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+
+html:not(.dark) .pa-card__base {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+html:not(.dark) .pa-card__glow {
+  opacity: 0;
+}
+
+html:not(.dark) .pa-card__content {
+  color: #111827;
+}
+
+html:not(.dark) .list-title {
+  color: #111827;
+}
+
+html:not(.dark) .muted {
+  color: #6b7280;
+}
+
+html:not(.dark) .input {
+  background: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+html:not(.dark) .input::placeholder {
+  color: #9ca3af;
+}
+
+html:not(.dark) .task-row {
+  color: #111827;
+}
+
+html:not(.dark) .task-row label {
+  color: #111827;
+}
+
+html:not(.dark) .small-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+html:not(.dark) .small-btn:hover {
+  background: #e5e7eb;
+}
+
+html:not(.dark) .progress-bar {
+  background: #e5e7eb;
+}
+
+html:not(.dark) .progress-fill {
+  background: #2563eb;
+}
+
+/* ── Light mode: filter chips ── */
+html:not(.dark) .chip {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+html:not(.dark) .chip:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+html:not(.dark) .chip.is-on {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+html:not(.dark) .chip input[type="checkbox"] {
+  accent-color: #2563eb;
+}
+
+/* ── Light mode: sidepanel ── */
+html:not(.dark) .sidepanel {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
+}
+
+html:not(.dark) .sidepanel-head {
+  border-bottom-color: #e5e7eb;
+}
+
+html:not(.dark) .sidepanel-head h3 {
+  color: #111827;
+}
+
+html:not(.dark) .sidepanel-close {
+  color: #6b7280;
+}
+
+html:not(.dark) .sidepanel-close:hover {
+  color: #111827;
+  background: #f3f4f6;
+}
+
+html:not(.dark) .lists-controls {
+  background: #ffffff;
+  border-bottom-color: #e5e7eb;
+}
+
+/* ===== MODAL ===== */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+
+  background: rgba(0, 0, 0, 0.5); /* dark overlay */
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  z-index: 9999;
+}
+
+.modal-content {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 12px;
+
+  width: 400px;
+  max-width: 90%;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Inputs */
+.modal-content input,
+.modal-content select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  outline: none;
+}
+
+.modal-content input:focus,
+.modal-content select:focus {
+  border-color: #22c55e;
+}
+
+/* Buttons */
+.modal-content button {
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.modal-content button:first-of-type {
+  background: #22c55e;
+  color: white;
+}
+
+.modal-content button:last-of-type {
+  background: #e5e7eb;
+}
