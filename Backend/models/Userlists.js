@@ -7,11 +7,7 @@ const taskSchema = new mongoose.Schema({
   done: { type: Boolean, default: false },  // ← must be Boolean, not mixed
 }, { _id: false });
 
-const userListsSchema = new mongoose.Schema({
-  userId:    { type: String, required: true, unique: true },
-  lists:     { type: [listSchema], default: [] },
-  updatedAt: { type: Date, default: Date.now },
-});
+
 
 const assignmentSchema = new mongoose.Schema({
   id:            { type: String },
@@ -30,5 +26,11 @@ const listSchema = new mongoose.Schema({
   assignments: { type: [assignmentSchema], default: [] },
   collapsed:   { type: Boolean, default: false },
 }, { _id: false });
+
+const userListsSchema = new mongoose.Schema({
+  userId:    { type: String, required: true, unique: true },
+  lists:     { type: [listSchema], default: [] },
+  updatedAt: { type: Date, default: Date.now },
+});
 
 module.exports = mongoose.model("UserLists", userListsSchema);
