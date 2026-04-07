@@ -172,7 +172,7 @@ const Analytics: FC = () => {
     let role = "student";
     if (Array.isArray(rawRole) && rawRole.length > 0) role = String(rawRole[0]).toLowerCase();
     else if (typeof rawRole === "string") role = rawRole.toLowerCase();
-    if (role !== "admin") { router.replace("/Student"); return; }
+    if (role !== "staff") { router.replace("/Student"); return; }
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
