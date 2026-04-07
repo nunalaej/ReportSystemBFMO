@@ -1,5 +1,5 @@
-// models/ListsTask.js
-const mongoose = require("mongoose");
+// models/ListsTask.js updated
+ const mongoose = require("mongoose");
 
 const collectionName = process.env.MONGODB_COLLECTION_LISTSTASK || "ListsTaskCollection";
 
