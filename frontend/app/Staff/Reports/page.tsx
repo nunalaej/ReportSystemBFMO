@@ -189,7 +189,7 @@ export default function ReportPage() {
     } else if (typeof rawRole === "string") {
       role = rawRole.toLowerCase();
     }
-    if (role !== "admin") {
+    if (role !== "staff") {
       router.replace("/Student");
       return;
     }
@@ -478,7 +478,7 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: trimmedComment, by: "Admin", skipEmail: true }),
+            body: JSON.stringify({ text: trimmedComment, by: "staff", skipEmail: true }),
           }
         );
         const commentData = await commentRes.json().catch(() => null);
@@ -603,7 +603,7 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
       const res = await fetch(`${API_BASE}/api/reports/${selectedReport._id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: trimmed, by: "Admin" }),
+        body: JSON.stringify({ text: trimmed, by: "staff" }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to add comment");
