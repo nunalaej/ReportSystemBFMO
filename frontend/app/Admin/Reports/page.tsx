@@ -626,7 +626,7 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const printedBy = firstName || "Administrator";
+    const printedDate = new Date().toLocaleString();
     const concernBaseCounts = new Map<string, number>();
     const concernCounts = new Map<string, number>();
     const buildingCounts = new Map<string, number>();
@@ -663,8 +663,8 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
         const created = r.createdAt ? new Date(r.createdAt).toLocaleString() : "";
         return `
           <tr>
-            <td>${safe(r.reportId)}</td>
             <td>${idx + 1}</td>
+            <td>${safe(r.reportId)}</td>
             <td>${created}</td>
             <td>${safe(r.status)}</td>
             <td>${safe(r.building)}</td>
@@ -673,67 +673,154 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
             <td>${safe(r.floor)}</td>
             <td>${safe(r.room)}</td>
             <td>${safe(r.email)}</td>
+            <td>${safe(r.userType)}</td>
           </tr>
         `;
       })
       .join("");
 
     const html = `
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>BFMO Reports Analytics</title>
-          <style>
-            body { font-family: system-ui, sans-serif; font-size: 12px; color: #111827; padding: 16px; }
-            h1 { font-size: 20px; margin-bottom: 4px; }
-            h2 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-            h3 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
-            .meta { font-size: 12px; color: #4b5563; margin-bottom: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            th, td { border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; vertical-align: top; }
-            thead { background: #f3f4f6; }
-            ul { margin: 4px 0 8px 16px; padding: 0; }
-            li { margin: 2px 0; }
-          </style>
-        </head>
-        <body>
-          <h1>BFMO Reports - Analytics (Current Filters)</h1>
-          <div class="meta">
-            Generated at: ${new Date().toLocaleString()}<br />
-            Records shown: ${filteredReports.length}<br />
-            Printed by: ${printedBy}
-          </div>
-          <h2>Summary Statistics</h2>
-          <h3>By Concern (Base)</h3>
-          <ul>${concernBaseStatsHtml}</ul>
-          <h3>By Concern (Detailed)</h3>
-          <ul>${concernStatsHtml}</ul>
-          <h3>By Building</h3>
-          <ul>${buildingStatsHtml}</ul>
-          <h2>Detailed Report</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Report ID</th>
-                <th>#</th>
-                <th>Date Created</th>
-                <th>Status</th>
-                <th>Building</th>
-                <th>Concern</th>
-                <th>College</th>
-                <th>Floor</th>
-                <th>Room</th>
-                <th>Email</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="10">No data for current filters.</td></tr>'}
-            </tbody>
-          </table>
-        </body>
-      </html>
-    `;
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>BFMO Reports</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 8px;
+        color: #111827;
+        padding: 10px;
+      }
+      .doc-header { margin-bottom: 20px; }
+      .doc-table { width: 100%; margin: 0 auto; border-collapse: collapse; }
+      .logo-cell { width: 90px; text-align: center; }
+      .logo-cell img { width: 64px; height: 64px; padding-top: 12px; object-fit: contain; }
+      .title { font-size: 14px; font-weight: 700; color: #ffffff; background: #029006; border-bottom: 1px solid #000; padding: 8px; }
+      .row-line { border-bottom: 1px solid #000; padding-bottom: 4px; }
+      .label { font-weight: 600; }
+      h1 { font-size: 18px; margin: 16px 0 4px; }
+      h2 { font-size: 15px; margin-top: 16px; margin-bottom: 4px; }
+      h3 { font-size: 13px; margin-top: 10px; margin-bottom: 4px; }
+      .meta { font-size: 11px; color: #374151; margin-bottom: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      th, td { border: 1px solid #d1d5db; padding: 4px 6px; text-align: left; vertical-align: top; }
+      thead { background: #f3f4f6; }
+      ul { margin: 4px 0 8px 16px; padding: 0; }
+      li { margin: 2px 0; }
+      .signatories {
+        margin-top: 48px;
+        page-break-inside: avoid;
+      }
+      .signatories h2 {
+        font-size: 13px;
+        margin-bottom: 32px;
+        border-bottom: 1px solid #d1d5db;
+        padding-bottom: 6px;
+      }
+      .sig-row {
+        display: flex;
+        justify-content: space-around;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .sig-block {
+        flex: 1;
+        min-width: 140px;
+        max-width: 200px;
+        text-align: center;
+      }
+      .sig-line {
+        border-top: 1px solid #111827;
+        margin-bottom: 4px;
+        margin-top: 40px;
+      }
+      .sig-name {
+        font-size: 9px;
+        font-weight: 700;
+        color: #111827;
+      }
+      .sig-role {
+        font-size: 8px;
+        color: #6b7280;
+        margin-top: 2px;
+      }
+      @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="doc-header">
+      <table class="doc-table">
+        <tr>
+          <td class="logo-cell" rowspan="5">
+            <img src="/logo-dlsud.png" alt="BFMO Logo" />
+          </td>
+          <td colspan="2" class="title">
+            Building Facilities Maintenance Office : Facility Reports
+          </td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Document Reference:</span> BFMO Report System</td>
+          <td class="row-line"><span class="label">Printed Date:</span> ${printedDate}</td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Confidentiality Level:</span> Research Purpose</td>
+          <td class="row-line"><span class="label">Approval Date:</span></td>
+        </tr>
+        <tr>
+          <td class="row-line"><span class="label">Review Cycle:</span> Monthly</td>
+          <td class="row-line"><span class="label">Effectivity Date:</span></td>
+        </tr>
+      </table>
+    </div>
+
+    <h1>BFMO Reports - Tabular Report</h1>
+    <div class="meta">Records shown: ${filteredReports.length}</div>
+
+    <h2>Summary Statistics</h2>
+    <h3>By Concern (Base)</h3>
+    <ul>${concernBaseStatsHtml}</ul>
+    <h3>By Concern (Detailed)</h3>
+    <ul>${concernStatsHtml}</ul>
+    <h3>By Building</h3>
+    <ul>${buildingStatsHtml}</ul>
+
+    <h2>Detailed Report</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Report ID</th><th>Date Created</th><th>Status</th><th>Building</th>
+          <th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th><th>Reporter Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml || '<tr><td colspan="11">No data for current filters.</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="signatories">
+      <h2>Signatories</h2>
+      <div class="sig-row">
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Prepared by</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Reviewed by</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line"></div>
+          <div class="sig-name">Signature over Printed Name</div>
+          <div class="sig-role">Approved by</div>
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>`;
 
     const printWin = window.open("", "_blank");
     if (!printWin) return;

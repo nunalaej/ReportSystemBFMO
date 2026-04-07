@@ -36,11 +36,10 @@ interface Comment {
   by?: string;
 }
 
-// ✅ FIXED: Added reportId and userType fields
 interface Report {
   _id?: string;
-  reportId?: string;          // ← ADDED
-  userType?: string;          // ← ADDED
+  reportId?: string;
+  userType?: string;
   email?: string;
   heading?: string;
   description?: string;
@@ -110,9 +109,8 @@ const BUILDING_COLORS = [
   "#64748b",
 ];
 
-const getBuildingColor = (name: string, index: number) => {
-  return BUILDING_COLORS[index % BUILDING_COLORS.length];
-};
+const getBuildingColor = (name: string, index: number) =>
+  BUILDING_COLORS[index % BUILDING_COLORS.length];
 
 const COLLEGE_COLORS = [
   "#3b82f6",
@@ -125,13 +123,10 @@ const COLLEGE_COLORS = [
   "#64748b",
 ];
 
-const getCollegeColor = (name: string, index: number) => {
-  return COLLEGE_COLORS[index % COLLEGE_COLORS.length];
-};
+const getCollegeColor = (name: string, index: number) =>
+  COLLEGE_COLORS[index % COLLEGE_COLORS.length];
 
-const getConcernBaseFromLabel = (
-  fullLabel: string,
-): { base: string; sub: string } => {
+const getConcernBaseFromLabel = (fullLabel: string): { base: string; sub: string } => {
   const [baseRaw, subRaw] = fullLabel.split(" : ");
   const base = (baseRaw || "Unspecified").trim();
   const sub = (subRaw || base).trim();
@@ -145,8 +140,6 @@ const getConcernColorFromBase = (base: string): string => {
   if (b === "electrical") return "#fbbf24";
   return "#9ca3af";
 };
-
-/* Helpers */
 
 const formatConcernLabel = (report: Report) => {
   const base = report.concern || "Unspecified";
@@ -185,13 +178,12 @@ const STATUS_TO_FILTER_LABEL: Record<StatusKey, string> = {
   archived: "Archived",
 };
 
-// ✅ FIXED: Updated to use new orange color for Pending
 const STATUS_COLORS: Record<StatusKey, string> = {
-  pending: "#f97316",       // ← Changed from #fbbf24 to orange
-  waiting: "#0ea5e9",       // ← Changed from #60a5fa to bright blue
-  progress: "#8b5cf6",      // ← Changed from #6366f1 to purple
-  resolved: "#10b981",      // ← Changed from #22c55e to darker green
-  archived: "#6b7280",      // ← Changed from #9ca3af to darker gray
+  pending: "#f97316",
+  waiting: "#0ea5e9",
+  progress: "#8b5cf6",
+  resolved: "#10b981",
+  archived: "#6b7280",
 };
 
 const getBaseConcernFromReport = (r: Report): string => {
@@ -203,8 +195,7 @@ const normalizeStatusFilterLabel = (raw?: string): string | null => {
   const s = (raw || "").trim().toLowerCase();
   if (!s) return null;
   if (s === "pending") return "Pending";
-  if (s === "waiting for materials" || s === "waiting")
-    return "Waiting for Materials";
+  if (s === "waiting for materials" || s === "waiting") return "Waiting for Materials";
   if (s === "in progress") return "In Progress";
   if (s === "resolved") return "Resolved";
   if (s === "archived") return "Archived";
@@ -214,33 +205,17 @@ const normalizeStatusFilterLabel = (raw?: string): string | null => {
 const Analytics: FC = () => {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
-
   const [canView, setCanView] = useState(false);
 
   /* AUTH GUARD */
-
   useEffect(() => {
     if (!isLoaded) return;
-
-    if (!isSignedIn || !user) {
-      router.replace("/");
-      return;
-    }
-
+    if (!isSignedIn || !user) { router.replace("/"); return; }
     const rawRole = (user.publicMetadata as any)?.role;
     let role = "student";
-
-    if (Array.isArray(rawRole) && rawRole.length > 0) {
-      role = String(rawRole[0]).toLowerCase();
-    } else if (typeof rawRole === "string") {
-      role = rawRole.toLowerCase();
-    }
-
-    if (role !== "admin") {
-      router.replace("/Student");
-      return;
-    }
-
+    if (Array.isArray(rawRole) && rawRole.length > 0) role = String(rawRole[0]).toLowerCase();
+    else if (typeof rawRole === "string") role = rawRole.toLowerCase();
+    if (role !== "admin") { router.replace("/Student"); return; }
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
@@ -255,91 +230,31 @@ const Analytics: FC = () => {
     try {
       setLoadErr("");
       setLoading(true);
-
       const res = await fetch(`${API_BASE}/api/reports`, {
         cache: "no-store",
         signal,
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
       });
-
       if (!res.ok) throw new Error("Failed to fetch reports");
       const data = await res.json();
-
       const list: Report[] = Array.isArray(data)
         ? data
         : Array.isArray(data.reports)
           ? data.reports
           : [];
-
-      console.log("Fetched reports:", list);  // ✅ Debug log
       setReports(list);
     } catch (e: any) {
       if (e?.name === "AbortError") return;
-
       console.error(e);
       setLoadErr("Could not load reports, using demo data");
-
       const now = new Date().toISOString();
       setReports([
-        {
-          reportId: "010426001",  // ✅ ADDED
-          userType: "Student",    // ✅ ADDED
-          status: "Pending",
-          building: "Building A",
-          concern: "Electrical",
-          subConcern: "Lights",
-          college: "CIT",
-          createdAt: now,
-        },
-        {
-          reportId: "010426002",  // ✅ ADDED
-          userType: "Staff/Faculty", // ✅ ADDED
-          status: "In Progress",
-          building: "Building B",
-          concern: "Plumbing",
-          college: "COE",
-          createdAt: now,
-        },
-        {
-          reportId: "010426003",  // ✅ ADDED
-          userType: "Student",    // ✅ ADDED
-          status: "Resolved",
-          building: "Building A",
-          concern: "HVAC",
-          college: "CIT",
-          createdAt: now,
-        },
-        {
-          reportId: "010426004",  // ✅ ADDED
-          userType: "Staff/Faculty", // ✅ ADDED
-          status: "Pending",
-          building: "Building C",
-          concern: "Electrical",
-          subConcern: "Outlets",
-          college: "COE",
-          createdAt: now,
-        },
-        {
-          reportId: "010426005",  // ✅ ADDED
-          userType: "Student",    // ✅ ADDED
-          status: "Resolved",
-          building: "Building B",
-          concern: "Carpentry",
-          college: "CLA",
-          createdAt: now,
-        },
-        {
-          reportId: "010426006",  // ✅ ADDED
-          userType: "Staff/Faculty", // ✅ ADDED
-          status: "In Progress",
-          building: "Building C",
-          concern: "HVAC",
-          college: "CBA",
-          createdAt: now,
-        },
+        { reportId: "010426001", userType: "Student", status: "Pending", building: "Building A", concern: "Electrical", subConcern: "Lights", college: "CIT", createdAt: now },
+        { reportId: "010426002", userType: "Staff/Faculty", status: "In Progress", building: "Building B", concern: "Plumbing", college: "COE", createdAt: now },
+        { reportId: "010426003", userType: "Student", status: "Resolved", building: "Building A", concern: "HVAC", college: "CIT", createdAt: now },
+        { reportId: "010426004", userType: "Staff/Faculty", status: "Pending", building: "Building C", concern: "Electrical", subConcern: "Outlets", college: "COE", createdAt: now },
+        { reportId: "010426005", userType: "Student", status: "Resolved", building: "Building B", concern: "Carpentry", college: "CLA", createdAt: now },
+        { reportId: "010426006", userType: "Staff/Faculty", status: "In Progress", building: "Building C", concern: "HVAC", college: "CBA", createdAt: now },
       ]);
     } finally {
       setLoading(false);
@@ -355,12 +270,7 @@ const Analytics: FC = () => {
 
   useEffect(() => {
     if (!canView) return;
-
-    const onFocus = () => {
-      const ctrl = new AbortController();
-      fetchReports(ctrl.signal);
-    };
-
+    const onFocus = () => { const ctrl = new AbortController(); fetchReports(ctrl.signal); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [canView, fetchReports]);
@@ -368,21 +278,12 @@ const Analytics: FC = () => {
   /* =========================================================
     FILTERS
   ========================================================= */
-
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(
-    () =>
-      new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"]),
+    () => new Set(["Pending", "Waiting for Materials", "In Progress", "Resolved"]),
   );
-
-  const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [selectedConcerns, setSelectedConcerns] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const [selectedColleges, setSelectedColleges] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(() => new Set());
+  const [selectedConcerns, setSelectedConcerns] = useState<Set<string>>(() => new Set());
+  const [selectedColleges, setSelectedColleges] = useState<Set<string>>(() => new Set());
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
 
@@ -396,9 +297,7 @@ const Analytics: FC = () => {
   const toggleFiltersOpen = () => {
     setFiltersOpen((prev) => {
       const next = !prev;
-      try {
-        localStorage.setItem(FILTERS_OPEN_KEY, next ? "1" : "0");
-      } catch {}
+      try { localStorage.setItem(FILTERS_OPEN_KEY, next ? "1" : "0"); } catch {}
       return next;
     });
   };
@@ -434,24 +333,13 @@ const Analytics: FC = () => {
   const filtered = useMemo(() => {
     const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
     return reports.filter((r) => {
       const st = normalizeStatusFilterLabel(r.status);
       if (!st || !selectedStatuses.has(st)) return false;
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return false;
-      }
-
+      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) return false;
       const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return false;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return false;
-      }
-
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) return false;
+      if (selectedColleges.size && !selectedColleges.has(r.college || "")) return false;
       if ((fromTS || toTS) && r.createdAt) {
         const ts = new Date(r.createdAt).getTime();
         if (fromTS && ts < fromTS) return false;
@@ -459,232 +347,135 @@ const Analytics: FC = () => {
       }
       return true;
     });
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [reports, selectedStatuses, selectedBuildings, selectedConcerns, selectedColleges, dateFrom, dateTo]);
 
   const availableStatusFilters = useMemo(() => {
     const s = new Set<string>();
     const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
     reports.forEach((r) => {
       const stLabel = normalizeStatusFilterLabel(r.status);
       if (!stLabel) return;
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
+      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) return;
       const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) return;
+      if (selectedColleges.size && !selectedColleges.has(r.college || "")) return;
       if ((fromTS || toTS) && r.createdAt) {
         const ts = new Date(r.createdAt).getTime();
         if (fromTS && ts < fromTS) return;
         if (toTS && ts > toTS) return;
       }
-
       s.add(stLabel);
     });
-
     return STATUSES.filter((st) => s.has(st));
-  }, [
-    reports,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [reports, selectedBuildings, selectedConcerns, selectedColleges, dateFrom, dateTo]);
 
   const availableBuildings = useMemo(() => {
     const s = new Set<string>();
     const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
     reports.forEach((r) => {
       if (!r.building) return;
-
       const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
+      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) return;
       const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) return;
+      if (selectedColleges.size && !selectedColleges.has(r.college || "")) return;
       if ((fromTS || toTS) && r.createdAt) {
         const ts = new Date(r.createdAt).getTime();
         if (fromTS && ts < fromTS) return;
         if (toTS && ts > toTS) return;
       }
-
       s.add(r.building);
     });
-
     return [...s].sort();
-  }, [
-    reports,
-    selectedStatuses,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [reports, selectedStatuses, selectedConcerns, selectedColleges, dateFrom, dateTo]);
 
   const availableConcerns = useMemo(() => {
     const s = new Set<string>();
     const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
     reports.forEach((r) => {
       const baseConcern = getBaseConcernFromReport(r);
       if (!baseConcern) return;
-
       const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
-      if (selectedColleges.size && !selectedColleges.has(r.college || "")) {
-        return;
-      }
-
+      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) return;
+      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) return;
+      if (selectedColleges.size && !selectedColleges.has(r.college || "")) return;
       if ((fromTS || toTS) && r.createdAt) {
         const ts = new Date(r.createdAt).getTime();
         if (fromTS && ts < fromTS) return;
         if (toTS && ts > toTS) return;
       }
-
       s.add(baseConcern);
     });
-
-    const CONCERN_PRIORITY: Record<string, number> = {
-      Civil: 1,
-      Mechanical: 2,
-      Electrical: 3,
-    };
-
+    const CONCERN_PRIORITY: Record<string, number> = { Civil: 1, Mechanical: 2, Electrical: 3 };
     return [...s].sort((a, b) => {
       const aPri = CONCERN_PRIORITY[a] ?? 999;
       const bPri = CONCERN_PRIORITY[b] ?? 999;
       if (aPri !== bPri) return aPri - bPri;
       return a.localeCompare(b);
     });
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [reports, selectedStatuses, selectedBuildings, selectedColleges, dateFrom, dateTo]);
 
   const availableColleges = useMemo(() => {
     const s = new Set<string>();
     const fromTS = dateFrom ? new Date(dateFrom).getTime() : null;
     const toTS = dateTo ? new Date(dateTo).getTime() + 86399999 : null;
-
     reports.forEach((r) => {
       if (!(r.college || "").trim()) return;
-
       const stLabel = normalizeStatusFilterLabel(r.status);
-      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) {
-        return;
-      }
-
-      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) {
-        return;
-      }
-
+      if (stLabel && selectedStatuses.size && !selectedStatuses.has(stLabel)) return;
+      if (selectedBuildings.size && !selectedBuildings.has(r.building || "")) return;
       const baseConcern = getBaseConcernFromReport(r);
-      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) {
-        return;
-      }
-
+      if (selectedConcerns.size && !selectedConcerns.has(baseConcern)) return;
       if ((fromTS || toTS) && r.createdAt) {
         const ts = new Date(r.createdAt).getTime();
         if (fromTS && ts < fromTS) return;
         if (toTS && ts > toTS) return;
       }
-
       s.add(r.college as string);
     });
-
     return [...s].sort();
-  }, [
-    reports,
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [reports, selectedStatuses, selectedBuildings, selectedConcerns, dateFrom, dateTo]);
 
   const sortedStatusFilters = useMemo(
-    () =>
-      [...availableStatusFilters].sort((a, b) => {
-        const aSel = selectedStatuses.has(a);
-        const bSel = selectedStatuses.has(b);
-        if (aSel !== bSel) return aSel ? -1 : 1;
-        return a.localeCompare(b);
-      }),
+    () => [...availableStatusFilters].sort((a, b) => {
+      const aSel = selectedStatuses.has(a);
+      const bSel = selectedStatuses.has(b);
+      if (aSel !== bSel) return aSel ? -1 : 1;
+      return a.localeCompare(b);
+    }),
     [availableStatusFilters, selectedStatuses],
   );
 
   const sortedBuildings = useMemo(
-    () =>
-      [...availableBuildings].sort((a, b) => {
-        const aSel = selectedBuildings.has(a);
-        const bSel = selectedBuildings.has(b);
-        if (aSel !== bSel) return aSel ? -1 : 1;
-        return a.localeCompare(b);
-      }),
+    () => [...availableBuildings].sort((a, b) => {
+      const aSel = selectedBuildings.has(a);
+      const bSel = selectedBuildings.has(b);
+      if (aSel !== bSel) return aSel ? -1 : 1;
+      return a.localeCompare(b);
+    }),
     [availableBuildings, selectedBuildings],
   );
 
   const sortedConcerns = useMemo(
-    () =>
-      [...availableConcerns].sort((a, b) => {
-        const aSel = selectedConcerns.has(a);
-        const bSel = selectedConcerns.has(b);
-        if (aSel !== bSel) return aSel ? -1 : 1;
-        return a.localeCompare(b);
-      }),
+    () => [...availableConcerns].sort((a, b) => {
+      const aSel = selectedConcerns.has(a);
+      const bSel = selectedConcerns.has(b);
+      if (aSel !== bSel) return aSel ? -1 : 1;
+      return a.localeCompare(b);
+    }),
     [availableConcerns, selectedConcerns],
   );
 
   const sortedColleges = useMemo(
-    () =>
-      [...availableColleges].sort((a, b) => {
-        const aSel = selectedColleges.has(a);
-        const bSel = selectedColleges.has(b);
-        if (aSel !== bSel) return aSel ? -1 : 1;
-        return a.localeCompare(b);
-      }),
+    () => [...availableColleges].sort((a, b) => {
+      const aSel = selectedColleges.has(a);
+      const bSel = selectedColleges.has(b);
+      if (aSel !== bSel) return aSel ? -1 : 1;
+      return a.localeCompare(b);
+    }),
     [availableColleges, selectedColleges],
   );
 
@@ -699,26 +490,13 @@ const Analytics: FC = () => {
     if (selectedColleges.size) c++;
     if (dateFrom || dateTo) c++;
     return c;
-  }, [
-    selectedStatuses,
-    selectedBuildings,
-    selectedConcerns,
-    selectedColleges,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [selectedStatuses, selectedBuildings, selectedConcerns, selectedColleges, dateFrom, dateTo]);
 
   /* =========================================================
     AGGREGATES FOR CHARTS
   ========================================================= */
   const statusCounts = useMemo(() => {
-    const map: Record<StatusKey, number> = {
-      pending: 0,
-      waiting: 0,
-      progress: 0,
-      resolved: 0,
-      archived: 0,
-    };
+    const map: Record<StatusKey, number> = { pending: 0, waiting: 0, progress: 0, resolved: 0, archived: 0 };
     filtered.forEach((r) => {
       const s = (r.status || "").trim().toLowerCase();
       if (s === "pending") map.pending++;
@@ -730,21 +508,21 @@ const Analytics: FC = () => {
     return map;
   }, [filtered]);
 
-  const statusPieData = useMemo(
-    () =>
-      (Object.keys(statusCounts) as StatusKey[])
-        .filter((key) => {
-          const filterLabel = STATUS_TO_FILTER_LABEL[key];
-          return selectedStatuses.has(filterLabel);
-        })
-        .map((key) => ({
-          name: STATUS_LABELS[key],
-          value: statusCounts[key],
-          color: STATUS_COLORS[key],
-        }))
-        .filter((entry) => entry.value > 0),
-    [statusCounts, selectedStatuses],
-  );
+  const statusPieData = useMemo(() => {
+    const total = (Object.keys(statusCounts) as StatusKey[])
+      .filter((key) => selectedStatuses.has(STATUS_TO_FILTER_LABEL[key]))
+      .reduce((sum, key) => sum + statusCounts[key], 0);
+
+    return (Object.keys(statusCounts) as StatusKey[])
+      .filter((key) => selectedStatuses.has(STATUS_TO_FILTER_LABEL[key]))
+      .map((key) => ({
+        name: STATUS_LABELS[key],
+        value: statusCounts[key],
+        color: STATUS_COLORS[key],
+        percent: total > 0 ? Math.round((statusCounts[key] / total) * 100) : 0,
+      }))
+      .filter((entry) => entry.value > 0);
+  }, [statusCounts, selectedStatuses]);
 
   const agg = useCallback(
     (arr: Report[], keyOrFn: keyof Report | ((r: Report) => string)) => {
@@ -752,7 +530,6 @@ const Analytics: FC = () => {
         typeof keyOrFn === "function"
           ? keyOrFn
           : (r: Report) => (r[keyOrFn] as string) || "Unspecified";
-
       const m = new Map<string, number>();
       arr.forEach((r) => {
         const raw = getKey(r);
@@ -766,39 +543,20 @@ const Analytics: FC = () => {
     [],
   );
 
-  const buildingData = useMemo(
-    () => agg(filtered, "building"),
-    [filtered, agg],
-  );
+  const buildingData = useMemo(() => agg(filtered, "building"), [filtered, agg]);
 
   const concernData = useMemo<ConcernChartDatum[]>(() => {
     const m = new Map<string, ConcernChartDatum>();
-
     filtered.forEach((r) => {
       const full = formatConcernLabel(r);
       if (!full) return;
-
       const { base, sub } = getConcernBaseFromLabel(full);
       const key = `${base}||${sub}`;
-
       const existing = m.get(key);
       if (existing) existing.value += 1;
-      else {
-        m.set(key, {
-          name: sub,
-          base,
-          fullLabel: full,
-          value: 1,
-        });
-      }
+      else m.set(key, { name: sub, base, fullLabel: full, value: 1 });
     });
-
-    const BASE_PRIORITY: Record<string, number> = {
-      Civil: 1,
-      Mechanical: 2,
-      Electrical: 3,
-    };
-
+    const BASE_PRIORITY: Record<string, number> = { Civil: 1, Mechanical: 2, Electrical: 3 };
     return [...m.values()].sort((a, b) => {
       const aPri = BASE_PRIORITY[a.base] ?? 999;
       const bPri = BASE_PRIORITY[b.base] ?? 999;
@@ -812,20 +570,13 @@ const Analytics: FC = () => {
   /* =========================================================
     TIME SERIES
   ========================================================= */
-
   const [timeMode, setTimeMode] = useState<TimeMode>("month");
 
   const timeSeriesData: TimeSeriesPoint[] = useMemo(() => {
     if (!filtered.length) return [];
     const now = new Date();
-
-    const map = new Map<
-      string,
-      { label: string; value: number; sortKey: number }
-    >();
-
+    const map = new Map<string, { label: string; value: number; sortKey: number }>();
     const makeDayKey = (d: Date) => d.toISOString().slice(0, 10);
-
     const getThreshold = (): Date => {
       const d = new Date(now);
       if (timeMode === "day") d.setDate(d.getDate() - 29);
@@ -834,23 +585,16 @@ const Analytics: FC = () => {
       else d.setFullYear(d.getFullYear() - 4);
       return d;
     };
-
     const threshold = getThreshold();
-
     filtered.forEach((r) => {
       if (!r.createdAt) return;
       const dt = new Date(r.createdAt);
       if (Number.isNaN(dt.getTime())) return;
       if (dt < threshold) return;
-
-      let key: string;
-      let label: string;
-      let sortKey: number;
-
+      let key: string, label: string, sortKey: number;
       const year = dt.getFullYear();
       const month = dt.getMonth();
       const day = dt.getDate();
-
       if (timeMode === "day") {
         key = makeDayKey(dt);
         label = `${month + 1}/${day}`;
@@ -860,16 +604,11 @@ const Analytics: FC = () => {
         const dayOfWeek = tmp.getDay() || 7;
         tmp.setDate(tmp.getDate() - (dayOfWeek - 1));
         key = `W${tmp.getFullYear()}-${makeDayKey(tmp)}`;
-        label = `Wk ${tmp.getFullYear().toString().slice(2)}-${
-          tmp.getMonth() + 1
-        }`;
+        label = `Wk ${tmp.getFullYear().toString().slice(2)}-${tmp.getMonth() + 1}`;
         sortKey = tmp.getTime();
       } else if (timeMode === "month") {
         key = `${year}-${month + 1}`;
-        const monthNames = [
-          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        ];
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
         label = `${monthNames[month]} ${year.toString().slice(2)}`;
         sortKey = year * 12 + month;
       } else {
@@ -877,21 +616,16 @@ const Analytics: FC = () => {
         label = `${year}`;
         sortKey = year;
       }
-
       const existing = map.get(key);
       if (existing) existing.value += 1;
       else map.set(key, { label, value: 1, sortKey });
     });
-
-    return [...map.values()]
-      .sort((a, b) => a.sortKey - b.sortKey)
-      .map((v) => ({ label: v.label, value: v.value }));
+    return [...map.values()].sort((a, b) => a.sortKey - b.sortKey).map((v) => ({ label: v.label, value: v.value }));
   }, [filtered, timeMode]);
 
   /* =========================================================
     PRINT
   ========================================================= */
-
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
 
@@ -901,46 +635,50 @@ const Analytics: FC = () => {
 
     filtered.forEach((r) => {
       const baseConcern = getBaseConcernFromReport(r) || "Unspecified";
-      concernBaseCounts.set(
-        baseConcern,
-        (concernBaseCounts.get(baseConcern) || 0) + 1,
-      );
-
+      concernBaseCounts.set(baseConcern, (concernBaseCounts.get(baseConcern) || 0) + 1);
       const concernLabel = formatConcernLabel(r);
       const concernKey = concernLabel || "Unspecified";
       concernCounts.set(concernKey, (concernCounts.get(concernKey) || 0) + 1);
-
       const buildingKey = (r.building || "Unspecified").trim() || "Unspecified";
-      buildingCounts.set(
-        buildingKey,
-        (buildingCounts.get(buildingKey) || 0) + 1,
-      );
+      buildingCounts.set(buildingKey, (buildingCounts.get(buildingKey) || 0) + 1);
     });
 
     const concernBaseStatsHtml =
-      [...concernBaseCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No concerns for current filters.</li>";
+      [...concernBaseCounts.entries()].sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`).join("") ||
+      "<li>No concerns for current filters.</li>";
 
     const concernStatsHtml =
-      [...concernCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No detailed concerns for current filters.</li>";
+      [...concernCounts.entries()].sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`).join("") ||
+      "<li>No detailed concerns for current filters.</li>";
 
     const buildingStatsHtml =
-      [...buildingCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => `<li>${name}: ${count}</li>`)
-        .join("") || "<li>No buildings for current filters.</li>";
+      [...buildingCounts.entries()].sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `<li>${name}: ${count}</li>`).join("") ||
+      "<li>No buildings for current filters.</li>";
+
+    const total = filtered.length;
+    const statusSummaryHtml = (
+      [
+        ["Pending", statusCounts.pending],
+        ["Waiting for Materials", statusCounts.waiting],
+        ["In Progress", statusCounts.progress],
+        ["Resolved", statusCounts.resolved],
+        ["Archived", statusCounts.archived],
+      ] as [string, number][]
+    )
+      .filter(([, count]) => count > 0)
+      .map(([label, count]) => {
+        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+        return `<li>${label}: ${count} (${pct}%)</li>`;
+      })
+      .join("") || "<li>No status data.</li>";
 
     const rowsHtml = filtered
       .map((r, idx) => {
         const concernLabel = formatConcernLabel(r);
-        const created = r.createdAt
-          ? new Date(r.createdAt).toLocaleString()
-          : "";
+        const created = r.createdAt ? new Date(r.createdAt).toLocaleString() : "";
         const safe = (v?: string) => (v ? String(v) : "");
         return `
           <tr>
@@ -969,12 +707,7 @@ const Analytics: FC = () => {
     <meta charset="utf-8" />
     <title>BFMO Analytics Report</title>
     <style>
-      body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        font-size: 8px;
-        color: #111827;
-        padding: 10px;
-      }
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 8px; color: #111827; padding: 10px; }
       .doc-header { margin-bottom: 20px; }
       .doc-table { width: 100%; margin: 0 auto; border-collapse: collapse; }
       .logo-cell { width: 90px; text-align: center; }
@@ -991,43 +724,13 @@ const Analytics: FC = () => {
       thead { background: #f3f4f6; }
       ul { margin: 4px 0 8px 16px; padding: 0; }
       li { margin: 2px 0; }
-      .signatories {
-        margin-top: 48px;
-        page-break-inside: avoid;
-      }
-      .signatories h2 {
-        font-size: 13px;
-        margin-bottom: 32px;
-        border-bottom: 1px solid #d1d5db;
-        padding-bottom: 6px;
-      }
-      .sig-row {
-        display: flex;
-        justify-content: space-around;
-        gap: 24px;
-        flex-wrap: wrap;
-      }
-      .sig-block {
-        flex: 1;
-        min-width: 140px;
-        max-width: 200px;
-        text-align: center;
-      }
-      .sig-line {
-        border-top: 1px solid #111827;
-        margin-bottom: 4px;
-        margin-top: 40px;
-      }
-      .sig-name {
-        font-size: 9px;
-        font-weight: 700;
-        color: #111827;
-      }
-      .sig-role {
-        font-size: 8px;
-        color: #6b7280;
-        margin-top: 2px;
-      }
+      .signatories { margin-top: 48px; page-break-inside: avoid; }
+      .signatories h2 { font-size: 13px; margin-bottom: 32px; border-bottom: 1px solid #d1d5db; padding-bottom: 6px; }
+      .sig-row { display: flex; justify-content: space-around; gap: 24px; flex-wrap: wrap; }
+      .sig-block { flex: 1; min-width: 140px; max-width: 200px; text-align: center; }
+      .sig-line { border-top: 1px solid #111827; margin-bottom: 4px; margin-top: 40px; }
+      .sig-name { font-size: 9px; font-weight: 700; color: #111827; }
+      .sig-role { font-size: 8px; color: #6b7280; margin-top: 2px; }
       @media print { * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }
     </style>
   </head>
@@ -1035,12 +738,8 @@ const Analytics: FC = () => {
     <div class="doc-header">
       <table class="doc-table">
         <tr>
-          <td class="logo-cell" rowspan="5">
-            <img src="/logo-dlsud.png" alt="BFMO Logo" />
-          </td>
-          <td colspan="2" class="title">
-            Building Facilities Maintenance Office : Report Analytics
-          </td>
+          <td class="logo-cell" rowspan="5"><img src="/logo-dlsud.png" alt="BFMO Logo" /></td>
+          <td colspan="2" class="title">Building Facilities Maintenance Office : Report Analytics</td>
         </tr>
         <tr>
           <td class="row-line"><span class="label">Document Reference:</span> BFMO Report System</td>
@@ -1058,6 +757,8 @@ const Analytics: FC = () => {
     </div>
     <h1>BFMO Analytics - Tabular Report</h1>
     <div class="meta">Records shown: ${filtered.length}</div>
+    <h2>Status Summary</h2>
+    <ul>${statusSummaryHtml}</ul>
     <h2>Summary Statistics</h2>
     <h3>By Concern (Base)</h3>
     <ul>${concernBaseStatsHtml}</ul>
@@ -1077,7 +778,6 @@ const Analytics: FC = () => {
         ${rowsHtml || '<tr><td colspan="11">No data for current filters.</td></tr>'}
       </tbody>
     </table>
-
     <div class="signatories">
       <h2>Signatories</h2>
       <div class="sig-row">
@@ -1098,7 +798,6 @@ const Analytics: FC = () => {
         </div>
       </div>
     </div>
-
   </body>
 </html>`;
 
@@ -1109,7 +808,7 @@ const Analytics: FC = () => {
     printWin.document.close();
     printWin.focus();
     printWin.print();
-  }, [filtered]);
+  }, [filtered, statusCounts]);
 
   /* =========================================================
      LISTS / ASSIGNMENTS — STATE & HELPERS
@@ -1144,70 +843,56 @@ const Analytics: FC = () => {
   const [lists, setLists] = useState<List[]>(() => loadLocal() || defaultLists());
 
   const [newAssignment, setNewAssignment] = useState<Assignment>({
-    id: "",
-    name: "",
-    concernType: "Mechanical",
-    reportId: "",
-    assignedStaff: [],
-    status: "Pending",
-    checklist: [],
+    id: "", name: "", concernType: "Mechanical", reportId: "",
+    assignedStaff: [], status: "Pending", checklist: [],
   });
 
-  /* Persist to localStorage whenever lists change */
   useEffect(() => {
     try {
       if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(lists));
     } catch {}
   }, [lists]);
 
-  /* Silent auto-save to server */
-const autoSaveToServer = useCallback((updatedLists: List[]) => {
-  if (!user?.id) return;
-  fetch(`${API_BASE}/api/lists`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId: user.id, lists: updatedLists }),
-  }).catch(console.error);
-}, [user]);
+  const autoSaveToServer = useCallback((updatedLists: List[]) => {
+    if (!user?.id) return;
+    fetch(`${API_BASE}/api/lists`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id, lists: updatedLists }),
+    }).catch(console.error);
+  }, [user]);
 
-const loadFromServer = useCallback(async () => {
-  if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
-  setListSaveStatus("Loading…");
-  try {
-    const res = await fetch(`${API_BASE}/api/liststask?userId=${encodeURIComponent(user.id)}`, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => res.statusText);
-      throw new Error(`Server responded ${res.status}: ${t}`);
+  // ✅ FIXED: now calls /api/lists instead of /api/liststask
+  const loadFromServer = useCallback(async () => {
+    if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
+    setListSaveStatus("Loading…");
+    try {
+      const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
+        cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => res.statusText);
+        throw new Error(`Server responded ${res.status}: ${t}`);
+      }
+      const data = await res.json();
+      // Handle both { lists: [...] } and plain array responses
+      const loadedLists: List[] = Array.isArray(data) ? data : (data.lists ?? []);
+      if (loadedLists.length > 0) {
+        setLists(loadedLists);
+        setListSaveStatus("✅ Loaded!");
+      } else {
+        setListSaveStatus("ℹ️ No lists found on server");
+      }
+    } catch (e: any) {
+      setListSaveStatus(`❌ ${e?.message || "Load failed"}`);
+    } finally {
+      setTimeout(() => setListSaveStatus(""), 3000);
     }
-    const data = await res.json();
-    const loadedLists = Array.isArray(data)
-      ? data
-      : Array.isArray(data.lists)
-        ? data.lists
-        : [];
+  }, [user]);
 
-    if (loadedLists.length > 0) {
-      setLists(loadedLists as List[]);
-      setListSaveStatus("✅ Loaded!");
-    } else {
-      setListSaveStatus("ℹ️ No lists found on server");
-    }
-  } catch (e: any) {
-    setListSaveStatus(`❌ ${e?.message || "Load failed"}`);
-  } finally {
-    setTimeout(() => setListSaveStatus(""), 3000);
-  }
-}, [user]);
-
-/* Load from server when user becomes available */
-useEffect(() => {
-  if (user?.id) {
-    loadFromServer();
-  }
-}, [user?.id, loadFromServer]);
+  useEffect(() => {
+    if (user?.id) loadFromServer();
+  }, [user?.id, loadFromServer]);
 
   const computeProgress = useCallback((list: List) => {
     if (!list.tasks || list.tasks.length === 0) return 0;
@@ -1247,28 +932,25 @@ useEffect(() => {
       l.id === listId ? { ...l, tasks: l.tasks.filter((t) => t.id !== taskId) } : l));
 
   const createAssignment = useCallback(async (assignment: Assignment) => {
-  if (!user?.id) {
-    setListSaveStatus("❌ Not signed in");
-    return;
-  }
-  setListSaveStatus("Saving…");
-  try {
-    const res = await fetch(`${API_BASE}/api/liststask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, liststask: assignment }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => res.statusText);
-      throw new Error(`Server responded ${res.status}: ${t}`);
+    if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
+    setListSaveStatus("Saving…");
+    try {
+      const res = await fetch(`${API_BASE}/api/liststask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, liststask: assignment }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => res.statusText);
+        throw new Error(`Server responded ${res.status}: ${t}`);
+      }
+      setListSaveStatus("✅ Task created & saved!");
+    } catch (e: any) {
+      setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
+    } finally {
+      setTimeout(() => setListSaveStatus(""), 3000);
     }
-    setListSaveStatus("✅ Task created & saved!");
-  } catch (e: any) {
-    setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
-  } finally {
-    setTimeout(() => setListSaveStatus(""), 3000);
-  }
-}, [user]);
+  }, [user]);
 
   const toggleAssignmentTask = useCallback((listId: string, assignmentId: string, taskId: string) => {
     setLists((prev) => {
@@ -1278,9 +960,7 @@ useEffect(() => {
           assignments: (l.assignments || []).map((a) =>
             a.id !== assignmentId ? a : {
               ...a,
-              checklist: a.checklist.map((c) =>
-                c.id === taskId ? { ...c, done: !c.done } : c
-              ),
+              checklist: a.checklist.map((c) => c.id === taskId ? { ...c, done: !c.done } : c),
             }
           ),
         }
@@ -1310,24 +990,23 @@ useEffect(() => {
     setListSaveStatus("Saving…");
     try {
       const res = await fetch(`${API_BASE}/api/lists`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, lists }),
       });
-      if (!res.ok) { const t = await res.text().catch(() => res.statusText); throw new Error(`Server responded ${res.status}: ${t}`); }
+      if (!res.ok) {
+        const t = await res.text().catch(() => res.statusText);
+        throw new Error(`Server responded ${res.status}: ${t}`);
+      }
       setListSaveStatus("✅ Saved!");
-    } catch (e: any) { setListSaveStatus(`❌ ${e?.message || "Save failed"}`); }
-    finally { setTimeout(() => setListSaveStatus(""), 3000); }
+    } catch (e: any) {
+      setListSaveStatus(`❌ ${e?.message || "Save failed"}`);
+    } finally {
+      setTimeout(() => setListSaveStatus(""), 3000);
+    }
   }, [lists, user]);
 
-  /* Load from server when user becomes available */
-  useEffect(() => {
-    if (user?.id) {
-      loadFromServer();
-    }
-  }, [user?.id, loadFromServer]);
-
   /* RENDER */
-
   if (!isLoaded || !canView) {
     return (
       <div className="analytics-wrapper">
@@ -1348,13 +1027,10 @@ useEffect(() => {
               <p className="subtitle">Insights from BFMO Report System</p>
               {loadErr ? <div className="note">{loadErr}</div> : null}
               {!loading && (
-                <span className="note">
-                  Showing {filtered.length} of {reports.length} reports
-                </span>
+                <span className="note">Showing {filtered.length} of {reports.length} reports</span>
               )}
             </div>
           </div>
-
           <div className="header-actions">
             <button
               className="pa-btn"
@@ -1365,172 +1041,91 @@ useEffect(() => {
             >
               {filtersOpen ? "Hide Filters" : "Show Filters"}
               {activeFilterCount > 0 && (
-                <span className="badge" style={{ marginLeft: 8 }}>
-                  {activeFilterCount}
-                </span>
+                <span className="badge" style={{ marginLeft: 8 }}>{activeFilterCount}</span>
               )}
             </button>
-
-            <button
-              className="pa-btn"
-              type="button"
-              onClick={() => setListsOpen(true)}
-            >
+            <button className="pa-btn" type="button" onClick={() => setListsOpen(true)}>
               Open Lists Panel
             </button>
-
             <button className="printreports-btn" onClick={handlePrint}>
               Print Analytics
             </button>
-
-            <button
-              className="pa-btn"
-              type="button"
-              onClick={() => fetchReports()}
-            >
+            <button className="pa-btn" type="button" onClick={() => fetchReports()}>
               Refresh Data
             </button>
           </div>
         </header>
 
         {filtersOpen && (
-          <section
-            id="filters-panel"
-            className="filters card"
-            aria-label="Filters"
-          >
+          <section id="filters-panel" className="filters card" aria-label="Filters">
             <div className="filters-row">
               <div className="filter-block">
                 <h4>Status</h4>
                 <div className="chips">
                   {sortedStatusFilters.map((s) => (
-                    <label
-                      key={s}
-                      className={`chip ${selectedStatuses.has(s) ? "is-on" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedStatuses.has(s)}
-                        onChange={() => toggleSet(setSelectedStatuses)(s)}
-                      />
+                    <label key={s} className={`chip ${selectedStatuses.has(s) ? "is-on" : ""}`}>
+                      <input type="checkbox" checked={selectedStatuses.has(s)} onChange={() => toggleSet(setSelectedStatuses)(s)} />
                       {s}
                     </label>
                   ))}
                 </div>
               </div>
-
               <div className="filter-block">
                 <h4>Building</h4>
                 <div className="chips scroll">
                   {sortedBuildings.map((b) => (
-                    <label
-                      key={b}
-                      className={`chip ${selectedBuildings.has(b) ? "is-on" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedBuildings.has(b)}
-                        onChange={() => toggleSet(setSelectedBuildings)(b)}
-                      />
+                    <label key={b} className={`chip ${selectedBuildings.has(b) ? "is-on" : ""}`}>
+                      <input type="checkbox" checked={selectedBuildings.has(b)} onChange={() => toggleSet(setSelectedBuildings)(b)} />
                       {b}
                     </label>
                   ))}
                 </div>
               </div>
-
               <div className="filter-block">
                 <h4>Concern</h4>
                 <div className="chips scroll">
                   {sortedConcerns.map((c) => (
-                    <label
-                      key={c}
-                      className={`chip ${selectedConcerns.has(c) ? "is-on" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedConcerns.has(c)}
-                        onChange={() => toggleSet(setSelectedConcerns)(c)}
-                      />
+                    <label key={c} className={`chip ${selectedConcerns.has(c) ? "is-on" : ""}`}>
+                      <input type="checkbox" checked={selectedConcerns.has(c)} onChange={() => toggleSet(setSelectedConcerns)(c)} />
                       {c}
                     </label>
                   ))}
                 </div>
               </div>
-
               <div className="filter-block">
                 <h4>College</h4>
                 <div className="chips scroll">
                   {sortedColleges.map((col) => (
-                    <label
-                      key={col}
-                      className={`chip ${selectedColleges.has(col) ? "is-on" : ""}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedColleges.has(col)}
-                        onChange={() => toggleSet(setSelectedColleges)(col)}
-                      />
+                    <label key={col} className={`chip ${selectedColleges.has(col) ? "is-on" : ""}`}>
+                      <input type="checkbox" checked={selectedColleges.has(col)} onChange={() => toggleSet(setSelectedColleges)(col)} />
                       {col}
                     </label>
                   ))}
                 </div>
               </div>
-
               <div className="filter-block">
                 <h4>Date</h4>
                 <div className="dates">
-                  <input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                  />
+                  <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
                   <span>to</span>
-                  <input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                  />
+                  <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
-
                 <div className="quick-dates">
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => setLastDays(7)}
-                  >
-                    Last 7 days
-                  </button>
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => setLastDays(30)}
-                  >
-                    Last 30 days
-                  </button>
-                  <button
-                    type="button"
-                    className="quick-date-btn"
-                    onClick={() => {
-                      setDateFrom("");
-                      setDateTo("");
-                    }}
-                  >
-                    All time
-                  </button>
+                  <button type="button" className="quick-date-btn" onClick={() => setLastDays(7)}>Last 7 days</button>
+                  <button type="button" className="quick-date-btn" onClick={() => setLastDays(30)}>Last 30 days</button>
+                  <button type="button" className="quick-date-btn" onClick={() => { setDateFrom(""); setDateTo(""); }}>All time</button>
                 </div>
               </div>
             </div>
-
             <div className="filters-actions">
-              <button className="pa-btn" onClick={clearAllFilters}>
-                Clear filters
-              </button>
+              <button className="pa-btn" onClick={clearAllFilters}>Clear filters</button>
             </div>
           </section>
         )}
 
         <div className="analytics-grid">
-          {/* Status Overview - Using FIXED colors */}
+
+          {/* ── Status Overview ── */}
           <div className="card analytics-card">
             <div className="header-stats-total">
               <h3>Status Overview</h3>
@@ -1539,7 +1134,6 @@ useEffect(() => {
                 <strong>{reports.length}</strong>
               </div>
             </div>
-
             <div className="chart-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1560,40 +1154,45 @@ useEffect(() => {
                     contentStyle={{ backgroundColor: "#ffffff", borderRadius: 8, border: "1px solid #e5e7eb", color: "#000000" }}
                     labelStyle={{ color: "#000000" }}
                     itemStyle={{ color: "#000000" }}
+                    formatter={(value, name, props) => {
+                      const pct = props?.payload?.percent ?? 0;
+                      return [`${value} (${pct}%)`, name];
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
-
             <div className="header-stats">
-              <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#10b981" }} />
-                <span>Resolved</span>
-                <strong>{statusCounts.resolved}</strong>
-              </div>
-              <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#f97316" }} />
-                <span>Pending</span>
-                <strong>{statusCounts.pending}</strong>
-              </div>
-              <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#0ea5e9" }} />
-                <span>Waiting</span>
-                <strong>{statusCounts.waiting}</strong>
-              </div>
-              <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#8b5cf6" }} />
-                <span>In Progress</span>
-                <strong>{statusCounts.progress}</strong>
-              </div>
-              <div className="stat-chip">
-                <span className="stat-dot" style={{ background: "#6b7280" }} />
-                <span>Archived</span>
-                <strong>{statusCounts.archived}</strong>
-              </div>
+              {(() => {
+                const total = statusPieData.reduce((sum, e) => sum + e.value, 0);
+                const chips: { color: string; label: string; key: StatusKey }[] = [
+                  { color: "#10b981", label: "Resolved", key: "resolved" },
+                  { color: "#f97316", label: "Pending", key: "pending" },
+                  { color: "#0ea5e9", label: "Waiting", key: "waiting" },
+                  { color: "#8b5cf6", label: "In Progress", key: "progress" },
+                  { color: "#6b7280", label: "Archived", key: "archived" },
+                ];
+                return chips.map(({ color, label, key }) => {
+                  const count = statusCounts[key];
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  return (
+                    <div className="stat-chip" key={key}>
+                      <span className="stat-dot" style={{ background: color }} />
+                      <span>{label}</span>
+                      <strong>{count}</strong>
+                      {count > 0 && (
+                        <span style={{ fontSize: 11, color: "#6b7280", marginLeft: 2 }}>
+                          ({pct}%)
+                        </span>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
-          </div>
+          </div>{/* ── end Status Overview card ── */}
 
+          {/* ── Reports by Building ── */}
           <div className="card analytics-card">
             <h3>Reports by Building</h3>
             <div className="bar-wrap resizable">
@@ -1629,6 +1228,7 @@ useEffect(() => {
             </div>
           </div>
 
+          {/* ── Reports by Concern ── */}
           <div className="card analytics-card">
             <h3>Reports by Concern</h3>
             <div className="chart-wrap resizable">
@@ -1675,6 +1275,7 @@ useEffect(() => {
             </div>
           </div>
 
+          {/* ── Reports by College ── */}
           <div className="card analytics-card">
             <h3>Reports by College</h3>
             <div className="chart-wrap resizable">
@@ -1710,6 +1311,7 @@ useEffect(() => {
             </div>
           </div>
 
+          {/* ── Reports Over Time ── */}
           <div className="card analytics-card analytics-card-full">
             <div className="time-header">
               <h3>Reports Over Time</h3>
@@ -1726,7 +1328,6 @@ useEffect(() => {
                 ))}
               </div>
             </div>
-
             <div className="chart-wrap resizable">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={timeSeriesData}>
@@ -1759,8 +1360,9 @@ useEffect(() => {
               </ResponsiveContainer>
             </div>
           </div>
-        </div>
-      </div>
+
+        </div>{/* ── end analytics-grid ── */}
+      </div>{/* ── end analytics-container ── */}
 
       {/* ── SIDE PANEL ── */}
       <div
@@ -1771,13 +1373,7 @@ useEffect(() => {
       >
         <div className="sidepanel-head">
           <h3>Lists with Progress</h3>
-          <button
-            className="sidepanel-close"
-            onClick={() => setListsOpen(false)}
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <button className="sidepanel-close" onClick={() => setListsOpen(false)} aria-label="Close">×</button>
         </div>
 
         <div className="lists-controls sticky">
@@ -1786,42 +1382,22 @@ useEffect(() => {
             setShowModal(true);
           }}>+ Create Task</button>
 
-          <button
-            className="pa-btn"
-            onClick={saveToServer}
-            disabled={!user?.id}
-            title={!user?.id ? "Sign in to save" : "Save lists to database"}
-          >
+          <button className="pa-btn" onClick={saveToServer} disabled={!user?.id}
+            title={!user?.id ? "Sign in to save" : "Save lists to database"}>
             Save to Server
           </button>
 
-          <button
-            className="pa-btn"
-            onClick={loadFromServer}
-            disabled={!user?.id}
-            title={!user?.id ? "Sign in to load" : "Load lists from database"}
-          >
+          <button className="pa-btn" onClick={loadFromServer} disabled={!user?.id}
+            title={!user?.id ? "Sign in to load" : "Load lists from database"}>
             Load from Server
           </button>
 
           {listSaveStatus && (
-            <span
-              style={{
-                fontSize: 12,
-                padding: "4px 8px",
-                borderRadius: 6,
-                background: listSaveStatus.startsWith("✅")
-                  ? "#dcfce7"
-                  : listSaveStatus.startsWith("❌")
-                    ? "#fee2e2"
-                    : "#f3f4f6",
-                color: listSaveStatus.startsWith("✅")
-                  ? "#166534"
-                  : listSaveStatus.startsWith("❌")
-                    ? "#991b1b"
-                    : "#374151",
-              }}
-            >
+            <span style={{
+              fontSize: 12, padding: "4px 8px", borderRadius: 6,
+              background: listSaveStatus.startsWith("✅") ? "#dcfce7" : listSaveStatus.startsWith("❌") ? "#fee2e2" : "#f3f4f6",
+              color: listSaveStatus.startsWith("✅") ? "#166534" : listSaveStatus.startsWith("❌") ? "#991b1b" : "#374151",
+            }}>
               {listSaveStatus}
             </span>
           )}
@@ -1839,43 +1415,25 @@ useEffect(() => {
                     <div className="list-left">
                       <div className="list-title-row">
                         <h3 className="list-title">{list.title}</h3>
-                        <button
-                          className="small-btn collapse"
-                          onClick={() => toggleCollapse(list.id)}
-                        >
+                        <button className="small-btn collapse" onClick={() => toggleCollapse(list.id)}>
                           {list.collapsed ? "Expand" : "Panel"}
                         </button>
                       </div>
-
                       <div className="progress-wrap">
                         <div className="muted">{pct}%</div>
                         <div className="progress-bar small">
-                          <div
-                            className="progress-fill"
-                            style={{ transform: `scaleX(${pct / 100})` }}
-                          />
+                          <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})` }} />
                         </div>
                       </div>
                     </div>
-
                     <div className="list-actions">
-                      <button
-                        className="small-btn"
-                        onClick={() => {
-                          const text = prompt("Task name:");
-                          if (text && text.trim()) addTask(list.id, text.trim());
-                        }}
-                      >
-                        + Task
-                      </button>
-                      <button
-                        className="small-btn"
-                        onClick={() => {
-                          if (confirm("Delete this list?")) deleteList(list.id);
-                        }}
-                      >
-                        Delete
-                      </button>
+                      <button className="small-btn" onClick={() => {
+                        const text = prompt("Task name:");
+                        if (text && text.trim()) addTask(list.id, text.trim());
+                      }}>+ Task</button>
+                      <button className="small-btn" onClick={() => {
+                        if (confirm("Delete this list?")) deleteList(list.id);
+                      }}>Delete</button>
                     </div>
                   </div>
 
@@ -1888,50 +1446,26 @@ useEffect(() => {
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               const v = (e.currentTarget.value || "").trim();
-                              if (v) {
-                                addTask(list.id, v);
-                                (e.currentTarget as HTMLInputElement).value = "";
-                              }
+                              if (v) { addTask(list.id, v); (e.currentTarget as HTMLInputElement).value = ""; }
                             }
                           }}
                         />
-                        <button
-                          className="small-btn"
-                          onClick={(e) => {
-                            const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                            if (input && input.value.trim()) {
-                              addTask(list.id, input.value.trim());
-                              input.value = "";
-                            }
-                          }}
-                        >
-                          Add
-                        </button>
+                        <button className="small-btn" onClick={(e) => {
+                          const input = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (input && input.value.trim()) { addTask(list.id, input.value.trim()); input.value = ""; }
+                        }}>Add</button>
                       </div>
-
                       <div className="tasks-wrap">
                         {!list.tasks || list.tasks.length === 0 ? (
                           <div className="muted">No tasks yet.</div>
                         ) : (
                           list.tasks.map((task) => (
                             <div key={task.id} className="task-row">
-                              <input
-                                type="checkbox"
-                                checked={!!task.done}
-                                onChange={() => toggleTask(list.id, task.id)}
-                              />
-                              <label style={{ textDecoration: task.done ? "line-through" : "none" }}>
-                                {task.text}
-                              </label>
-                              <button
-                                className="small-btn"
-                                title="Delete task"
-                                onClick={() => {
-                                  if (confirm("Delete task?")) deleteTask(list.id, task.id);
-                                }}
-                              >
-                                ×
-                              </button>
+                              <input type="checkbox" checked={!!task.done} onChange={() => toggleTask(list.id, task.id)} />
+                              <label style={{ textDecoration: task.done ? "line-through" : "none" }}>{task.text}</label>
+                              <button className="small-btn" title="Delete task" onClick={() => {
+                                if (confirm("Delete task?")) deleteTask(list.id, task.id);
+                              }}>×</button>
                             </div>
                           ))
                         )}
@@ -1946,11 +1480,7 @@ useEffect(() => {
       </div>
 
       {listsOpen && (
-        <div
-          className="sidepanel-backdrop"
-          onClick={() => setListsOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="sidepanel-backdrop" onClick={() => setListsOpen(false)} aria-hidden="true" />
       )}
 
       {showModal && (
@@ -2034,9 +1564,7 @@ useEffect(() => {
                       <input type="checkbox" checked={item.done}
                         onChange={() => setNewAssignment((prev) => ({
                           ...prev,
-                          checklist: prev.checklist.map((c) =>
-                            c.id === item.id ? { ...c, done: !c.done } : c
-                          ),
+                          checklist: prev.checklist.map((c) => c.id === item.id ? { ...c, done: !c.done } : c),
                         }))}
                       />
                       <span style={{

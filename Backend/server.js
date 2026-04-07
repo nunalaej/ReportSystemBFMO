@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 
+const listsRouter = require("./routes/lists");
 const liststaskRouter = require("./api/liststask.js");  // Add this line
 const staffRouter = require("./api/user/staff");
 const Meta = require("./api/meta.js");          // Mongoose model
@@ -36,9 +37,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
    ROUTES
 --------------------------------*/
 app.use("/api/reports", reportsRouter);
+app.use("/api/lists", listsRouter);
 app.use("/api/liststask", liststaskRouter);  // Add this line
 app.use("/api/user", staffRouter);
-
 
 /* -------------------------------
    MONGODB CONNECTION
