@@ -1,7 +1,7 @@
 // api/liststask.js
 const express = require("express");
 const router = express.Router();
-const ListsTask = require("../models/ListsTask");
+const ListsTask = require("../models/Liststask");
 const Report = require("../models/Report");
 
 /* ============================================================
