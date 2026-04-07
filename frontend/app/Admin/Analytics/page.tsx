@@ -855,7 +855,7 @@ const Analytics: FC = () => {
 
   const autoSaveToServer = useCallback((updatedLists: List[]) => {
     if (!user?.id) return;
-    fetch(`${API_BASE}/api/lists`, {
+    fetch(`${API_BASE}/api/liststasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId: user.id, lists: updatedLists }),
@@ -867,7 +867,7 @@ const Analytics: FC = () => {
     if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
     setListSaveStatus("Loading…");
     try {
-      const res = await fetch(`${API_BASE}/api/lists?userId=${encodeURIComponent(user.id)}`, {
+      const res = await fetch(`${API_BASE}/api/liststasks?userId=${encodeURIComponent(user.id)}`, {
         cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
       });
       if (!res.ok) {
@@ -935,7 +935,7 @@ const Analytics: FC = () => {
     if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
     setListSaveStatus("Saving…");
     try {
-      const res = await fetch(`${API_BASE}/api/liststask`, {
+      const res = await fetch(`${API_BASE}/api/liststasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, liststask: assignment }),
@@ -989,7 +989,7 @@ const Analytics: FC = () => {
     if (!user?.id) { setListSaveStatus("❌ Not signed in"); return; }
     setListSaveStatus("Saving…");
     try {
-      const res = await fetch(`${API_BASE}/api/lists`, {
+      const res = await fetch(`${API_BASE}/api/liststasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, lists }),
