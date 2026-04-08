@@ -176,6 +176,18 @@ export default function ReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
+
+  // Add this effect to close modal when component unmounts (user navigates away)
+useEffect(() => {
+  return () => {
+    setSelectedReport(null);
+    setStatusValue("Pending");
+    setCommentText("");
+    setEditingIndex(null);
+    setEditingText("");
+    setIsImageExpanded(false);
+  };
+}, []);
   /* AUTH GUARD */
 
   useEffect(() => {
