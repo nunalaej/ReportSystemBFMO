@@ -146,7 +146,6 @@ html:not(.dark) .status-focus-archived {
   color: #ffffff;
 }
 
-/* Force modal to escape any parent overflow/transform clipping */
 .report-modal-backdrop {
   position: fixed !important;
   inset: 0 !important;
@@ -154,7 +153,6 @@ html:not(.dark) .status-focus-archived {
   width: 100vw !important;
   height: 100vh !important;
 }
-
 .report-modal {
   max-width: 960px !important;
   width: calc(100vw - 3rem) !important;
