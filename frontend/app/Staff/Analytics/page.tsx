@@ -720,20 +720,46 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
   }, [user?.id]);
 
   const toggleChecklistItem = useCallback(async (taskId: string, itemId: string, done: boolean) => {
-    if (!user?.id) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/liststask/${taskId}/checklist/${itemId}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ done }),
-      });
-      if (!res.ok) throw new Error("Failed to update");
+  if (!user?.id) return;
+
+  // Optimistic update — update UI immediately regardless of server response
+  setServerTasks((prev) =>
+    prev.map((t) =>
+      t._id === taskId
+        ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done } : c) }
+        : t
+    )
+  );
+
+  try {
+    const res = await fetch(`${API_BASE}/api/liststask/${taskId}/checklist/${itemId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ done }),
+    });
+    if (!res.ok) {
+      // Revert on failure
       setServerTasks((prev) =>
-        prev.map((t) => t._id === taskId
-          ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done } : c) }
-          : t)
+        prev.map((t) =>
+          t._id === taskId
+            ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done: !done } : c) }
+            : t
+        )
       );
-    } catch (e) { console.error("Error toggling checklist:", e); }
-  }, [user?.id]);
+      console.error("Failed to update checklist item");
+    }
+  } catch (e) {
+    // Revert on error
+    setServerTasks((prev) =>
+      prev.map((t) =>
+        t._id === taskId
+          ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done: !done } : c) }
+          : t
+      )
+    );
+    console.error("Error toggling checklist:", e);
+  }
+}, [user?.id]);
 
   /* =========================================================
     LOCAL LISTS HELPERS
