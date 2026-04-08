@@ -28,7 +28,6 @@ const ListsTaskSchema = new mongoose.Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
 
     // Task metadata
@@ -48,7 +47,6 @@ const ListsTaskSchema = new mongoose.Schema(
     reportId: {
       type: String,
       default: null,
-      index: true,
     },
 
     // Task status
