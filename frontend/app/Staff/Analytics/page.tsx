@@ -48,6 +48,7 @@ interface Report {
 }
 
 interface Task {
+  _id?: string;
   id: string;
   text: string;
   done: boolean;
@@ -63,14 +64,6 @@ interface Assignment {
   status: "Pending" | "Waiting for Materials" | "In Progress" | "Resolved";
   checklist: Task[];
   createdAt?: string;
-}
-
-interface List {
-  id: string;
-  title: string;
-  tasks: Task[];
-  assignments?: Assignment[];
-  collapsed: boolean;
 }
 
 type StatusKey = "pending" | "waiting" | "progress" | "resolved" | "archived";
@@ -604,7 +597,7 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
   }, [filtered, statusCounts]);
 
   /* =========================================================
-    LISTS & TASKS STATE
+    TASKS STATE
   ========================================================= */
   const [listsOpen, setListsOpen] = useState<boolean>(false);
   const [listSaveStatus, setListSaveStatus] = useState<string>("");
@@ -612,37 +605,15 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
   const [serverTasks, setServerTasks] = useState<Assignment[]>([]);
   const [loadingTasks, setLoadingTasks] = useState<boolean>(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  // Track the in-progress text for adding a new checklist item per task
+  const [newChecklistText, setNewChecklistText] = useState<Record<string, string>>({});
 
-  const STORAGE_KEY = "todoLists_v1";
   const uid = useCallback(() => Date.now().toString(36) + Math.random().toString(36).slice(2, 8), []);
-
-  const defaultLists = useCallback((): List[] => [{
-    id: uid(), title: "Sample BFMO Checklist", collapsed: false,
-    tasks: [
-      { id: uid(), text: "Review unresolved reports", done: false },
-      { id: uid(), text: "Coordinate with maintenance team", done: false },
-      { id: uid(), text: "Prepare weekly summary", done: false },
-    ],
-  }], [uid]);
-
-  const loadLocal = useCallback((): List[] | null => {
-    try {
-      if (typeof window === "undefined") return null;
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) as List[] : null;
-    } catch { return null; }
-  }, []);
-
-  const [lists, setLists] = useState<List[]>(() => loadLocal() || defaultLists());
 
   const [newAssignment, setNewAssignment] = useState<Assignment>({
     name: "", concernType: "Mechanical", reportId: "",
     assignedStaff: [], status: "Pending", checklist: [],
   });
-
-  useEffect(() => {
-    try { if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(lists)); } catch {}
-  }, [lists]);
 
   /* =========================================================
     SERVER TASKS CRUD
@@ -719,84 +690,119 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
     } catch { setListSaveStatus("❌ Delete failed"); }
   }, [user?.id]);
 
-  const toggleChecklistItem = useCallback(async (taskId: string, itemId: string, done: boolean) => {
-  if (!user?.id) return;
+  /* ---------------------------------------------------------
+    FIX: toggleChecklistItem
+    - Uses the item's _id if present, otherwise falls back to id.
+    - Does NOT revert optimistic update on success.
+    - Only reverts if the server call actually fails.
+  --------------------------------------------------------- */
+  const getItemKey = (item: Task): string => item._id || item.id;
 
-  // Optimistic update — update UI immediately regardless of server response
-  setServerTasks((prev) =>
-    prev.map((t) =>
-      t._id === taskId
-        ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done } : c) }
-        : t
-    )
-  );
+  const toggleChecklistItem = useCallback(async (taskId: string, item: Task, done: boolean) => {
+    if (!user?.id) return;
+    const itemKey = getItemKey(item);
 
-  try {
-    const res = await fetch(`${API_BASE}/api/liststask/${taskId}/checklist/${itemId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done }),
-    });
-    if (!res.ok) {
-      // Revert on failure
-      setServerTasks((prev) =>
-        prev.map((t) =>
-          t._id === taskId
-            ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done: !done } : c) }
-            : t
-        )
-      );
-      console.error("Failed to update checklist item");
-    }
-  } catch (e) {
-    // Revert on error
+    // Optimistic update
     setServerTasks((prev) =>
       prev.map((t) =>
         t._id === taskId
-          ? { ...t, checklist: t.checklist.map((c) => c.id === itemId ? { ...c, done: !done } : c) }
+          ? { ...t, checklist: t.checklist.map((c) => getItemKey(c) === itemKey ? { ...c, done } : c) }
           : t
       )
     );
-    console.error("Error toggling checklist:", e);
-  }
-}, [user?.id]);
 
-  /* =========================================================
-    LOCAL LISTS HELPERS
-  ========================================================= */
-  const autoSaveToServer = useCallback((updatedLists: List[]) => {
-    if (!user?.id) return;
-    fetch(`${API_BASE}/api/lists`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, lists: updatedLists }),
-    }).catch(console.error);
-  }, [user]);
-
-  const deleteList = (listId: string) =>
-    setLists((prev) => prev.filter((l) => l.id !== listId));
-
-  const addTask = (listId: string, text: string) => {
-    if (!text) return;
-    setLists((prev) => prev.map((l) =>
-      l.id === listId ? { ...l, tasks: [...(l.tasks || []), { id: uid(), text: text.trim(), done: false }] } : l));
-  };
-
-  const toggleTask = useCallback((listId: string, taskId: string) => {
-    setLists((prev) => {
-      const updated = prev.map((l) =>
-        l.id !== listId ? l : {
-          ...l, tasks: (l.tasks || []).map((t) => t.id === taskId ? { ...t, done: !t.done } : t),
-        }
+    try {
+      const res = await fetch(`${API_BASE}/api/liststask/${taskId}/checklist/${itemKey}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done }),
+      });
+      if (!res.ok) throw new Error("Server rejected checklist update");
+    } catch (e) {
+      // Revert only on failure
+      setServerTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId
+            ? { ...t, checklist: t.checklist.map((c) => getItemKey(c) === itemKey ? { ...c, done: !done } : c) }
+            : t
+        )
       );
-      autoSaveToServer(updated);
-      return updated;
-    });
-  }, [autoSaveToServer]);
+      console.error("Error toggling checklist:", e);
+    }
+  }, [user?.id]);
 
-  const computeProgress = useCallback((list: List) => {
-    if (!list.tasks || list.tasks.length === 0) return 0;
-    return Math.round((list.tasks.filter((t) => t.done).length / list.tasks.length) * 100);
-  }, []);
+  /* ---------------------------------------------------------
+    ADD checklist item to existing server task
+  --------------------------------------------------------- */
+  const addChecklistItem = useCallback(async (taskId: string, text: string) => {
+    if (!text.trim() || !user?.id) return;
+    const newItem: Task = { id: uid(), text: text.trim(), done: false };
+
+    // Optimistic update
+    setServerTasks((prev) =>
+      prev.map((t) =>
+        t._id === taskId ? { ...t, checklist: [...t.checklist, newItem] } : t
+      )
+    );
+    setNewChecklistText((prev) => ({ ...prev, [taskId]: "" }));
+
+    try {
+      const task = serverTasks.find((t) => t._id === taskId);
+      if (!task) return;
+      const updatedChecklist = [...task.checklist, newItem];
+      const res = await fetch(`${API_BASE}/api/liststask/${taskId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checklist: updatedChecklist }),
+      });
+      if (!res.ok) throw new Error("Failed to add checklist item");
+    } catch (e) {
+      // Revert
+      setServerTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId
+            ? { ...t, checklist: t.checklist.filter((c) => getItemKey(c) !== newItem.id) }
+            : t
+        )
+      );
+      console.error("Error adding checklist item:", e);
+    }
+  }, [user?.id, uid, serverTasks]);
+
+  /* ---------------------------------------------------------
+    REMOVE checklist item from existing server task
+  --------------------------------------------------------- */
+  const removeChecklistItem = useCallback(async (taskId: string, item: Task) => {
+    if (!user?.id) return;
+    const itemKey = getItemKey(item);
+
+    // Optimistic update
+    setServerTasks((prev) =>
+      prev.map((t) =>
+        t._id === taskId
+          ? { ...t, checklist: t.checklist.filter((c) => getItemKey(c) !== itemKey) }
+          : t
+      )
+    );
+
+    try {
+      const task = serverTasks.find((t) => t._id === taskId);
+      if (!task) return;
+      const updatedChecklist = task.checklist.filter((c) => getItemKey(c) !== itemKey);
+      const res = await fetch(`${API_BASE}/api/liststask/${taskId}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checklist: updatedChecklist }),
+      });
+      if (!res.ok) throw new Error("Failed to remove checklist item");
+    } catch (e) {
+      // Revert — add the item back
+      setServerTasks((prev) =>
+        prev.map((t) =>
+          t._id === taskId ? { ...t, checklist: [...t.checklist, item] } : t
+        )
+      );
+      console.error("Error removing checklist item:", e);
+    }
+  }, [user?.id, serverTasks]);
 
   useEffect(() => {
     if (user?.id && listsOpen) loadTasksFromServer();
@@ -1073,7 +1079,7 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
       </div>{/* end analytics-container */}
 
       {/* ================================================================
-          TASKS MODAL (replaces side panel)
+          TASKS MODAL
       ================================================================ */}
       {listsOpen && (
         <div
@@ -1127,7 +1133,7 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
               </div>
             </div>
 
-            {/* Modal Body — two-column layout */}
+            {/* Modal Body */}
             <div style={{ overflowY: "auto", flex: 1, padding: "1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
               {/* ── SERVER TASKS ── */}
@@ -1218,27 +1224,60 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
                               </p>
                             )}
 
-                            {checklistTotal > 0 && (
-                              <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #334155" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                  <span style={{ fontSize: 11, color: "#9ca3af" }}>Checklist</span>
-                                  <span style={{ fontSize: 11, color: "#9ca3af" }}>{checklistDone}/{checklistTotal} · {taskPct}%</span>
-                                </div>
-                                <div style={{ height: 4, background: "#0f172a", borderRadius: 2, overflow: "hidden", marginBottom: 6 }}>
-                                  <div style={{ height: "100%", background: "#8b5cf6", width: `${taskPct}%`, transition: "width 0.2s" }} />
-                                </div>
-                                {task.checklist.map((item) => (
-                                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, fontSize: 12 }}>
-                                    <input type="checkbox" checked={!!item.done}
-                                      onChange={(e) => toggleChecklistItem(task._id!, item.id, e.target.checked)}
-                                    />
-                                    <span style={{ flex: 1, textDecoration: item.done ? "line-through" : "none", color: "#cbd5e1", opacity: item.done ? 0.6 : 1 }}>
-                                      {item.text}
-                                    </span>
+                            {/* Checklist */}
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #334155" }}>
+                              {checklistTotal > 0 && (
+                                <>
+                                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                                    <span style={{ fontSize: 11, color: "#9ca3af" }}>Checklist</span>
+                                    <span style={{ fontSize: 11, color: "#9ca3af" }}>{checklistDone}/{checklistTotal} · {taskPct}%</span>
                                   </div>
-                                ))}
+                                  <div style={{ height: 4, background: "#0f172a", borderRadius: 2, overflow: "hidden", marginBottom: 6 }}>
+                                    <div style={{ height: "100%", background: "#8b5cf6", width: `${taskPct}%`, transition: "width 0.2s" }} />
+                                  </div>
+                                  {task.checklist.map((item) => (
+                                    <div key={getItemKey(item)} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontSize: 12 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={!!item.done}
+                                        onChange={(e) => toggleChecklistItem(task._id!, item, e.target.checked)}
+                                      />
+                                      <span style={{ flex: 1, textDecoration: item.done ? "line-through" : "none", color: "#cbd5e1", opacity: item.done ? 0.6 : 1 }}>
+                                        {item.text}
+                                      </span>
+                                      <button
+                                        onClick={() => removeChecklistItem(task._id!, item)}
+                                        title="Remove item"
+                                        style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 13, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+                                      >×</button>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+
+                              {/* Add new checklist item inline */}
+                              <div style={{ display: "flex", gap: 4, marginTop: checklistTotal > 0 ? 6 : 0 }}>
+                                <input
+                                  type="text"
+                                  placeholder="Add item…"
+                                  value={newChecklistText[task._id!] || ""}
+                                  onChange={(e) => setNewChecklistText((prev) => ({ ...prev, [task._id!]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      addChecklistItem(task._id!, newChecklistText[task._id!] || "");
+                                    }
+                                  }}
+                                  style={{
+                                    flex: 1, padding: "4px 6px", fontSize: 11, borderRadius: 4,
+                                    border: "1px solid #334155", background: "#0f172a", color: "#f9fafb",
+                                  }}
+                                />
+                                <button
+                                  onClick={() => addChecklistItem(task._id!, newChecklistText[task._id!] || "")}
+                                  style={{ padding: "4px 8px", fontSize: 11, background: "#334155", color: "#f9fafb", border: "none", borderRadius: 4, cursor: "pointer", flexShrink: 0 }}
+                                >+</button>
                               </div>
-                            )}
+                            </div>
 
                             <button onClick={() => deleteServerTask(task._id!)}
                               style={{ marginTop: 8, width: "100%", padding: "4px", fontSize: 11, background: "#ef4444", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
@@ -1251,52 +1290,6 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
                   })}
                 </div>
               </section>
-
-              {/* ── LOCAL LISTS ── */}
-              {lists.length > 0 && (
-                <section>
-                  <h4 style={{ margin: "0 0 0.75rem 0", fontSize: "11px", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.6px" }}>
-                    Local Lists ({lists.length})
-                  </h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "0.75rem" }}>
-                    {lists.map((list) => {
-                      const pct = computeProgress(list);
-                      return (
-                        <div key={list.id} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "0.875rem" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                            <h5 style={{ margin: 0, fontSize: 13, color: "#f9fafb", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-                              {list.title}
-                            </h5>
-                            <span style={{ fontSize: 11, color: "#9ca3af" }}>{pct}%</span>
-                          </div>
-                          <div style={{ height: 4, background: "#0f172a", borderRadius: 2, overflow: "hidden", marginBottom: 8 }}>
-                            <div style={{ height: "100%", background: "#10b981", width: `${pct}%`, transition: "width 0.2s" }} />
-                          </div>
-                          {list.tasks && list.tasks.length > 0 && (
-                            <div style={{ marginBottom: 8 }}>
-                              {list.tasks.map((task) => (
-                                <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontSize: 12 }}>
-                                  <input type="checkbox" checked={!!task.done} onChange={() => toggleTask(list.id, task.id)} />
-                                  <span style={{ flex: 1, textDecoration: task.done ? "line-through" : "none", color: "#e5e7eb", opacity: task.done ? 0.6 : 1 }}>
-                                    {task.text}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <button className="small-btn" style={{ flex: 1, fontSize: 11 }} onClick={() => {
-                              const text = prompt("Task name:");
-                              if (text && text.trim()) addTask(list.id, text.trim());
-                            }}>+ Task</button>
-                            <button className="small-btn" style={{ fontSize: 11 }} onClick={() => { if (confirm("Delete?")) deleteList(list.id); }}>Delete</button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              )}
 
             </div>{/* end modal body */}
           </div>

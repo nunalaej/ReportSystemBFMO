@@ -146,15 +146,18 @@ html:not(.dark) .status-focus-archived {
   color: #ffffff;
 }
 
-/* Modal backdrop and container */
-html:not(.dark) .report-modal-backdrop {
-  background: rgba(15, 23, 42, 0.35);
+/* Force modal to escape any parent overflow/transform clipping */
+.report-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+  width: 100vw !important;
+  height: 100vh !important;
 }
 
-html:not(.dark) .report-modal {
-  background: #ffffff;
-  border-color: #e5e7eb;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+.report-modal {
+  max-width: 960px !important;
+  width: calc(100vw - 3rem) !important;
 }
 
 html:not(.dark) .modal-header {

@@ -5,6 +5,8 @@ import "@/app/Admin/style/reports.css";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { createPortal } from "react-dom";
+
 
 const defaultImg = "/default.jpg";
 
@@ -1152,7 +1154,7 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
           </>
         )}
 
-        {selectedReport && (
+        {selectedReport && createPortal(
           <div className="report-modal-backdrop" onClick={closeDetails}>
             <div className="report-modal" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
@@ -1364,7 +1366,8 @@ return buildingMatch && concernMatch && collegeMatch && statusMatch && searchMat
                 />
               </div>
             )}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     </>
