@@ -28,7 +28,6 @@ const ListsTaskSchema = new mongoose.Schema(
     userId: {
       type: String,
       required: true,
-      index: true,
     },
 
     // Task metadata
@@ -48,7 +47,6 @@ const ListsTaskSchema = new mongoose.Schema(
     reportId: {
       type: String,
       default: null,
-      index: true,
     },
 
     // Task status
@@ -82,7 +80,9 @@ const ListsTaskSchema = new mongoose.Schema(
 );
 
 // Indexes
+ListsTaskSchema.index({ userId: 1 });
 ListsTaskSchema.index({ userId: 1, status: 1 });
+ListsTaskSchema.index({ reportId: 1 });
 ListsTaskSchema.index({ createdAt: -1 });
 ListsTaskSchema.index({ userId: 1, createdAt: -1 });
 
