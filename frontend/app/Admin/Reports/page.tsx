@@ -843,9 +843,7 @@ export default function ReportPage() {
         </div>
 
         {/* Modal Body */}
-        <div className="modal-content">
-
-
+        <div className="modal-content-test">
           {/* Desktop image */}
           <div className="modal-img-wrapper">
             <img

@@ -1300,7 +1300,7 @@ html:not(.dark) .log-list {
   }
 
   /* vertical layout inside modal */
-  .modal-content {
+  .modal-content-test {
     display: flex;
     flex-direction: column;
     padding: 0.75rem 1rem 1rem;
