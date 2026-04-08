@@ -1269,7 +1269,7 @@ html:not(.dark) .log-list {
 }
 
 /* 768px and below: full-screen modal, big image, vertical layout */
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .report-wrapper {
     padding: 1rem;
   }
