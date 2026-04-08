@@ -844,16 +844,7 @@ export default function ReportPage() {
 
         {/* Modal Body */}
         <div className="modal-content">
-          {/* Mobile thumbnail */}
-          <div className="modal-thumb-mobile">
-            <img
-              src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
-              alt="Report"
-              className="report-img report-img-clickable"
-              onClick={() => setIsImageExpanded(true)}
-              onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
-            />
-          </div>
+
 
           {/* Desktop image */}
           <div className="modal-img-wrapper">
@@ -866,6 +857,19 @@ export default function ReportPage() {
             />
             <div className="modal-img-hint">Click to enlarge</div>
           </div>
+
+
+          {/* Mobile thumbnail */}
+          <div className="modal-thumb-mobile">
+            <img
+              src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+              alt="Report"
+              className="report-img report-img-clickable"
+              onClick={() => setIsImageExpanded(true)}
+              onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
+            />
+          </div>
+
 
           {/* Info column */}
           <div className="modal-info">
