@@ -85,21 +85,6 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // ✅ Prevent duplicate reportId per user
-if (reportId) {
-  const existingTask = await ListsTask.findOne({
-    userId,
-    reportId,
-  });
-
-  if (existingTask) {
-    return res.status(400).json({
-      success: false,
-      message: "A task with this Report ID already exists.",
-    });
-  }
-}
-
     const newTask = await ListsTask.create({
       userId,
       name: name.trim(),
@@ -110,8 +95,6 @@ if (reportId) {
       checklist: checklist || [],
     });
 
-
-    
     // If linked to a report, update report status to "In Progress"
     if (reportId) {
       await Report.updateOne(
