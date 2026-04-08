@@ -1387,11 +1387,36 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <button className="pa-btn" style={{ flex: 1 }}
                 onClick={() => {
-                  if (!newAssignment.name.trim()) { alert("Please enter a task name."); return; }
-                  createAssignment(newAssignment);
-                  setNewAssignment({ name: "", concernType: "Mechanical", reportId: "", assignedStaff: [], status: "Pending", checklist: [] });
-                  setShowModal(false);
-                }}>
+  if (!newAssignment.name.trim()) {
+    alert("Please enter a task name.");
+    return;
+  }
+
+  // ✅ CHECK FOR DUPLICATE reportId
+  if (newAssignment.reportId) {
+    const alreadyExists = serverTasks.some(
+      (task) => task.reportId === newAssignment.reportId
+    );
+
+    if (alreadyExists) {
+      alert("A task with this Report ID already exists.");
+      return;
+    }
+  }
+
+  createAssignment(newAssignment);
+
+  setNewAssignment({
+    name: "",
+    concernType: "Mechanical",
+    reportId: "",
+    assignedStaff: [],
+    status: "Pending",
+    checklist: [],
+  });
+
+  setShowModal(false);
+}}>
                 Save Task
               </button>
               <button className="pa-btn" style={{ background: "linear-gradient(to right,#374151,#4b5563)" }}
