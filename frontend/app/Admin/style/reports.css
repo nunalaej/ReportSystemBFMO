@@ -532,6 +532,7 @@ html:not(.dark) .back-btn:hover {
 
 .report-header-row {
   display: flex;
+  flex-direction: row-reverse;
   justify-content: space-between;
   align-items: center;
   gap: 0.5rem;
@@ -1451,6 +1452,27 @@ html:not(.dark) .log-list {
   margin-top: 2px;
 }
 
+
+
+html:not(dark) .report-id-badge {
+  display: inline-block;
+  font-size: 11px;  
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #111111;
+  background: #ffffff;;
+  border: 1px solid #c4c4c4;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+html:not(dark) .modal-report-id {
+  font-size: 12px;
+  margin-top: 2px;
+}
 /* ── Reporter type badge in card ───────────────────────────────── */
 .reporter-type-label {
   font-size: 12px;
