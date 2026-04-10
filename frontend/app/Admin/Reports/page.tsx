@@ -1060,26 +1060,6 @@ export default function ReportPage() {
           </div>
         </div>
 
-        {/* Quick stats bar */}
-        <div className="stats-bar">
-          <div className="stat-chip stat-chip-total">
-            <span className="stat-chip-num">{stats.total}</span>
-            <span className="stat-chip-label">Showing</span>
-          </div>
-          <div className="stat-chip stat-chip-pending">
-            <span className="stat-chip-num">{stats.pending}</span>
-            <span className="stat-chip-label">Pending</span>
-          </div>
-          <div className="stat-chip stat-chip-inprogress">
-            <span className="stat-chip-num">{stats.inProgress}</span>
-            <span className="stat-chip-label">In Progress</span>
-          </div>
-          <div className="stat-chip stat-chip-resolved">
-            <span className="stat-chip-num">{stats.resolved}</span>
-            <span className="stat-chip-label">Resolved</span>
-          </div>
-        </div>
-
         {loadError && (
           <div className="load-error-banner">
             {loadError}{" "}
