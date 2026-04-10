@@ -978,3 +978,561 @@ html:not(.dark) .lists-controls {
 .modal-content button:last-of-type {
   background: #e5e7eb;
 }
+/* ═══════════════════════════════════════════════════════════
+   TASKS MODAL — dark / light mode
+═══════════════════════════════════════════════════════════ */
+
+/* Backdrop */
+.tasks-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* Modal panel */
+.tasks-modal {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 960px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+
+html:not(.dark) .tasks-modal {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.18);
+}
+
+/* Header */
+.tasks-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+html:not(.dark) .tasks-modal-header {
+  border-bottom-color: #e5e7eb;
+}
+
+.tasks-modal-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f9fafb;
+}
+
+html:not(.dark) .tasks-modal-title {
+  color: #111827;
+}
+
+.tasks-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Close button */
+.tasks-modal-close {
+  background: none;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  color: #9ca3af;
+  font-size: 18px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+html:not(.dark) .tasks-modal-close {
+  border-color: #d1d5db;
+  color: #6b7280;
+}
+
+.tasks-modal-close:hover {
+  background: #1e293b;
+  color: #f9fafb;
+}
+
+html:not(.dark) .tasks-modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* Status message pill */
+.tasks-save-status {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.tasks-save-status.is-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.tasks-save-status.is-err {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tasks-save-status.is-info {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+html:not(.dark) .tasks-save-status.is-info {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Body */
+.tasks-modal-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Section label */
+.tasks-section-label {
+  margin: 0 0 0.75rem 0;
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+html:not(.dark) .tasks-section-label {
+  color: #9ca3af;
+}
+
+/* Empty state */
+.tasks-empty {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Task cards grid */
+.tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Individual task card */
+.task-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 0.875rem;
+}
+
+html:not(.dark) .task-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+/* Card top row */
+.task-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.task-card-name {
+  margin: 0 0 3px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+html:not(.dark) .task-card-name {
+  color: #111827;
+}
+
+.task-card-concern {
+  margin: 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+html:not(.dark) .task-card-concern {
+  color: #6b7280;
+}
+
+.task-card-edit-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+}
+
+html:not(.dark) .task-card-edit-btn {
+  color: #6b7280;
+}
+
+.task-card-staff {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+html:not(.dark) .task-card-staff {
+  color: #374151;
+}
+
+.task-card-report {
+  margin: 4px 0 0 0;
+  font-size: 11px;
+  color: #64748b;
+}
+
+/* ── Checklist ── */
+.task-checklist-wrap {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #334155;
+}
+
+html:not(.dark) .task-checklist-wrap {
+  border-top-color: #e2e8f0;
+}
+
+.task-checklist-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.task-checklist-label,
+.task-checklist-count {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+html:not(.dark) .task-checklist-label,
+html:not(.dark) .task-checklist-count {
+  color: #6b7280;
+}
+
+.task-checklist-bar-bg {
+  height: 4px;
+  background: #0f172a;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+html:not(.dark) .task-checklist-bar-bg {
+  background: #e2e8f0;
+}
+
+.task-checklist-bar-fill {
+  height: 100%;
+  background: #8b5cf6;
+  transition: width 0.2s;
+}
+
+.task-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.task-checklist-item-text {
+  flex: 1;
+  color: #cbd5e1;
+}
+
+html:not(.dark) .task-checklist-item-text {
+  color: #374151;
+}
+
+.task-checklist-remove {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+html:not(.dark) .task-checklist-remove {
+  color: #9ca3af;
+}
+
+/* Add item row */
+.task-checklist-add-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.task-checklist-add-input {
+  flex: 1;
+  padding: 4px 6px;
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f9fafb;
+}
+
+html:not(.dark) .task-checklist-add-input {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+html:not(.dark) .task-checklist-add-input::placeholder {
+  color: #9ca3af;
+}
+
+.task-checklist-add-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  background: #334155;
+  color: #f9fafb;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+html:not(.dark) .task-checklist-add-btn {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Delete button */
+.task-delete-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 4px;
+  font-size: 11px;
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.task-delete-btn:hover {
+  background: #dc2626;
+}
+
+/* ── Edit mode form ── */
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-edit-input,
+.task-edit-textarea {
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f9fafb;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+html:not(.dark) .task-edit-input,
+html:not(.dark) .task-edit-textarea {
+  background: #ffffff;
+  border-color: #d1d5db;
+  color: #111827;
+}
+
+.task-edit-textarea {
+  min-height: 50px;
+  resize: vertical;
+}
+
+.task-edit-save {
+  flex: 1;
+  padding: 6px;
+  font-size: 11px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.task-edit-cancel {
+  flex: 1;
+  padding: 6px;
+  font-size: 11px;
+  background: #6b7280;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ── PATCH: tasks-modal must not clip the Create Task modal ──
+   overflow: hidden was trapping the Create Task backdrop inside
+   the Tasks panel's paint layer, making it unclickable.        */
+
+.tasks-modal {
+  overflow: visible;   /* was: hidden — caused clipping */
+}
+
+.tasks-modal-body {
+  overflow-y: auto;    /* scrolling stays on the inner body only */
+  overflow-x: hidden;
+}
+
+
+/* Full-screen backdrop — sits above everything */
+.create-task-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+ 
+/* Modal panel */
+.create-task-modal {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+}
+ 
+html:not(.dark) .create-task-modal {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.15);
+}
+ 
+/* Title */
+.create-task-modal__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f9fafb;
+}
+ 
+html:not(.dark) .create-task-modal__title {
+  color: #111827;
+}
+ 
+/* Hint text */
+.create-task-modal__hint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+ 
+html:not(.dark) .create-task-modal__hint {
+  color: #6b7280;
+}
+ 
+/* Checklist item text */
+.create-task-modal__checklist-text {
+  color: #e5e7eb;
+}
+ 
+html:not(.dark) .create-task-modal__checklist-text {
+  color: #111827;
+}
+ 
+/* ── .input: inputs & selects inside modals ── */
+.dropdown {
+  width: 100%;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+  background: #020617;
+  color: #e5e5e5;
+  border: 1px solid #273549;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+ 
+.dropdown::placeholder {
+  color: #6b7280;
+}
+ 
+.dropdown:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
+}
+ 
+.dropdown option {
+  background: #020617;
+  color: #e5e5e5;
+}
+ 
+html:not(.dark) .dropdown {
+  background: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
+}
+ 
+html:not(.dark) .dropdown::placeholder {
+  color: #9ca3af;
+}
+ 
+html:not(.dark) .dropdown:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.4);
+}
+ 
+html:not(.dark) .dropdown option {
+  background: #ffffff;
+  color: #111827;
+}
+ 

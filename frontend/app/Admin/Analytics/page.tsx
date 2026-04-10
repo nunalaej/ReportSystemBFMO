@@ -623,7 +623,6 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
   const loadTasksFromServer = useCallback(async () => {
     if (!user?.id) return;
     setLoadingTasks(true);
-    setListSaveStatus("Loading tasks…");
     try {
       const res = await fetch(`${API_BASE}/api/liststask?userId=${encodeURIComponent(user.id)}`, {
         cache: "no-store", headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
@@ -632,7 +631,6 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
       const data = await res.json();
       const tasks: Assignment[] = Array.isArray(data) ? data : (data.tasks ?? data.liststask ?? []);
       setServerTasks(tasks);
-      setListSaveStatus(`✅ Loaded ${tasks.length} task(s)!`);
     } catch (e: any) {
       setListSaveStatus(`❌ Load failed`);
     } finally {
@@ -1296,34 +1294,235 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
             </div>{/* end modal body */}
           </div>
         </div>
+      )}{/* ================================================================
+          TASKS MODAL
+      ================================================================ */}
+      {listsOpen && (
+        <div
+          className="tasks-modal-backdrop"
+          onClick={() => setListsOpen(false)}
+        >
+          <div
+            className="tasks-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="tasks-modal-header">
+              <h2 className="tasks-modal-title">Tasks &amp; Lists</h2>
+              <div className="tasks-modal-header-actions">
+                <button className="pa-btn" onClick={(e) => {
+                  e.stopPropagation();
+                  setNewAssignment({ name: "", concernType: "Mechanical", reportId: "", assignedStaff: [], status: "Pending", checklist: [] });
+                  setShowModal(true);
+                }}>+ Create Task</button>
+
+                <button className="pa-btn" onClick={loadTasksFromServer} disabled={!user?.id}>
+                  Refresh Tasks
+                </button>
+
+                {listSaveStatus && (
+                  <span className={`tasks-save-status ${listSaveStatus.startsWith("✅") ? "is-ok" : listSaveStatus.startsWith("❌") ? "is-err" : "is-info"}`}>
+                    {listSaveStatus}
+                  </span>
+                )}
+
+                <button onClick={() => setListsOpen(false)} aria-label="Close" className="tasks-modal-close">×</button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="tasks-modal-body">
+              <section>
+                <h4 className="tasks-section-label">
+                  Server Tasks {serverTasks.length > 0 && `(${serverTasks.length})`}
+                </h4>
+                {loadingTasks && <p className="tasks-empty">Loading tasks…</p>}
+                {!loadingTasks && serverTasks.length === 0 && (
+                  <p className="tasks-empty">No tasks yet. Create one to get started.</p>
+                )}
+                <div className="tasks-grid">
+                  {serverTasks.map((task) => {
+                    const checklistDone = task.checklist.filter((c) => c.done).length;
+                    const checklistTotal = task.checklist.length;
+                    const taskPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
+                    const isEditing = editingTaskId === task._id;
+
+                    return (
+                      <div key={task._id} className="task-card">
+                        {isEditing ? (
+                          <div className="task-edit-form">
+                            <input
+                              type="text"
+                              value={task.name}
+                              onChange={(e) => setServerTasks((prev) =>
+                                prev.map((t) => t._id === task._id ? { ...t, name: e.target.value } : t)
+                              )}
+                              className="task-edit-input"
+                            />
+                            <select
+                              value={task.status}
+                              onChange={(e) => setServerTasks((prev) =>
+                                prev.map((t) => t._id === task._id ? { ...t, status: e.target.value as Assignment["status"] } : t)
+                              )}
+                              className="task-edit-input"
+                            >
+                              <option value="Pending">Pending</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Waiting for Materials">Waiting for Materials</option>
+                              <option value="Resolved">Resolved</option>
+                            </select>
+                            <textarea
+                              placeholder="Assigned staff (comma separated)"
+                              defaultValue={task.assignedStaff.join(", ")}
+                              onBlur={(e) => setServerTasks((prev) =>
+                                prev.map((t) => t._id === task._id
+                                  ? { ...t, assignedStaff: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }
+                                  : t)
+                              )}
+                              className="task-edit-textarea"
+                            />
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                onClick={() => updateTask(task._id!, { name: task.name, status: task.status, assignedStaff: task.assignedStaff })}
+                                className="task-edit-save"
+                              >Save</button>
+                              <button onClick={() => setEditingTaskId(null)} className="task-edit-cancel">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="task-card-top">
+                              <div style={{ flex: 1 }}>
+                                <h5 className="task-card-name">{task.name}</h5>
+                                <p className="task-card-concern">{task.concernType}</p>
+                              </div>
+                              <button
+                                onClick={() => setEditingTaskId(task._id!)}
+                                className="task-card-edit-btn"
+                                title="Edit"
+                              >✏️</button>
+                            </div>
+
+                            <span style={getStatusBadgeStyle(task.status)}>{task.status}</span>
+
+                            {task.assignedStaff.length > 0 && (
+                              <p className="task-card-staff">👤 {task.assignedStaff.join(", ")}</p>
+                            )}
+
+                            {task.reportId && (
+                              <p className="task-card-report">🔗 {task.reportId}</p>
+                            )}
+
+                            <div className="task-checklist-wrap">
+                              {checklistTotal > 0 && (
+                                <>
+                                  <div className="task-checklist-header">
+                                    <span className="task-checklist-label">Checklist</span>
+                                    <span className="task-checklist-count">{checklistDone}/{checklistTotal} · {taskPct}%</span>
+                                  </div>
+                                  <div className="task-checklist-bar-bg">
+                                    <div className="task-checklist-bar-fill" style={{ width: `${taskPct}%` }} />
+                                  </div>
+                                  {task.checklist.map((item) => (
+                                    <div key={getItemKey(item)} className="task-checklist-item">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!item.done}
+                                        onChange={(e) => toggleChecklistItem(task._id!, item, e.target.checked)}
+                                      />
+                                      <span className="task-checklist-item-text" style={{
+                                        textDecoration: item.done ? "line-through" : "none",
+                                        opacity: item.done ? 0.6 : 1,
+                                      }}>
+                                        {item.text}
+                                      </span>
+                                      <button
+                                        onClick={() => removeChecklistItem(task._id!, item)}
+                                        className="task-checklist-remove"
+                                        title="Remove item"
+                                      >×</button>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                              <div className="task-checklist-add-row">
+                                <input
+                                  type="text"
+                                  placeholder="Add item…"
+                                  value={newChecklistText[task._id!] || ""}
+                                  onChange={(e) => setNewChecklistText((prev) => ({ ...prev, [task._id!]: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") addChecklistItem(task._id!, newChecklistText[task._id!] || "");
+                                  }}
+                                  className="task-checklist-add-input"
+                                />
+                                <button
+                                  onClick={() => addChecklistItem(task._id!, newChecklistText[task._id!] || "")}
+                                  className="task-checklist-add-btn"
+                                >+</button>
+                              </div>
+                            </div>
+
+                            <button onClick={() => deleteServerTask(task._id!)} className="task-delete-btn">
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* ── CREATE TASK MODAL ── */}
+      {/* ── CREATE TASK MODAL ──
+          IMPORTANT: Rendered OUTSIDE the Tasks modal so it is never
+          clipped by overflow:hidden or blocked by a lower z-index backdrop. */}
       {showModal && (
         <div
           style={{
-            position: "fixed", inset: 0, zIndex: 500,
+            position: "fixed", inset: 0, zIndex: 600,
             background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
           }}
           onClick={() => setShowModal(false)}
         >
           <div
+            className="create-task-modal"
             style={{
-              background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16,
-              padding: "1.5rem", width: "100%", maxWidth: 500,
-              display: "flex", flexDirection: "column", gap: "0.75rem",
-              maxHeight: "90vh", overflowY: "auto",
+              borderRadius: 16,
+              padding: "1.5rem",
+              width: "100%",
+              maxWidth: 500,
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+              maxHeight: "90vh",
+              overflowY: "auto",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ margin: 0, fontSize: "1rem", color: "#f9fafb" }}>Create Task</h3>
+            <h3 className="create-task-modal__title" style={{ margin: 0, fontSize: "1rem" }}>
+              Create Task
+            </h3>
 
-            <input className="input" placeholder="Task name" value={newAssignment.name}
-              onChange={(e) => setNewAssignment({ ...newAssignment, name: e.target.value })} />
+            <input
+              className="dropdown"
+              placeholder="Task name"
+              value={newAssignment.name}
+              onChange={(e) => setNewAssignment({ ...newAssignment, name: e.target.value })}
+            />
 
-            <select className="input" value={newAssignment.concernType}
-              onChange={(e) => setNewAssignment({ ...newAssignment, concernType: e.target.value as Assignment["concernType"] })}>
+            <select
+              className="dropdown"
+              value={newAssignment.concernType}
+              onChange={(e) =>
+                setNewAssignment({ ...newAssignment, concernType: e.target.value as Assignment["concernType"] })
+              }
+            >
               <option value="Mechanical">Mechanical</option>
               <option value="Civil">Civil</option>
               <option value="Electrical">Electrical</option>
@@ -1331,23 +1530,38 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
               <option value="Other">Other</option>
             </select>
 
-            <select className="input" value={newAssignment.reportId || ""}
-              onChange={(e) => setNewAssignment({ ...newAssignment, reportId: e.target.value })}>
+            <select
+              className="dropdown"
+              value={newAssignment.reportId || ""}
+              onChange={(e) => setNewAssignment({ ...newAssignment, reportId: e.target.value })}
+            >
               <option value="">— Link to Report (optional) —</option>
               {reports.map((r) => (
-                <option key={r._id} value={r.reportId}>{r.reportId} – {r.concern}</option>
+                <option key={r._id} value={r.reportId}>
+                  {r.reportId} – {r.concern}
+                </option>
               ))}
             </select>
 
-            <input className="input" placeholder="Assigned staff (comma separated)"
+            <input
+              className="dropdown"
+              placeholder="Assigned staff (comma separated)"
               defaultValue={newAssignment.assignedStaff.join(", ")}
-              onBlur={(e) => setNewAssignment({
-                ...newAssignment,
-                assignedStaff: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
-              })} />
+              onBlur={(e) =>
+                setNewAssignment({
+                  ...newAssignment,
+                  assignedStaff: e.target.value.split(",").map((s) => s.trim()).filter(Boolean),
+                })
+              }
+            />
 
-            <select className="input" value={newAssignment.status}
-              onChange={(e) => setNewAssignment({ ...newAssignment, status: e.target.value as Assignment["status"] })}>
+            <select
+              className="dropdown"
+              value={newAssignment.status}
+              onChange={(e) =>
+                setNewAssignment({ ...newAssignment, status: e.target.value as Assignment["status"] })
+              }
+            >
               <option value="Pending">Pending</option>
               <option value="Waiting for Materials">Waiting for Materials</option>
               <option value="In Progress">In Progress</option>
@@ -1355,13 +1569,20 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
             </select>
 
             <div>
-              <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6 }}>Checklist — press Enter to add</p>
-              <input className="input" placeholder="Add checklist item…"
+              <p className="create-task-modal__hint" style={{ fontSize: 12, marginBottom: 6 }}>
+                Checklist — press Enter to add
+              </p>
+              <input
+                className="dropdown"
+                placeholder="Add checklist item…"
                 onKeyDown={(e) => {
                   if (e.key !== "Enter") return;
                   const val = e.currentTarget.value.trim();
                   if (!val) return;
-                  setNewAssignment((prev) => ({ ...prev, checklist: [...prev.checklist, { id: uid(), text: val, done: false }] }));
+                  setNewAssignment((prev) => ({
+                    ...prev,
+                    checklist: [...prev.checklist, { id: uid(), text: val, done: false }],
+                  }));
                   e.currentTarget.value = "";
                 }}
               />
@@ -1369,15 +1590,38 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
                 <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                   {newAssignment.checklist.map((item) => (
                     <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <input type="checkbox" checked={item.done}
-                        onChange={() => setNewAssignment((prev) => ({
-                          ...prev, checklist: prev.checklist.map((c) => c.id === item.id ? { ...c, done: !c.done } : c),
-                        }))} />
-                      <span style={{ fontSize: 13, color: "#e5e7eb", flex: 1, textDecoration: item.done ? "line-through" : "none", opacity: item.done ? 0.5 : 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={() =>
+                          setNewAssignment((prev) => ({
+                            ...prev,
+                            checklist: prev.checklist.map((c) =>
+                              c.id === item.id ? { ...c, done: !c.done } : c
+                            ),
+                          }))
+                        }
+                      />
+                      <span
+                        className="create-task-modal__checklist-text"
+                        style={{
+                          fontSize: 13,
+                          flex: 1,
+                          textDecoration: item.done ? "line-through" : "none",
+                          opacity: item.done ? 0.5 : 1,
+                        }}
+                      >
                         {item.text}
                       </span>
-                      <button className="small-btn"
-                        onClick={() => setNewAssignment((prev) => ({ ...prev, checklist: prev.checklist.filter((c) => c.id !== item.id) }))}>
+                      <button
+                        className="small-btn"
+                        onClick={() =>
+                          setNewAssignment((prev) => ({
+                            ...prev,
+                            checklist: prev.checklist.filter((c) => c.id !== item.id),
+                          }))
+                        }
+                      >
                         ×
                       </button>
                     </div>
@@ -1387,17 +1631,33 @@ thead{background:#f3f4f6}ul{margin:4px 0 8px 16px;padding:0}li{margin:2px 0}
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-              <button className="pa-btn" style={{ flex: 1 }}
+              <button
+                className="pa-btn"
+                style={{ flex: 1 }}
                 onClick={() => {
-                  if (!newAssignment.name.trim()) { alert("Please enter a task name."); return; }
+                  if (!newAssignment.name.trim()) {
+                    alert("Please enter a task name.");
+                    return;
+                  }
                   createAssignment(newAssignment);
-                  setNewAssignment({ name: "", concernType: "Mechanical", reportId: "", assignedStaff: [], status: "Pending", checklist: [] });
+                  setNewAssignment({
+                    name: "",
+                    concernType: "Mechanical",
+                    reportId: "",
+                    assignedStaff: [],
+                    status: "Pending",
+                    checklist: [],
+                  });
                   setShowModal(false);
-                }}>
+                }}
+              >
                 Save Task
               </button>
-              <button className="pa-btn" style={{ background: "linear-gradient(to right,#374151,#4b5563)" }}
-                onClick={() => setShowModal(false)}>
+              <button
+                className="pa-btn"
+                style={{ background: "linear-gradient(to right,#374151,#4b5563)" }}
+                onClick={() => setShowModal(false)}
+              >
                 Cancel
               </button>
             </div>
