@@ -14,7 +14,7 @@ type BuildingMeta = {
   id: string;
   name: string;
   floors: number;
-  roomsPerFloor: number;
+  roomsPerFloor: number | number[]; // supports flat number OR per-floor array
   hasRooms?: boolean;
   singleLocationLabel?: string;
 };
@@ -85,6 +85,12 @@ const DEFAULT_CONCERNS: ConcernMeta[] = [
   },
 ];
 
+const FLOOR_ORDINALS = [
+  "1st Floor", "2nd Floor", "3rd Floor", "4th Floor",
+  "5th Floor", "6th Floor", "7th Floor", "8th Floor",
+  "9th Floor", "10th Floor",
+];
+
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
@@ -95,32 +101,24 @@ const META_URL = `${API_BASE.replace(/\/+$/, "")}/api/meta`;
 const norm = (v: unknown) =>
   v == null ? "" : String(v).trim().toLowerCase();
 
-function Panel(props: {
-  title?: string;
-  subtitle?: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  const { title, subtitle, actions, children } = props;
-  return (
-    <section className="admin-edit__panel">
-      <header className="admin-edit__panel-head">
-        <div>
-          {title && <h3 className="admin-edit__panel-title">{title}</h3>}
-          {subtitle && (
-            <p className="admin-edit__panel-subtitle">{subtitle}</p>
-          )}
-        </div>
-        {actions && (
-          <div className="admin-edit__panel-actions">{actions}</div>
-        )}
-      </header>
-      <div className="admin-edit__panel-body">{children}</div>
-    </section>
-  );
+/** Normalise roomsPerFloor from DB into a number[] (one entry per floor) */
+function normaliseRoomsPerFloor(
+  raw: unknown,
+  floors: number
+): number[] {
+  if (Array.isArray(raw)) {
+    const arr = (raw as unknown[]).map((v) => {
+      const n = parseInt(String(v), 10);
+      return Number.isNaN(n) || n <= 0 ? 1 : n;
+    });
+    // Pad or trim to match floor count
+    while (arr.length < floors) arr.push(arr[arr.length - 1] ?? 1);
+    return arr.slice(0, floors);
+  }
+  const flat = typeof raw === "number" && raw > 0 ? Math.round(raw) : 1;
+  return Array.from({ length: floors }, () => flat);
 }
 
-// Normalize buildings coming from DB
 function normalizeBuildingsFromDb(raw: unknown[]): BuildingMeta[] {
   return raw.map((b, idx) => {
     if (typeof b === "string") {
@@ -132,7 +130,7 @@ function normalizeBuildingsFromDb(raw: unknown[]): BuildingMeta[] {
         id,
         name: label || "Unnamed",
         floors: 1,
-        roomsPerFloor: 1,
+        roomsPerFloor: [1],
         hasRooms: true,
         singleLocationLabel: "",
       };
@@ -145,20 +143,14 @@ function normalizeBuildingsFromDb(raw: unknown[]): BuildingMeta[] {
       norm(rawName).replace(/\s+/g, "-") ||
       `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
 
-    const hasRooms =
-      obj?.hasRooms === false
-        ? false
-        : true;
+    const hasRooms = obj?.hasRooms === false ? false : true;
 
     const floors =
       typeof obj?.floors === "number" && obj.floors > 0
         ? Math.round(obj.floors)
         : 1;
 
-    const roomsPerFloor =
-      typeof obj?.roomsPerFloor === "number" && obj.roomsPerFloor > 0
-        ? Math.round(obj.roomsPerFloor)
-        : 1;
+    const roomsPerFloor = normaliseRoomsPerFloor(obj?.roomsPerFloor, floors);
 
     const singleLocationLabel =
       typeof obj?.singleLocationLabel === "string"
@@ -197,6 +189,41 @@ function normalizeConcernsFromDb(raw: unknown[]): ConcernMeta[] {
   });
 }
 
+function Panel(props: {
+  title?: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const { title, subtitle, actions, children } = props;
+  return (
+    <section className="admin-edit__panel">
+      <header className="admin-edit__panel-head">
+        <div>
+          {title && <h3 className="admin-edit__panel-title">{title}</h3>}
+          {subtitle && (
+            <p className="admin-edit__panel-subtitle">{subtitle}</p>
+          )}
+        </div>
+        {actions && (
+          <div className="admin-edit__panel-actions">{actions}</div>
+        )}
+      </header>
+      <div className="admin-edit__panel-body">{children}</div>
+    </section>
+  );
+}
+
+/** Returns the rooms-per-floor array for a building, always length === floors */
+function getRoomsArray(b: BuildingMeta): number[] {
+  return normaliseRoomsPerFloor(b.roomsPerFloor, b.floors);
+}
+
+/** Total rooms across all floors */
+function totalRooms(b: BuildingMeta): number {
+  return getRoomsArray(b).reduce((s, n) => s + n, 0);
+}
+
 export default function AdminEditPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
@@ -207,36 +234,26 @@ export default function AdminEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMsg, setSaveMsg] = useState("");
-  
-  // Selected items for editing
+
   const [selectedBuildingId, setSelectedBuildingId] = useState<string>("");
   const [selectedConcernId, setSelectedConcernId] = useState<string>("");
 
   const role = useMemo(() => {
     if (!isLoaded || !isSignedIn || !user) return "guest";
-
     const rawRole = (user.publicMetadata as any)?.role;
     let r = "student";
-
     if (Array.isArray(rawRole) && rawRole.length > 0) {
       r = String(rawRole[0]).toLowerCase();
     } else if (typeof rawRole === "string") {
       r = rawRole.toLowerCase();
     }
-
     return r;
   }, [isLoaded, isSignedIn, user]);
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn || !user) {
-      router.replace("/");
-      return;
-    }
-
-    if (role !== "admin") {
-      router.replace("/");
-    }
+    if (!isSignedIn || !user) { router.replace("/"); return; }
+    if (role !== "admin") router.replace("/");
   }, [isLoaded, isSignedIn, user, role, router]);
 
   const loadMeta = useCallback(
@@ -246,39 +263,25 @@ export default function AdminEditPage() {
         setError("");
         setSaveMsg("");
 
-        const res = await fetch(`${META_URL}?ts=${Date.now()}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          const raw = await res.text().catch(() => "");
-          console.error("Meta load failed:", res.status, raw);
-          throw new Error("Failed to load options from server.");
-        }
+        const res = await fetch(`${META_URL}?ts=${Date.now()}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load options from server.");
 
         const data = await res.json().catch(() => null);
-        if (!data) {
-          throw new Error("Server returned empty meta.");
-        }
+        if (!data) throw new Error("Server returned empty meta.");
 
         const rawBuildings = Array.isArray((data as any).buildings)
-          ? ((data as any).buildings as unknown[])
-          : [];
+          ? ((data as any).buildings as unknown[]) : [];
         const rawConcerns = Array.isArray((data as any).concerns)
-          ? ((data as any).concerns as unknown[])
-          : [];
+          ? ((data as any).concerns as unknown[]) : [];
 
         let incomingBuildings: BuildingMeta[];
         let incomingConcerns: ConcernMeta[];
 
         if (mode === "preferDefaults") {
-          incomingBuildings =
-            rawBuildings.length > 0
-              ? normalizeBuildingsFromDb(rawBuildings)
-              : DEFAULT_BUILDINGS;
-          incomingConcerns =
-            rawConcerns.length > 0
-              ? normalizeConcernsFromDb(rawConcerns)
-              : DEFAULT_CONCERNS;
+          incomingBuildings = rawBuildings.length > 0
+            ? normalizeBuildingsFromDb(rawBuildings) : DEFAULT_BUILDINGS;
+          incomingConcerns = rawConcerns.length > 0
+            ? normalizeConcernsFromDb(rawConcerns) : DEFAULT_CONCERNS;
         } else {
           incomingBuildings = normalizeBuildingsFromDb(rawBuildings);
           incomingConcerns = normalizeConcernsFromDb(rawConcerns);
@@ -286,28 +289,17 @@ export default function AdminEditPage() {
 
         setBuildings(incomingBuildings);
         setConcerns(incomingConcerns);
-        
-        // Auto-select first items
-        if (incomingBuildings.length > 0 && !selectedBuildingId) {
+        if (incomingBuildings.length > 0 && !selectedBuildingId)
           setSelectedBuildingId(incomingBuildings[0].id);
-        }
-        if (incomingConcerns.length > 0 && !selectedConcernId) {
+        if (incomingConcerns.length > 0 && !selectedConcernId)
           setSelectedConcernId(incomingConcerns[0].id);
-        }
       } catch (err: any) {
-        console.error(err);
         if (mode === "preferDefaults") {
-          setError(
-            err?.message ||
-              "Could not load buildings and concerns. Using defaults."
-          );
+          setError(err?.message || "Could not load buildings. Using defaults.");
           setBuildings(DEFAULT_BUILDINGS);
           setConcerns(DEFAULT_CONCERNS);
         } else {
-          setError(
-            err?.message ||
-              "Could not load buildings and concerns from database."
-          );
+          setError(err?.message || "Could not load from database.");
         }
       } finally {
         setLoading(false);
@@ -316,9 +308,7 @@ export default function AdminEditPage() {
     [selectedBuildingId, selectedConcernId]
   );
 
-  useEffect(() => {
-    loadMeta("preferDefaults");
-  }, []);
+  useEffect(() => { loadMeta("preferDefaults"); }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -329,160 +319,73 @@ export default function AdminEditPage() {
       .map((b, idx) => {
         const name = String(b.name || "").trim();
         if (!name) return null;
-
-        const id =
-          String(b.id || "").trim() ||
+        const id = String(b.id || "").trim() ||
           norm(name).replace(/\s+/g, "-") ||
           `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
         const hasRooms = b.hasRooms === false ? false : true;
-
-        const floors =
-          typeof b.floors === "number" && b.floors > 0
-            ? Math.round(b.floors)
-            : 1;
-
-        const roomsPerFloor =
-          typeof b.roomsPerFloor === "number" && b.roomsPerFloor > 0
-            ? Math.round(b.roomsPerFloor)
-            : 1;
-
-        const singleLocationLabel = String(
-          b.singleLocationLabel || ""
-        ).trim();
-
-        return {
-          id,
-          name,
-          floors,
-          roomsPerFloor,
-          hasRooms,
-          singleLocationLabel,
-        };
+        const floors = typeof b.floors === "number" && b.floors > 0
+          ? Math.round(b.floors) : 1;
+        const roomsPerFloor = normaliseRoomsPerFloor(b.roomsPerFloor, floors);
+        const singleLocationLabel = String(b.singleLocationLabel || "").trim();
+        return { id, name, floors, roomsPerFloor, hasRooms, singleLocationLabel };
       })
       .filter(Boolean) as BuildingMeta[];
 
-    const hasOtherBuilding = cleanBuildings.some(
-      (b) => norm(b.name) === "other"
-    );
-    if (!hasOtherBuilding) {
+    if (!cleanBuildings.some((b) => norm(b.name) === "other")) {
       cleanBuildings.push({
-        id: "other",
-        name: "Other",
-        floors: 1,
-        roomsPerFloor: 1,
-        hasRooms: false,
-        singleLocationLabel: "",
+        id: "other", name: "Other", floors: 1,
+        roomsPerFloor: [1], hasRooms: false, singleLocationLabel: "",
       });
     }
-
-    const otherBuildings = cleanBuildings.filter(
-      (b) => norm(b.name) === "other"
-    );
-    const normalBuildings = cleanBuildings.filter(
-      (b) => norm(b.name) !== "other"
-    );
+    const otherBuildings = cleanBuildings.filter((b) => norm(b.name) === "other");
+    const normalBuildings = cleanBuildings.filter((b) => norm(b.name) !== "other");
     cleanBuildings = [...normalBuildings, ...otherBuildings];
 
     let cleanConcerns: ConcernMeta[] = concerns
       .map((c, idx) => {
         const label = String(c.label || "").trim();
         if (!label) return null;
-
-        const id =
-          String(c.id || "").trim() ||
+        const id = String(c.id || "").trim() ||
           norm(label).replace(/\s+/g, "-") ||
           `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
-        let subs = Array.isArray(c.subconcerns) ? c.subconcerns : [];
-        subs = subs
-          .map((s) => String(s || "").trim())
-          .filter((s) => s.length > 0);
-
-        const hasOtherSub = subs.some((s) => norm(s) === "other");
-        if (!hasOtherSub) {
-          subs.push("Other");
-        } else {
+        let subs = (Array.isArray(c.subconcerns) ? c.subconcerns : [])
+          .map((s) => String(s || "").trim()).filter((s) => s.length > 0);
+        if (!subs.some((s) => norm(s) === "other")) subs.push("Other");
+        else {
           const others = subs.filter((s) => norm(s) === "other");
-          const normalSubs = subs.filter((s) => norm(s) !== "other");
-          subs = [...normalSubs, ...others];
+          subs = [...subs.filter((s) => norm(s) !== "other"), ...others];
         }
-
-        return {
-          id,
-          label,
-          subconcerns: subs,
-        };
+        return { id, label, subconcerns: subs };
       })
       .filter(Boolean) as ConcernMeta[];
 
-    let otherConcernIndex = cleanConcerns.findIndex(
-      (c) => norm(c.label) === "other"
-    );
-
-    if (otherConcernIndex === -1) {
-      cleanConcerns.push({
-        id: "other",
-        label: "Other",
-        subconcerns: ["Other"],
-      });
-    } else {
-      const oc = cleanConcerns[otherConcernIndex];
-      let subs = Array.isArray(oc.subconcerns) ? oc.subconcerns : [];
-      subs = subs
-        .map((s) => String(s || "").trim())
-        .filter((s) => s.length > 0);
-
-      const hasOtherSub = subs.some((s) => norm(s) === "other");
-      if (!hasOtherSub) {
-        subs.push("Other");
-      } else {
-        const others = subs.filter((s) => norm(s) === "other");
-        const normalSubs = subs.filter((s) => norm(s) !== "other");
-        subs = [...normalSubs, ...others];
-      }
-
-      cleanConcerns[otherConcernIndex] = {
-        ...oc,
-        subconcerns: subs,
-      };
+    if (!cleanConcerns.some((c) => norm(c.label) === "other")) {
+      cleanConcerns.push({ id: "other", label: "Other", subconcerns: ["Other"] });
     }
-
-    const payload = {
-      buildings: cleanBuildings,
-      concerns: cleanConcerns,
-    };
 
     try {
       const res = await fetch(META_URL, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ buildings: cleanBuildings, concerns: cleanConcerns }),
       });
-
       if (!res.ok) {
         const raw = await res.text().catch(() => "");
-        console.error("Meta save failed:", res.status, raw);
         throw new Error(raw || "Failed to save changes.");
       }
-
       const data = await res.json().catch(() => null);
-
       if (data?.buildings && data?.concerns) {
         setBuildings(normalizeBuildingsFromDb(data.buildings));
         setConcerns(normalizeConcernsFromDb(data.concerns));
       }
-
       setSaveMsg("All changes saved successfully.");
     } catch (err: any) {
-      console.error(err);
       setError(err?.message || "Failed to save changes.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Get selected building and concern
   const selectedBuilding = useMemo(
     () => buildings.find((b) => b.id === selectedBuildingId),
     [buildings, selectedBuildingId]
@@ -493,16 +396,14 @@ export default function AdminEditPage() {
     [concerns, selectedConcernId]
   );
 
-  // Building handlers
-  const handleBuildingNameChange = (value: string) => {
-    setBuildings((prev) =>
-      prev.map((b) =>
-        b.id === selectedBuildingId ? { ...b, name: value } : b
-      )
-    );
-  };
+  /* ── Building handlers ─────────────────────────── */
 
-  const handleBuildingHasRoomsToggle = () => {
+  const handleBuildingNameChange = (value: string) =>
+    setBuildings((prev) =>
+      prev.map((b) => b.id === selectedBuildingId ? { ...b, name: value } : b)
+    );
+
+  const handleBuildingHasRoomsToggle = () =>
     setBuildings((prev) =>
       prev.map((b) =>
         b.id === selectedBuildingId
@@ -510,27 +411,31 @@ export default function AdminEditPage() {
           : b
       )
     );
-  };
 
   const handleBuildingFloorsChange = (value: string) => {
     const num = parseInt(value, 10);
+    const floors = Number.isNaN(num) || num <= 0 ? 1 : Math.min(num, 20);
     setBuildings((prev) =>
-      prev.map((b) =>
-        b.id === selectedBuildingId
-          ? { ...b, floors: Number.isNaN(num) || num <= 0 ? 1 : num }
-          : b
-      )
+      prev.map((b) => {
+        if (b.id !== selectedBuildingId) return b;
+        const existing = normaliseRoomsPerFloor(b.roomsPerFloor, b.floors);
+        const updated = normaliseRoomsPerFloor(existing, floors);
+        return { ...b, floors, roomsPerFloor: updated };
+      })
     );
   };
 
-  const handleBuildingRoomsChange = (value: string) => {
+  /** Update rooms for a specific floor index */
+  const handleFloorRoomsChange = (floorIndex: number, value: string) => {
     const num = parseInt(value, 10);
+    const rooms = Number.isNaN(num) || num <= 0 ? 1 : num;
     setBuildings((prev) =>
-      prev.map((b) =>
-        b.id === selectedBuildingId
-          ? { ...b, roomsPerFloor: Number.isNaN(num) || num <= 0 ? 1 : num }
-          : b
-      )
+      prev.map((b) => {
+        if (b.id !== selectedBuildingId) return b;
+        const arr = normaliseRoomsPerFloor(b.roomsPerFloor, b.floors);
+        arr[floorIndex] = rooms;
+        return { ...b, roomsPerFloor: [...arr] };
+      })
     );
   };
 
@@ -539,7 +444,7 @@ export default function AdminEditPage() {
       id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: "New Building",
       floors: 1,
-      roomsPerFloor: 1,
+      roomsPerFloor: [1],
       hasRooms: true,
       singleLocationLabel: "",
     };
@@ -550,29 +455,21 @@ export default function AdminEditPage() {
   const handleDeleteBuilding = () => {
     if (!selectedBuildingId) return;
     const idx = buildings.findIndex((b) => b.id === selectedBuildingId);
-    setBuildings((prev) => prev.filter((b) => b.id !== selectedBuildingId));
-    
-    // Select next or previous building
     const remaining = buildings.filter((b) => b.id !== selectedBuildingId);
+    setBuildings(remaining);
     if (remaining.length > 0) {
-      if (idx < remaining.length) {
-        setSelectedBuildingId(remaining[idx].id);
-      } else {
-        setSelectedBuildingId(remaining[remaining.length - 1].id);
-      }
+      setSelectedBuildingId(remaining[Math.min(idx, remaining.length - 1)].id);
     } else {
       setSelectedBuildingId("");
     }
   };
 
-  // Concern handlers
-  const handleConcernLabelChange = (value: string) => {
+  /* ── Concern handlers ──────────────────────────── */
+
+  const handleConcernLabelChange = (value: string) =>
     setConcerns((prev) =>
-      prev.map((c) =>
-        c.id === selectedConcernId ? { ...c, label: value } : c
-      )
+      prev.map((c) => c.id === selectedConcernId ? { ...c, label: value } : c)
     );
-  };
 
   const handleAddConcern = () => {
     const newConcern: ConcernMeta = {
@@ -587,22 +484,16 @@ export default function AdminEditPage() {
   const handleDeleteConcern = () => {
     if (!selectedConcernId) return;
     const idx = concerns.findIndex((c) => c.id === selectedConcernId);
-    setConcerns((prev) => prev.filter((c) => c.id !== selectedConcernId));
-    
-    // Select next or previous concern
     const remaining = concerns.filter((c) => c.id !== selectedConcernId);
+    setConcerns(remaining);
     if (remaining.length > 0) {
-      if (idx < remaining.length) {
-        setSelectedConcernId(remaining[idx].id);
-      } else {
-        setSelectedConcernId(remaining[remaining.length - 1].id);
-      }
+      setSelectedConcernId(remaining[Math.min(idx, remaining.length - 1)].id);
     } else {
       setSelectedConcernId("");
     }
   };
 
-  const handleSubconcernChange = (subIndex: number, value: string) => {
+  const handleSubconcernChange = (subIndex: number, value: string) =>
     setConcerns((prev) =>
       prev.map((c) => {
         if (c.id !== selectedConcernId) return c;
@@ -611,9 +502,8 @@ export default function AdminEditPage() {
         return { ...c, subconcerns: subs };
       })
     );
-  };
 
-  const handleAddSubconcern = () => {
+  const handleAddSubconcern = () =>
     setConcerns((prev) =>
       prev.map((c) =>
         c.id === selectedConcernId
@@ -621,9 +511,8 @@ export default function AdminEditPage() {
           : c
       )
     );
-  };
 
-  const handleDeleteSubconcern = (subIndex: number) => {
+  const handleDeleteSubconcern = (subIndex: number) =>
     setConcerns((prev) =>
       prev.map((c) => {
         if (c.id !== selectedConcernId) return c;
@@ -632,12 +521,11 @@ export default function AdminEditPage() {
         return { ...c, subconcerns: subs };
       })
     );
-  };
 
   if (!isLoaded || !isSignedIn) {
     return (
       <div className="admin-edit__wrapper">
-        <p>Checking your permissions...</p>
+        <p>Checking your permissions…</p>
       </div>
     );
   }
@@ -656,7 +544,7 @@ export default function AdminEditPage() {
         <header className="admin-edit__page-head">
           <div className="admin-edit__heading">
             <h1 className="admin-edit__page-title">
-              Buildings & Concerns Configuration
+              Buildings &amp; Concerns Configuration
             </h1>
             <p className="admin-edit__page-subtitle">
               Select a building or concern from the dropdown to edit its details
@@ -675,12 +563,10 @@ export default function AdminEditPage() {
                 setConcerns(DEFAULT_CONCERNS);
                 setSaveMsg("");
                 setError("");
-                if (DEFAULT_BUILDINGS.length > 0) {
+                if (DEFAULT_BUILDINGS.length > 0)
                   setSelectedBuildingId(DEFAULT_BUILDINGS[0].id);
-                }
-                if (DEFAULT_CONCERNS.length > 0) {
+                if (DEFAULT_CONCERNS.length > 0)
                   setSelectedConcernId(DEFAULT_CONCERNS[0].id);
-                }
               }}
               disabled={saving || loading}
             >
@@ -700,28 +586,24 @@ export default function AdminEditPage() {
               onClick={handleSave}
               disabled={saving || loading}
             >
-              {saving ? "Saving..." : "Save All Changes"}
+              {saving ? "Saving…" : "Save All Changes"}
             </button>
           </div>
         </header>
 
         {error && (
-          <div className="admin-edit__alert admin-edit__alert--error">
-            {error}
-          </div>
+          <div className="admin-edit__alert admin-edit__alert--error">{error}</div>
         )}
-
         {saveMsg && (
-          <div className="admin-edit__alert admin-edit__alert--success">
-            {saveMsg}
-          </div>
+          <div className="admin-edit__alert admin-edit__alert--success">{saveMsg}</div>
         )}
 
         {loading ? (
-          <p className="admin-edit__loading">Loading options...</p>
+          <p className="admin-edit__loading">Loading options…</p>
         ) : (
           <div className="admin-edit__grid">
-            {/* Buildings Section */}
+
+            {/* ── Buildings Panel ─────────────────────────── */}
             <Panel
               title="Buildings"
               subtitle="Select a building to edit its configuration"
@@ -736,23 +618,18 @@ export default function AdminEditPage() {
                   >
                     <option value="">-- Select a building --</option>
                     {buildings.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
+                      <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleAddBuilding}
-                >
+                <button type="button" className="btn btn-secondary" onClick={handleAddBuilding}>
                   + Add New Building
                 </button>
               </div>
 
               {selectedBuilding && (
                 <div className="admin-edit__editor-card">
+                  {/* Name */}
                   <div className="admin-edit__field-group">
                     <label className="admin-edit__label">Building Name</label>
                     <input
@@ -764,6 +641,7 @@ export default function AdminEditPage() {
                     />
                   </div>
 
+                  {/* Has Rooms toggle */}
                   <div className="admin-edit__field-group">
                     <label className="admin-edit__switch">
                       <input
@@ -784,41 +662,55 @@ export default function AdminEditPage() {
 
                   {selectedBuilding.hasRooms !== false && (
                     <>
-                      <div className="admin-edit__row-two">
-                        <div className="admin-edit__field-group">
-                          <label className="admin-edit__label">
-                            Number of Floors
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            className="admin-edit__input"
-                            value={selectedBuilding.floors}
-                            onChange={(e) =>
-                              handleBuildingFloorsChange(e.target.value)
-                            }
-                          />
-                        </div>
+                      {/* Floor count */}
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">Number of Floors</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          className="admin-edit__input admin-edit__input-small"
+                          value={selectedBuilding.floors}
+                          onChange={(e) => handleBuildingFloorsChange(e.target.value)}
+                        />
+                      </div>
 
-                        <div className="admin-edit__field-group">
-                          <label className="admin-edit__label">
-                            Rooms per Floor
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            className="admin-edit__input"
-                            value={selectedBuilding.roomsPerFloor}
-                            onChange={(e) =>
-                              handleBuildingRoomsChange(e.target.value)
-                            }
-                          />
+                      {/* Per-floor room counts */}
+                      <div className="admin-edit__field-group">
+                        <label className="admin-edit__label">
+                          Rooms per Floor
+                          <span className="admin-edit__label-hint"> — set individually</span>
+                        </label>
+                        <div className="admin-edit__floors-grid">
+                          {getRoomsArray(selectedBuilding).map((count, idx) => (
+                            <div key={idx} className="admin-edit__floor-row">
+                              <span className="admin-edit__floor-label">
+                                {FLOOR_ORDINALS[idx] ?? `Floor ${idx + 1}`}
+                              </span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="admin-edit__input admin-edit__input-floor"
+                                value={count}
+                                onChange={(e) => handleFloorRoomsChange(idx, e.target.value)}
+                              />
+                              <span className="admin-edit__floor-unit">rooms</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
+                      {/* Total rooms info box */}
                       <div className="admin-edit__info-box">
                         <strong>Total Rooms:</strong>{" "}
-                        {selectedBuilding.floors * selectedBuilding.roomsPerFloor}
+                        {totalRooms(selectedBuilding)}
+                        <span className="admin-edit__info-breakdown">
+                          &nbsp;(
+                          {getRoomsArray(selectedBuilding)
+                            .map((n, i) => `${FLOOR_ORDINALS[i] ?? `F${i + 1}`}: ${n}`)
+                            .join(" · ")}
+                          )
+                        </span>
                       </div>
                     </>
                   )}
@@ -842,7 +734,7 @@ export default function AdminEditPage() {
               )}
             </Panel>
 
-            {/* Concerns Section */}
+            {/* ── Concerns Panel ──────────────────────────── */}
             <Panel
               title="Concerns"
               subtitle="Select a concern to edit its subconcerns"
@@ -857,17 +749,11 @@ export default function AdminEditPage() {
                   >
                     <option value="">-- Select a concern --</option>
                     {concerns.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
+                      <option key={c.id} value={c.id}>{c.label}</option>
                     ))}
                   </select>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleAddConcern}
-                >
+                <button type="button" className="btn btn-secondary" onClick={handleAddConcern}>
                   + Add New Concern
                 </button>
               </div>
@@ -912,9 +798,7 @@ export default function AdminEditPage() {
                             className="admin-edit__input"
                             value={sub}
                             placeholder="Example: Walls"
-                            onChange={(e) =>
-                              handleSubconcernChange(idx, e.target.value)
-                            }
+                            onChange={(e) => handleSubconcernChange(idx, e.target.value)}
                           />
                           <button
                             type="button"

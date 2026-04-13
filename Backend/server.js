@@ -8,10 +8,11 @@ require("dotenv").config();
 const listsRouter = require("./routes/lists");
 const liststaskRouter = require("./api/liststask.js");  // Add this line
 const staffRouter = require("./api/user/staff");
-const Meta = require("./api/meta.js");          // Mongoose model
+const Meta = require("./models/Meta.js");          // Mongoose model
 const reportsRouter = require("./api/reports"); // router for /api/reports
 const { sendReportStatusEmail } = require("./utils/mailer"); // adjust if needed
 
+const metaRouter = require("./api/meta");
 const app = express();
 
 /* -------------------------------
@@ -40,6 +41,8 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/lists", listsRouter);
 app.use("/api/liststask", liststaskRouter);  // Add this line
 app.use("/api/user", staffRouter);
+app.use("/api/meta", metaRouter);
+
 
 /* -------------------------------
    MONGODB CONNECTION
