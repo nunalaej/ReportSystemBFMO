@@ -1494,6 +1494,7 @@ html:not(dark) .modal-report-id {
   font-family: "Montserrat", sans-serif;
   width: 100%;
   height: 45px;
+  margin-right: 10px;
   padding-left: 2.5rem;
   box-shadow: 0 0 0 1.5px #2b2c37, 0 0 25px -17px #000;
   border: 0;
@@ -1540,6 +1541,7 @@ html:not(.dark) .search {
   font-family: "Montserrat", sans-serif;
   width: 100%;
   height: 45px;
+  margin-right: 10px; 
   padding-left: 2.5rem;
   box-shadow: 0 0 0 1.5px #2b2c37, 0 0 0px -17px #919191;
   border: 0;
