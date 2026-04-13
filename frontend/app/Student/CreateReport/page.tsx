@@ -840,7 +840,7 @@ export default function Create() {
           setExistingReports((prev) => [...prev, result.report as Report]);
           if (result.report.reportId) setGeneratedReportId(result.report.reportId);
         }
-        showMsg("success", `Report submitted successfully. Report ID: ${result.report?.reportId || "N/A"}`);
+        showMsg("success", `Report submitted successfully.`);
         setFormData({
           email: currentUserEmail || "",
           heading: "", description: "",
