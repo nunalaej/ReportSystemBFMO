@@ -542,7 +542,7 @@ export default function ReportPage() {
       setSelectedReport(updatedSelected);
       setStatusValue(updatedSelected.status || "Pending");
       setCommentText("");
-      showToast(`Status updated to "${statusValue}" — email sent to ${selectedReport.email || "reporter"}.`, "success");
+      showToast(`Status updated to "${statusValue}" — email sent success`, "success");
     } catch (err: any) {
       showToast(err.message || "There was a problem saving the changes.", "error");
     } finally {
@@ -583,7 +583,7 @@ export default function ReportPage() {
 
         setSelectedReport(updatedSelected);
         setStatusValue("Archived");
-        showToast(`Report archived — email sent to ${selectedReport.email || "reporter"}.`, "success");
+        showToast(`Report archived — email sent success`, "success");
       } catch (err: any) {
         showToast("There was a problem archiving the report(s).", "error");
       } finally {
@@ -647,7 +647,7 @@ export default function ReportPage() {
       setReports((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
       setSelectedReport(updated);
       setCommentText("");
-      showToast(`Comment added — email sent to ${selectedReport.email || "reporter"}.`, "success");
+      showToast(`Comment added — email sent success`, "success");
     } catch (err: any) {
       showToast(err.message || "There was a problem adding the comment.", "error");
     } finally {
@@ -705,7 +705,6 @@ export default function ReportPage() {
             <td>${safe(r.college)}</td>
             <td>${safe(r.floor)}</td>
             <td>${safe(r.room)}</td>
-            <td>${safe(r.email)}</td>
             <td>${safe(r.userType)}</td>
           </tr>
         `;
@@ -776,7 +775,7 @@ export default function ReportPage() {
     <h2>Detailed Report</h2>
     <table>
       <thead>
-        <tr><th>#</th><th>Report ID</th><th>Date Created</th><th>Status</th><th>Building</th><th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Email</th><th>Reporter Type</th></tr>
+        <tr><th>#</th><th>Report ID</th><th>Date Created</th><th>Status</th><th>Building</th><th>Concern</th><th>College</th><th>Floor</th><th>Room</th><th>Reporter Type</th></tr>
       </thead>
       <tbody>${rowsHtml || '<tr><td colspan="11">No data for current filters.</td></tr>'}</tbody>
     </table>
@@ -879,9 +878,7 @@ export default function ReportPage() {
               <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
               <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
               <p><strong>College:</strong> {selectedReport.college || "Unspecified"}</p>
-              <p><strong>Reporter:</strong> {selectedReport.userType || "Unspecified"}</p>
-              <p><strong>Email:</strong> {selectedReport.email || "Unspecified"}</p>
-              <p>
+              <p><strong>Reporter:</strong> {selectedReport.userType || "Unspecified"}</p>              <p>
                 <strong>Submitted:</strong>{" "}
                 {selectedReport.createdAt && new Date(selectedReport.createdAt).toLocaleString()}{" "}
                 {selectedReport.createdAt && `(${getRelativeTime(selectedReport.createdAt)})`}
