@@ -54,7 +54,6 @@ const CONCERN_INFO: Record<string, string> = {
     "Physical dangers like slippery floors, uneven walkways, poorly lit areas, overloaded outlets, faulty wiring, improper chemical storage, loose handrails, broken windows, spikes, sharp objects, fire hazards, etc.",
 };
 
-// ─── Fallback buildings now carry full meta shape ────────────
 interface BuildingMeta {
   id: string;
   name: string;
@@ -92,7 +91,6 @@ const COLLEGE_OPTIONS: string[] = [
 
 const USER_TYPE_OPTIONS: string[] = ["Student", "Staff/Faculty"];
 
-// ─── Ordinal floor labels ─────────────────────────────────────
 const FLOOR_ORDINALS = [
   "1st Floor","2nd Floor","3rd Floor","4th Floor",
   "5th Floor","6th Floor","7th Floor","8th Floor",
@@ -107,6 +105,20 @@ const PROFANITY_PATTERNS: RegExp[] = [
   /fuck/i,      /fck/i,       /f\*ck/i,/bitch/i,  /b1tch/i,
   /ul0l/i,      /gago/i,      /gag0/i, /yawa/i,   /y4wa/i, /pakyu/i,
 ];
+
+// Status priority — higher number = more meaningful to surface
+const STATUS_PRIORITY: Record<string, number> = {
+  "Resolved":               4,
+  "In Progress":            3,
+  "Waiting for Materials":  2,
+  "Pending":                1,
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  "Resolved":               "#16a34a",
+  "In Progress":            "#2563eb",
+  "Waiting for Materials":  "#d97706",
+};
 
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
@@ -209,9 +221,6 @@ const getSimilarityKey = (r: {
     : `${building}|${concern}|${sub}`;
 };
 
-/**
- * Normalise roomsPerFloor from the API into a number[] of exactly `floors` entries.
- */
 function normaliseRoomsPerFloor(
   raw: number | number[] | unknown,
   floors: number
@@ -231,9 +240,6 @@ function normaliseRoomsPerFloor(
   return arr.slice(0, floors);
 }
 
-/**
- * Parse a raw building object from the meta API into a typed BuildingMeta.
- */
 function parseBuildingMeta(raw: unknown, idx: number): BuildingMeta {
   if (typeof raw === "string") {
     const name = raw.trim();
@@ -263,11 +269,6 @@ function parseBuildingMeta(raw: unknown, idx: number): BuildingMeta {
   };
 }
 
-/**
- * Given a BuildingMeta and a floor label ("1st Floor", "2nd Floor", …),
- * returns the room number list for that floor, derived entirely from meta.
- * Returns null if the building has no rooms or the floor is "Other".
- */
 function getRoomsForFloor(
   building: BuildingMeta | null,
   floorLabel: string
@@ -277,14 +278,13 @@ function getRoomsForFloor(
 
   const match = floorLabel.match(/^(\d+)/);
   if (!match) return null;
-  const floorNum = parseInt(match[1], 10); // 1-based
-  const floorIdx = floorNum - 1;           // 0-based
+  const floorNum = parseInt(match[1], 10);
+  const floorIdx = floorNum - 1;
 
   const arr   = normaliseRoomsPerFloor(building.roomsPerFloor, building.floors);
   const count = arr[floorIdx];
   if (!count || count < 1) return null;
 
-  // 1st floor → 101, 102, …   2nd floor → 201, 202, …   etc.
   const base = floorNum * 100;
   return Array.from({ length: count }, (_, i) => String(base + i + 1));
 }
@@ -409,12 +409,10 @@ export default function Create() {
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError,   setMetaError]   = useState<string>("");
 
-  // Clean up preview URL on unmount
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
 
-  // Set user email from Clerk
   useEffect(() => {
     if (!isLoaded || !user) return;
     const emailFromClerk =
@@ -426,7 +424,6 @@ export default function Create() {
     }
   }, [isLoaded, user]);
 
-  // Load metadata — buildings now parsed into full BuildingMeta shape
   useEffect(() => {
     let alive = true;
     async function loadMeta() {
@@ -462,7 +459,6 @@ export default function Create() {
     return () => { alive = false; };
   }, []);
 
-  // Fetch existing reports for similarity check
   useEffect(() => {
     const fetchReports = async () => {
       try {
@@ -482,26 +478,17 @@ export default function Create() {
     fetchReports();
   }, []);
 
-  /* ─────────────────────────────────────────────────────────
-     META-DRIVEN DERIVED STATE
-     Everything below replaces the old hardcoded maps.
-  ───────────────────────────────────────────────────────── */
+  /* ── Meta-driven building/floor/room state ─────────────────── */
 
-  /** Full BuildingMeta for the currently selected building name */
   const selectedBuildingMeta = useMemo((): BuildingMeta | null => {
     if (!formData.building || formData.building === "Other") return null;
     return meta.buildings.find((b) => b.name === formData.building) ?? null;
   }, [meta.buildings, formData.building]);
 
-  /** Whether the selected building has floors + rooms */
   const buildingHasRooms = useMemo((): boolean => {
     return selectedBuildingMeta?.hasRooms === true;
   }, [selectedBuildingMeta]);
 
-  /**
-   * Floor options for the selected building — always ordinal labels.
-   * Count comes from building.floors in meta.
-   */
   const visibleFloorOptions = useMemo((): string[] => {
     if (!selectedBuildingMeta || !buildingHasRooms) return [];
     const count = selectedBuildingMeta.floors ?? 1;
@@ -510,10 +497,6 @@ export default function Create() {
     return opts;
   }, [selectedBuildingMeta, buildingHasRooms]);
 
-  /**
-   * Room list for the currently selected floor, derived from meta.
-   * null = no room dropdown (show free-text or nothing).
-   */
   const availableRooms = useMemo((): string[] | null => {
     if (!buildingHasRooms || !formData.floor || formData.floor === "Other")
       return null;
@@ -525,12 +508,11 @@ export default function Create() {
     return [...availableRooms, "Other"];
   }, [availableRooms]);
 
-  /** True when there is a room dropdown to show */
   const hasRoom = useMemo((): boolean => {
     return Array.isArray(availableRooms) && availableRooms.length > 0;
   }, [availableRooms]);
 
-  /* ─── Conditional flags ────────────────────────────────── */
+  /* ── Conditional flags ─────────────────────────────────────── */
 
   const showSubConcern       = !!formData.concern && formData.concern !== "Other";
   const needsOtherConcern    = formData.concern === "Other";
@@ -538,37 +520,26 @@ export default function Create() {
   const needsOtherBuilding   = formData.building === "Other";
   const roomIsOther          = formData.room === "Other";
 
-  /** Show floor dropdown: building has rooms, user toggled specific location */
   const showFloorDropdown =
-    specificRoom &&
-    buildingHasRooms &&
-    !!formData.building &&
-    formData.building !== "Other";
+    specificRoom && buildingHasRooms &&
+    !!formData.building && formData.building !== "Other";
 
-  /** Show room dropdown: floor is chosen (not "Other") and rooms exist in meta */
   const showRoomDropdown =
     showFloorDropdown &&
-    !!formData.floor &&
-    formData.floor !== "Other" &&
+    !!formData.floor && formData.floor !== "Other" &&
     hasRoom;
 
-  /** Show free-text "other room" input when room dropdown is open and "Other" picked,
-   *  or when floor is "Other" */
   const needsOtherRoomText =
-    specificRoom &&
-    buildingHasRooms &&
-    !!formData.building &&
-    formData.building !== "Other" &&
+    specificRoom && buildingHasRooms &&
+    !!formData.building && formData.building !== "Other" &&
     (roomIsOther || formData.floor === "Other");
 
-  /** Building has no rooms at all → free-text spot input */
   const needsOtherRoom =
     specificRoom &&
-    !!formData.building &&
-    formData.building !== "Other" &&
+    !!formData.building && formData.building !== "Other" &&
     !buildingHasRooms;
 
-  /* ─── Required fields ──────────────────────────────────── */
+  /* ── Required fields ───────────────────────────────────────── */
 
   const requiredNow = useMemo((): (keyof FormDataState)[] => {
     const req: (keyof FormDataState)[] = [
@@ -603,10 +574,10 @@ export default function Create() {
 
   const readyToSubmit = progressPct === 100;
 
-  /* ─── Similarity check ─────────────────────────────────── */
+  /* ── Similarity check — now also captures highest status ───── */
 
-  const similarReportsCount = useMemo((): number => {
-    if (!formData.building || !formData.concern) return 0;
+  const similarMatches = useMemo((): Report[] => {
+    if (!formData.building || !formData.concern) return [];
     const currentKey = getSimilarityKey({
       building:     formData.building === "Other" ? formData.otherBuilding : formData.building,
       concern:      formData.concern,
@@ -615,14 +586,27 @@ export default function Create() {
       room:         formData.room    || undefined,
       otherRoom:    formData.room    ? undefined : formData.otherRoom || undefined,
     });
-    if (!currentKey.trim()) return 0;
+    if (!currentKey.trim()) return [];
     return existingReports.filter((r) => {
       if (norm(r.status || "Pending") === "archived") return false;
       return getSimilarityKey(r) === currentKey;
-    }).length;
+    });
   }, [existingReports, formData]);
 
-  /* ─── Summary text ─────────────────────────────────────── */
+  const similarReportsCount = useMemo(() => similarMatches.length, [similarMatches]);
+
+  /** The highest-priority status among all matching reports. */
+  const similarStatus = useMemo((): string | null => {
+    if (similarMatches.length === 0) return null;
+    const best = similarMatches.reduce((prev, curr) => {
+      const prevP = STATUS_PRIORITY[prev.status || "Pending"] ?? 0;
+      const currP = STATUS_PRIORITY[curr.status || "Pending"] ?? 0;
+      return currP > prevP ? curr : prev;
+    });
+    return best.status || "Pending";
+  }, [similarMatches]);
+
+  /* ── Summary text ──────────────────────────────────────────── */
 
   const summaryText = useMemo((): string => {
     const parts: string[] = [];
@@ -647,7 +631,6 @@ export default function Create() {
     if (specificRoom) {
       if (showFloorDropdown && formData.floor)
         parts.push(`Floor: ${formData.floor}`);
-
       if (showRoomDropdown || needsOtherRoomText) {
         const roomDisplay = formData.room === "Other" && formData.otherRoom
           ? `Other: ${formData.otherRoom}`
@@ -665,7 +648,7 @@ export default function Create() {
     return parts.join("\n");
   }, [formData, specificRoom, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom]);
 
-  /* ─── Concern options ──────────────────────────────────── */
+  /* ── Concern / building options ────────────────────────────── */
 
   const buildingOptions = useMemo((): string[] => {
     const list = meta.buildings
@@ -697,7 +680,7 @@ export default function Create() {
     return selectedConcern.subconcerns;
   }, [selectedConcern]);
 
-  /* ─── Profanity check ──────────────────────────────────── */
+  /* ── Profanity check ───────────────────────────────────────── */
 
   useEffect(() => {
     setHasProfanity([
@@ -707,7 +690,7 @@ export default function Create() {
     ].some((t) => containsProfanity(t)));
   }, [formData]);
 
-  /* ─── Event handlers ───────────────────────────────────── */
+  /* ── Event handlers ────────────────────────────────────────── */
 
   const showMsg = useCallback((type: "success"|"error"|"info", text: string) => {
     setMessageType(type);
@@ -740,23 +723,10 @@ export default function Create() {
 
       setFormData((prev) => {
         const next = { ...prev, [name]: value } as FormDataState;
-        if (name === "concern") {
-          next.subConcern  = "";
-          next.otherConcern = "";
-        }
-        if (name === "building") {
-          next.otherBuilding = "";
-          next.floor         = "";
-          next.room          = "";
-          next.otherRoom     = "";
-        }
-        if (name === "floor") {
-          next.room      = "";
-          next.otherRoom = "";
-        }
-        if (name === "room" && value !== "Other") {
-          next.otherRoom = "";
-        }
+        if (name === "concern")  { next.subConcern = ""; next.otherConcern = ""; }
+        if (name === "building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
+        if (name === "floor")    { next.room = ""; next.otherRoom = ""; }
+        if (name === "room" && value !== "Other") { next.otherRoom = ""; }
         return next;
       });
     },
@@ -820,6 +790,11 @@ export default function Create() {
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom",     formData.otherRoom);
 
+      // Pass the matching status so the backend can inherit it
+      if (similarStatus && similarStatus !== "Pending") {
+        data.append("inheritedStatus", similarStatus);
+      }
+
       if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
       const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
@@ -860,7 +835,7 @@ export default function Create() {
     } finally {
       setSubmitting(false);
     }
-  }, [formData, currentUserEmail, showMsg]);
+  }, [formData, currentUserEmail, showMsg, similarStatus]);
 
   const handleSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
@@ -916,7 +891,7 @@ export default function Create() {
     showMsg("info", "Form cleared.");
   }, [currentUserEmail, showMsg]);
 
-  /* ─── Render ───────────────────────────────────────────── */
+  /* ── Render ─────────────────────────────────────────────────── */
 
   return (
     <div className={`create-scope ${light ? "create-scope--light" : ""}`}>
@@ -985,9 +960,18 @@ export default function Create() {
           align-items: center;
           gap: 8px;
         }
+        .similar-status-badge {
+          display: inline-block;
+          padding: 2px 10px;
+          border-radius: 999px;
+          font-size: 0.8rem;
+          font-weight: 600;
+          margin-left: 4px;
+        }
       `}</style>
 
       <div className={`create-scope__layout ${sidebarOpen ? "" : "is-collapsed"}`}>
+
         {/* ── Sidebar ─────────────────────────────────────── */}
         <aside
           id="app-sidebar"
@@ -1010,7 +994,26 @@ export default function Create() {
                 <div>Similar reports</div>
                 <div>
                   {formData.building && formData.concern
-                    ? `${similarReportsCount} similar ${similarReportsCount === 1 ? "report" : "reports"}`
+                    ? similarReportsCount === 0
+                      ? "None found"
+                      : <>
+                          {similarReportsCount} similar{" "}
+                          {similarReportsCount === 1 ? "report" : "reports"}
+                          {similarStatus && similarStatus !== "Pending" && (
+                            <span
+                              className="similar-status-badge"
+                              style={{
+                                background: STATUS_COLOR[similarStatus]
+                                  ? STATUS_COLOR[similarStatus] + "22"
+                                  : "#88888822",
+                                color: STATUS_COLOR[similarStatus] ?? "#888",
+                                border: `1px solid ${STATUS_COLOR[similarStatus] ?? "#888"}55`,
+                              }}
+                            >
+                              {similarStatus}
+                            </span>
+                          )}
+                        </>
                     : "Set building and concern"}
                 </div>
                 <div>Attach clear photo</div>
@@ -1188,8 +1191,7 @@ export default function Create() {
                 <input
                   id="email" type="email" name="email"
                   placeholder="name@dlsud.edu.ph"
-                  value={formData.email}
-                  onChange={handleChange}
+                  value={formData.email} onChange={handleChange}
                   required autoComplete="email"
                   readOnly={Boolean(currentUserEmail)}
                 />
@@ -1202,8 +1204,7 @@ export default function Create() {
                   <input
                     id="heading" type="text" name="heading"
                     placeholder="Short title of the issue"
-                    value={formData.heading}
-                    onChange={handleChange} required
+                    value={formData.heading} onChange={handleChange} required
                   />
                 </div>
                 <div className="create-scope__group">
@@ -1229,8 +1230,7 @@ export default function Create() {
                 <textarea
                   id="description" name="description"
                   placeholder="Describe the issue with details. Include location markers and safety risks."
-                  value={formData.description}
-                  onChange={handleChange} rows={5} required
+                  value={formData.description} onChange={handleChange} rows={5} required
                 />
                 <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
               </div>
@@ -1346,35 +1346,29 @@ export default function Create() {
                 </div>
               )}
 
-              {/* ── Floor dropdown (meta-driven, ordinal labels) ── */}
+              {/* Floor dropdown */}
               {showFloorDropdown && (
                 <div className="create-scope__group">
                   <label htmlFor="floor">Floor <RequiredStar value={formData.floor} /></label>
-                  <select
-                    id="floor" name="floor"
-                    value={formData.floor} onChange={handleChange} required
-                  >
+                  <select id="floor" name="floor" value={formData.floor} onChange={handleChange} required>
                     <option value="">Select floor</option>
                     {visibleFloorOptions.map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
               )}
 
-              {/* ── Room dropdown (meta-driven, generated from per-floor count) ── */}
+              {/* Room dropdown */}
               {showRoomDropdown && (
                 <div className="create-scope__group">
                   <label htmlFor="room">Room <RequiredStar value={formData.room} /></label>
-                  <select
-                    id="room" name="room"
-                    value={formData.room} onChange={handleChange} required
-                  >
+                  <select id="room" name="room" value={formData.room} onChange={handleChange} required>
                     <option value="">Select room</option>
                     {availableRoomsWithOther?.map((r) => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
               )}
 
-              {/* ── "Other" room text input ── */}
+              {/* Other room text */}
               {needsOtherRoomText && (
                 <div className="create-scope__group">
                   <label htmlFor="otherRoomText">
@@ -1389,7 +1383,7 @@ export default function Create() {
                 </div>
               )}
 
-              {/* ── Free-text spot for buildings with hasRooms=false ── */}
+              {/* Free-text spot (no-room buildings) */}
               {needsOtherRoom && (
                 <div className="create-scope__group">
                   <label htmlFor="otherRoom">
@@ -1452,23 +1446,49 @@ export default function Create() {
         </main>
       </div>
 
-      {/* Confirmation Modal */}
+      {/* ── Confirmation Modal ─────────────────────────────────── */}
       {isConfirming && similarReportsCount > 0 && (
         <div className="confirm-overlay">
           <div className="card">
-            <p className="cookieHeading">Are you sure?</p>
+            <p className="cookieHeading">Similar report exists</p>
             <p className="cookieDescription">
-              There&apos;s {similarReportsCount} similar report
-              {similarReportsCount === 1 ? "" : "s"} about the same building, room, and concern.
-              <br />
+              There {similarReportsCount === 1 ? "is" : "are"}{" "}
+              <strong>{similarReportsCount}</strong> similar report
+              {similarReportsCount === 1 ? "" : "s"} about the same
+              building, room, and concern.
+
+              {similarStatus && similarStatus !== "Pending" && (
+                <>
+                  <br /><br />
+                  The existing report is currently{" "}
+                  <strong style={{ color: STATUS_COLOR[similarStatus] ?? "inherit" }}>
+                    {similarStatus}
+                  </strong>
+                  {similarStatus === "Resolved"
+                    ? " — this issue may already be fixed."
+                    : similarStatus === "In Progress"
+                    ? " — staff are already working on it."
+                    : similarStatus === "Waiting for Materials"
+                    ? " — staff are awaiting materials."
+                    : "."}
+                  {" "}Submitting a duplicate may be unnecessary.
+                </>
+              )}
+
+              <br /><br />
               Are you sure you want to submit this report?
             </p>
             <div className="buttonContainer">
-              <button type="button" className="acceptButton" onClick={() => void performSubmit()}>
-                Submit
+              <button
+                type="button"
+                className="acceptButton"
+                onClick={() => void performSubmit()}
+              >
+                Submit anyway
               </button>
               <button
-                type="button" className="declineButton"
+                type="button"
+                className="declineButton"
                 onClick={() => {
                   setIsConfirming(false);
                   showMsg("info", "Submission cancelled. You can adjust your report and try again.");

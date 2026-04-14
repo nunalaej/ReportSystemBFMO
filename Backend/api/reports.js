@@ -108,7 +108,8 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherConcern,
       otherBuilding,
       otherRoom,
-      userType,       // ← add this
+      userType,
+      inheritedStatus, // ← passed by frontend when a similar report already has a non-Pending status
     } = req.body;
 
     
@@ -159,8 +160,26 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
     /* ============================
        SAVE TO DATABASE
     ============================ */
+
+    // Allowed status values (must match Report model enum)
+    const VALID_STATUSES = [
+      "Pending",
+      "Waiting for Materials",
+      "In Progress",
+      "Resolved",
+      "Archived",
+    ];
+
+    // If the frontend detected a matching report with a more advanced status,
+    // start the new report at that same status instead of "Pending".
+    // This keeps duplicate reports consistent with the original.
+    const startingStatus =
+      inheritedStatus && VALID_STATUSES.includes(inheritedStatus)
+        ? inheritedStatus
+        : "Pending";
+
     const report = await Report.create({
-      reportId,          // ← add this
+      reportId,
       email,
       heading,
       description,
@@ -173,8 +192,9 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherConcern,
       otherBuilding,
       otherRoom,
-      userType,       // ← add this
+      userType,
       ImageFile,
+      status: startingStatus,
     });
 
     return res.status(201).json({
