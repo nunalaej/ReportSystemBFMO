@@ -843,8 +843,7 @@ export default function ReportPage() {
         </div>
 
         {/* Modal Body */}
-        <div className="modal-content-test">
-          {/* Desktop image */}
+<div className="modal-content">          {/* Desktop image */}
           <div className="modal-img-wrapper">
             <img
               src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
@@ -1312,16 +1311,17 @@ export default function ReportPage() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="confirm-ok-btn"
-                onClick={() => {
-                  setConfirmDialog((d) => ({ ...d, open: false }));
-                  confirmDialog.onConfirm();
-                }}
-              >
-                Confirm
-              </button>
+             <button
+  type="button"
+  className="confirm-ok-btn"
+  onClick={async () => {
+    const action = confirmDialog.onConfirm;
+    setConfirmDialog((d) => ({ ...d, open: false }));
+    await action();
+  }}
+>
+  Confirm
+</button>
             </div>
           </div>
         </div>,
