@@ -850,7 +850,7 @@ const showConfirm = (
         </div>
 
         {/* Modal Body */}
-<div className="modal-content-test">          {/* Desktop image */}
+<div className="modal-content">          {/* Desktop image */}
           <div className="modal-img-wrapper">
             <img
               src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
@@ -920,7 +920,7 @@ const showConfirm = (
             {/* Comments */}
             <div className="comments-section">
               <h3>
-                Comments
+                Comments 
                 {commentsToShow.length > 0 && (
                   <span className="comments-count">{commentsToShow.length}</span>
                 )}
