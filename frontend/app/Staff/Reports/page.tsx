@@ -196,11 +196,15 @@ export default function ReportPage() {
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   // Confirmation dialog state
-  const [confirmDialog, setConfirmDialog] = useState<{
+const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     message: string;
-    onConfirm: () => void;
-  }>({ open: false, message: "", onConfirm: () => {} });
+    onConfirm: () => void | Promise<void>;
+  }>({
+    open: false,
+    message: "",
+    onConfirm: () => {},
+  });
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
@@ -455,10 +459,12 @@ export default function ReportPage() {
     setUserTypeFilter("All");
   };
 
-  const showConfirm = (message: string, onConfirm: () => void) => {
-    setConfirmDialog({ open: true, message, onConfirm });
-  };
-
+const showConfirm = (
+  message: string,
+  onConfirm: () => void | Promise<void>
+) => {
+  setConfirmDialog({ open: true, message, onConfirm });
+};
   const syncComments = async (updatedComments: Comment[]) => {
     if (!selectedReport) return;
     try {
@@ -842,7 +848,7 @@ export default function ReportPage() {
         </div>
 
         {/* Modal Body */}
-        <div className="modal-content-test">
+        <div className="modal-content">
           {/* Desktop image */}
           <div className="modal-img-wrapper">
             <img
@@ -1309,16 +1315,23 @@ export default function ReportPage() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                className="confirm-ok-btn"
-                onClick={() => {
-                  setConfirmDialog((d) => ({ ...d, open: false }));
-                  confirmDialog.onConfirm();
-                }}
-              >
-                Confirm
-              </button>
+             <button
+  type="button"
+  className="confirm-ok-btn"
+  onClick={async () => {
+    const action = confirmDialog.onConfirm;
+    setConfirmDialog((d) => ({ ...d, open: false }));
+
+    try {
+      await Promise.resolve(action());
+    } catch (error) {
+      console.error("Confirm action failed:", error);
+      showToast("Action failed. Please try again.", "error");
+    }
+  }}
+>
+  Confirm
+</button>
             </div>
           </div>
         </div>,
