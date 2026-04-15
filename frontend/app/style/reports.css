@@ -711,7 +711,7 @@ html.dark .modal-close-btn:hover {
 }
 
 /* Modal scrollable content */
-.modal-content {
+.modal-content-test {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
   gap: 1.25rem;
@@ -1095,7 +1095,6 @@ html.dark .column-title {
     display: inline;
   }
 }
-
 
 
 /* Confirm popup for archive/delete */

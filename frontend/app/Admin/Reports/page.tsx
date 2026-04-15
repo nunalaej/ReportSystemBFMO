@@ -196,11 +196,15 @@ export default function ReportPage() {
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   // Confirmation dialog state
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    message: string;
-    onConfirm: () => void;
-  }>({ open: false, message: "", onConfirm: () => {} });
+const [confirmDialog, setConfirmDialog] = useState<{
+  open: boolean;
+  message: string;
+  onConfirm: () => void | Promise<void>;
+}>({
+  open: false,
+  message: "",
+  onConfirm: () => {},
+});
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
@@ -455,9 +459,15 @@ export default function ReportPage() {
     setUserTypeFilter("All");
   };
 
-  const showConfirm = (message: string, onConfirm: () => void) => {
-    setConfirmDialog({ open: true, message, onConfirm });
-  };
+const [confirmDialog, setConfirmDialog] = useState<{
+  open: boolean;
+  message: string;
+  onConfirm: () => void | Promise<void>;
+}>({
+  open: false,
+  message: "",
+  onConfirm: () => {},
+});
 
   const syncComments = async (updatedComments: Comment[]) => {
     if (!selectedReport) return;
@@ -1317,7 +1327,13 @@ export default function ReportPage() {
   onClick={async () => {
     const action = confirmDialog.onConfirm;
     setConfirmDialog((d) => ({ ...d, open: false }));
-    await action();
+
+    try {
+      await Promise.resolve(action());
+    } catch (error) {
+      console.error("Confirm action failed:", error);
+      showToast("Action failed. Please try again.", "error");
+    }
   }}
 >
   Confirm
