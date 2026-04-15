@@ -1484,7 +1484,7 @@ export default function Create() {
                 className="acceptButton"
                 onClick={() => void performSubmit()}
               >
-                Submit anyway
+                Submit
               </button>
               <button
                 type="button"

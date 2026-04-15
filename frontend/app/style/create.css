@@ -1065,7 +1065,8 @@
 
 /* Make sure the modal card looks good inside the overlay */
 .confirm-overlay .card {
-  width: 320px;
+  width: 500px;
+  height: 350px;
   max-width: 90vw;
   background-color: #ffffff;
   border-radius: 8px;
