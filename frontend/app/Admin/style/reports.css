@@ -837,7 +837,7 @@ html:not(.dark) .report-modal {
 
 /* ========= MAIN CONTENT ========= */
 
-.modal-content-test {
+.modal-content {
   padding: 1.25rem 1.5rem 1.5rem;
   display: grid;
   grid-template-columns: minmax(0, 2.2fr) minmax(0, 3fr);
