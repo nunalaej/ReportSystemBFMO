@@ -843,7 +843,7 @@ export default function ReportPage() {
         </div>
 
         {/* Modal Body */}
-<div className="modal-content">          {/* Desktop image */}
+<div className="modal-content-test">          {/* Desktop image */}
           <div className="modal-img-wrapper">
             <img
               src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
