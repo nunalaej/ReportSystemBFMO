@@ -195,18 +195,18 @@ export default function ReportPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
-  // Confirmation dialog state
 const [confirmDialog, setConfirmDialog] = useState<{
-  open: boolean;
-  message: string;
-  onConfirm: () => void | Promise<void>;
-}>({
-  open: false,
-  message: "",
-  onConfirm: () => {},
-});
+    open: boolean;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    open: false,
+    message: "",
+    onConfirm: () => {},
+  });
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
+
 
   // ── Portal mount safety (SSR) ─────────────────────────────────────────────
   const [mounted, setMounted] = useState(false);
@@ -459,15 +459,12 @@ const [confirmDialog, setConfirmDialog] = useState<{
     setUserTypeFilter("All");
   };
 
-const [confirmDialog, setConfirmDialog] = useState<{
-  open: boolean;
-  message: string;
-  onConfirm: () => void | Promise<void>;
-}>({
-  open: false,
-  message: "",
-  onConfirm: () => {},
-});
+const showConfirm = (
+  message: string,
+  onConfirm: () => void | Promise<void>
+) => {
+  setConfirmDialog({ open: true, message, onConfirm });
+};
 
   const syncComments = async (updatedComments: Comment[]) => {
     if (!selectedReport) return;
