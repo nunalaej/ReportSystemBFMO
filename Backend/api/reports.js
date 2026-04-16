@@ -1,317 +1,161 @@
-// api/reports.js
 const express = require("express");
-const router = express.Router();
-const multer = require("multer");
+const router  = express.Router();
+const multer  = require("multer");
 
-const Report = require("../models/Report");
+const Report     = require("../models/Report");
 const cloudinary = require("../config/cloudinary");
 const { sendReportStatusEmail } = require("../utils/mailer");
 
-/* ============================================================
-   MULTER CONFIG (MEMORY STORAGE)
-============================================================ */
-const upload = multer({
-  storage: multer.memoryStorage(),
-});
+const upload = multer({ storage: multer.memoryStorage() });
 
-/* ============================================================
-   IMAGE VALIDATION CONFIG
-============================================================ */
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-
+const MAX_IMAGE_SIZE           = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/heic",
-  "image/heif",
-  "image/webp",
-  "image/gif",
+  "image/jpeg", "image/png", "image/heic",
+  "image/heif", "image/webp", "image/gif",
 ];
+
+/* ── Report ID Generator: DDMMYYNNN ── */
+async function generateReportId() {
+  const now    = new Date();
+  const dd     = String(now.getDate()).padStart(2, "0");
+  const mm     = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy   = String(now.getFullYear()).slice(-2);
+  const prefix = `${dd}${mm}${yyyy}`;
+  const count  = await Report.countDocuments({ reportId: { $regex: `^${prefix}` } });
+  return `${prefix}${String(count + 1).padStart(3, "0")}`;
+}
 
 /* ============================================================
    GET ALL REPORTS
-   GET /api/reports
 ============================================================ */
 router.get("/", async (req, res) => {
   try {
-    const reports = await Report.find().sort({ createdAt: -1 });
-    res.json({ success: true, reports });
+    const reports = await Report.find({}).sort({ createdAt: -1 }).lean();
+    return res.json({ success: true, reports });
   } catch (err) {
     console.error("GET /reports error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load reports",
-    });
+    return res.status(500).json({ success: false, message: "Failed to load reports." });
   }
 });
 
 /* ============================================================
-   REPORT ID GENERATOR  →  DDMMYYYYNNN
-============================================================ */
-async function generateReportId() {
-  const now = new Date();
-  const dd   = String(now.getDate()).padStart(2, "0");
-  const mm   = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = String(now.getFullYear()).slice(-2); // "26" from 2026
-  const prefix = `${dd}${mm}${yyyy}`;          // e.g. "020426"
-
-  // Count how many reports already have an ID starting with today's prefix
-  const count = await Report.countDocuments({
-    reportId: { $regex: `^${prefix}` },
-  });
-
-  const seq = String(count + 1).padStart(3, "0"); // 001, 002, …
-  return `${prefix}${seq}`;                        // "02042026001"
-}
-
-/* ============================================================
    GET SINGLE REPORT
-   GET /api/reports/:id
 ============================================================ */
 router.get("/:id", async (req, res) => {
   try {
-    const report = await Report.findById(req.params.id);
-
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        message: "Report not found",
-      });
-    }
-
-    res.json({ success: true, report });
+    const report = await Report.findById(req.params.id).lean();
+    if (!report) return res.status(404).json({ success: false, message: "Report not found." });
+    return res.json({ success: true, report });
   } catch (err) {
     console.error("GET /reports/:id error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load report",
-    });
+    return res.status(500).json({ success: false, message: "Failed to load report." });
   }
 });
 
 /* ============================================================
    CREATE REPORT
-   POST /api/reports
 ============================================================ */
 router.post("/", upload.single("ImageFile"), async (req, res) => {
   try {
     const {
-      email,
-      heading,
-      description,
-      concern,
-      subConcern,
-      building,
-      college,
-      floor,
-      room,
-      otherConcern,
-      otherBuilding,
-      otherRoom,
-      userType,
-      inheritedStatus, // ← passed by frontend when a similar report already has a non-Pending status
+      email, heading, description, concern, subConcern,
+      building, college, floor, room,
+      otherConcern, otherBuilding, otherRoom,
+      userType, inheritedStatus,
     } = req.body;
 
-    
-
-    /* ============================
-       IMAGE VALIDATION (SERVER)
-    ============================ */
     if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "Image is required.",
-      });
+      return res.status(400).json({ success: false, message: "Image is required." });
     }
-
     if (!ALLOWED_IMAGE_MIME_TYPES.includes(req.file.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid image type. Only JPG, PNG, HEIC, WEBP, GIF are allowed.",
-      });
+      return res.status(400).json({ success: false, message: "Invalid image type. Only JPG, PNG, HEIC, WEBP, GIF are allowed." });
     }
-
     if (req.file.size > MAX_IMAGE_SIZE) {
-      return res.status(400).json({
-        success: false,
-        message: "Image exceeds 10MB limit.",
-      });
+      return res.status(400).json({ success: false, message: "Image exceeds 10MB limit." });
     }
 
-    /* ============================
-       UPLOAD TO CLOUDINARY
-    ============================ */
     const uploaded = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         { folder: "bfmo_reports" },
-        (error, result) => {
-          if (error) return reject(error);
-          resolve(result);
-        }
+        (error, result) => { if (error) return reject(error); resolve(result); }
       );
       stream.end(req.file.buffer);
     });
 
-    const ImageFile = uploaded.secure_url;
-
     const reportId = await generateReportId();
 
-    /* ============================
-       SAVE TO DATABASE
-    ============================ */
-
-    // Allowed status values (must match Report model enum)
-    const VALID_STATUSES = [
-      "Pending",
-      "Waiting for Materials",
-      "In Progress",
-      "Resolved",
-      "Archived",
-    ];
-
-    // If the frontend detected a matching report with a more advanced status,
-    // start the new report at that same status instead of "Pending".
-    // This keeps duplicate reports consistent with the original.
-    const startingStatus =
-      inheritedStatus && VALID_STATUSES.includes(inheritedStatus)
-        ? inheritedStatus
-        : "Pending";
+    // ✅ Accept any status string — no hardcoded enum
+    const startingStatus = inheritedStatus || "Pending";
 
     const report = await Report.create({
-      reportId,
-      email,
-      heading,
-      description,
-      concern,
-      subConcern,
-      building,
-      college,
-      floor,
-      room,
-      otherConcern,
-      otherBuilding,
-      otherRoom,
-      userType,
-      ImageFile,
+      reportId, email, heading, description,
+      concern, subConcern, building, college,
+      floor, room, otherConcern, otherBuilding,
+      otherRoom, userType,
+      ImageFile: uploaded.secure_url,
       status: startingStatus,
     });
 
-    return res.status(201).json({
-      success: true,
-      report,
-    });
+    return res.status(201).json({ success: true, report });
   } catch (err) {
     console.error("POST /reports error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create report.",
-    });
+    return res.status(500).json({ success: false, message: "Failed to create report." });
   }
 });
 
 /* ============================================================
-   UPDATE REPORT (STATUS / COMMENTS)
-   PUT /api/reports/:id
+   UPDATE REPORT
 ============================================================ */
 router.put("/:id", async (req, res) => {
   try {
-const { status, overwriteComments, comments, comment } = req.body;
-// comment = optional admin note sent from frontend
+    const { status, overwriteComments, comments, comment } = req.body;
+
     const existing = await Report.findById(req.params.id);
-    if (!existing) {
-      return res.status(404).json({
-        success: false,
-        message: "Report not found",
-      });
-    }
+    if (!existing) return res.status(404).json({ success: false, message: "Report not found." });
 
     const oldStatus = existing.status || "Pending";
 
-    if (status) {
-      existing.status = status;
-    }
-
-    if (overwriteComments && Array.isArray(comments)) {
-      existing.comments = comments;
-    }
+    if (status !== undefined)                          existing.status   = status;
+    if (overwriteComments && Array.isArray(comments))  existing.comments = comments;
 
     const updated = await existing.save();
 
-    /* ============================
-   EMAIL NOTIFICATION
-   Includes optional admin comment
-============================ */
-if (status && status !== oldStatus) {
-  sendReportStatusEmail({
-    to: updated.email,
-    heading: updated.heading,
-    status: updated.status,
-    reportId: String(updated._id),
+    if (status && status !== oldStatus) {
+      sendReportStatusEmail({
+        to:       updated.email,
+        heading:  updated.heading,
+        status:   updated.status,
+        reportId: String(updated._id),
+        comment:  comment || "",
+      }).catch(err => console.error("Email send failed:", err));
+    }
 
-    // ✅ NEW: include admin comment in email
-    comment: comment || "",
-  }).catch((err) => {
-    console.error("Email send failed:", err);
-  });
-}
-
-    res.json({ success: true, report: updated });
+    return res.json({ success: true, report: updated });
   } catch (err) {
     console.error("PUT /reports/:id error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to update report",
-    });
+    return res.status(500).json({ success: false, message: "Failed to update report." });
   }
 });
 
-
+/* ============================================================
+   FOLLOW UP
+============================================================ */
 router.post("/:id/followup", async (req, res) => {
   try {
     const report = await Report.findById(req.params.id).lean();
     if (!report) return res.status(404).json({ success: false, message: "Report not found." });
- 
-    const { reportId, email, heading, by } = req.body;
- 
-    // ── Option A: store in a Notifications collection ──────────────────
-    // Uncomment if you have a Notification model
-    /*
-    const Notification = require("../models/Notification");
-    await Notification.create({
-      type:      "followup",
-      message:   `Follow-up requested for report #${reportId || report.reportId} — "${heading || report.heading}" by ${by || email || "reporter"}.`,
-      reportId:  report._id,
-      createdAt: new Date(),
-      read:      false,
-    });
-    */
- 
-    // ── Option B: push a comment to the report as a system note ────────
-    // This surfaces the follow-up in the existing comments timeline.
-    const followupNote = {
-      text: `🔔 Follow-up requested by reporter (${by || email || "unknown"}).`,
-      at:   new Date(),
-      by:   "System",
-    };
- 
+
+    const { email, by } = req.body;
     await Report.findByIdAndUpdate(req.params.id, {
-      $push: { comments: followupNote },
+      $push: {
+        comments: {
+          text: `🔔 Follow-up requested by reporter (${by || email || "unknown"}).`,
+          at:   new Date(),
+          by:   "System",
+        },
+      },
     });
- 
-    // ── Option C (recommended): emit a socket event if you use Socket.IO
-    /*
-    const io = req.app.get("io");
-    if (io) {
-      io.emit("followup-notification", {
-        type:      "followup",
-        message:   `Follow-up requested for report #${reportId || report.reportId} — "${heading || report.heading}".`,
-        reportId:  report._id.toString(),
-        timestamp: new Date().toISOString(),
-      });
-    }
-    */
- 
+
     return res.json({ success: true, message: "Follow-up notification sent." });
   } catch (err) {
     console.error("POST /reports/:id/followup error:", err);
@@ -319,112 +163,65 @@ router.post("/:id/followup", async (req, res) => {
   }
 });
 
-
 /* ============================================================
    ADD COMMENT
-   POST /api/reports/:id/comments
 ============================================================ */
 router.post("/:id/comments", async (req, res) => {
   try {
     const { text, by } = req.body;
+    if (!text) return res.status(400).json({ success: false, message: "Comment text is required." });
 
-    if (!text) {
-      return res.status(400).json({
-        success: false,
-        message: "Comment text is required",
-      });
-    }
-
-    const newComment = {
-      text,
-      by: by || "Admin",
-      at: new Date(),
-    };
-
-    // ✅ FIX: Use returnDocument instead of deprecated 'new' option
     const updated = await Report.findByIdAndUpdate(
       req.params.id,
-      { $push: { comments: newComment } },
-      { returnDocument: 'after' }
+      { $push: { comments: { text, by: by || "Admin", at: new Date() } } },
+      { new: true }
     );
 
-    if (!updated) {
-      return res.status(404).json({
-        success: false,
-        message: "Report not found",
-      });
-    }
-
-    res.json({ success: true, report: updated });
+    if (!updated) return res.status(404).json({ success: false, message: "Report not found." });
+    return res.json({ success: true, report: updated });
   } catch (err) {
     console.error("POST comment error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to add comment",
-    });
+    return res.status(500).json({ success: false, message: "Failed to add comment." });
   }
 });
 
 /* ============================================================
    DELETE COMMENT
-   DELETE /api/reports/:id/comments/:index
 ============================================================ */
 router.delete("/:id/comments/:index", async (req, res) => {
   try {
-    const { id, index } = req.params;
+    const report = await Report.findById(req.params.id);
+    if (!report) return res.status(404).json({ success: false, message: "Report not found." });
 
-    const report = await Report.findById(id);
-    if (!report) {
-      return res.status(404).json({
-        success: false,
-        message: "Report not found",
-      });
-    }
-
-    const idx = parseInt(index, 10);
+    const idx = parseInt(req.params.index, 10);
     if (isNaN(idx) || idx < 0 || idx >= report.comments.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid comment index",
-      });
+      return res.status(400).json({ success: false, message: "Invalid comment index." });
     }
 
     report.comments.splice(idx, 1);
     await report.save();
-
-    res.json({ success: true, report });
+    return res.json({ success: true, report });
   } catch (err) {
     console.error("DELETE comment error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to delete comment",
-    });
+    return res.status(500).json({ success: false, message: "Failed to delete comment." });
   }
 });
 
 /* ============================================================
-   ARCHIVE PURGE
-   DELETE /api/reports/purge-resolved-archived
-   Deletes all Resolved + Archived reports from DB
+   PURGE RESOLVED/ARCHIVED
 ============================================================ */
 router.delete("/purge-resolved-archived", async (req, res) => {
   try {
-    const result = await Report.deleteMany({
-      status: { $in: ["Resolved", "Archived"] },
-    });
-
-    res.json({
+    const result = await Report.deleteMany({ status: { $in: ["Resolved", "Archived"] } });
+    return res.json({
       success: true,
       deletedCount: result.deletedCount,
       message: `Purged ${result.deletedCount} Resolved/Archived reports.`,
     });
   } catch (err) {
     console.error("DELETE /purge-resolved-archived error:", err);
-    res.status(500).json({ success: false, message: "Purge failed." });
+    return res.status(500).json({ success: false, message: "Purge failed." });
   }
 });
 
-/* ============================================================
-   EXPORT ROUTER
-============================================================ */
 module.exports = router;

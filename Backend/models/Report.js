@@ -1,5 +1,12 @@
 const mongoose = require("mongoose");
 
+if (mongoose.connection.models["Report"]) {
+  delete mongoose.connection.models["Report"];
+}
+if (mongoose.models["Report"]) {
+  delete mongoose.models["Report"];
+}
+
 const CommentSchema = new mongoose.Schema({
   text:     { type: String },
   comment:  { type: String },
@@ -33,18 +40,15 @@ const ReportSchema = new mongoose.Schema(
     otherRoom:     { type: String },
     image:         { type: String },
     ImageFile:     { type: String },
-    status:        { type: String, default: "Pending" },
+    status:        { type: String, default: "Pending" }, // ✅ NO enum
     comments:      [CommentSchema],
     history:       [HistoryEntrySchema],
   },
   {
     timestamps: true,
-    // ✅ This tells Mongoose which collection to use
-    // Change "reports" to whatever your actual MongoDB collection is named
-    collection: "reports",
+    collection: "ReportCollection", // ✅ FIXED — matches your actual MongoDB collection name
+    strict:     false,
   }
 );
 
-// ✅ Delete cached model to avoid stale schema issues
-delete mongoose.connection.models["Report"];
 module.exports = mongoose.model("Report", ReportSchema);
