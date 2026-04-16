@@ -852,6 +852,14 @@ export default function AdminEditPage() {
                       <input type="email" className="admin-edit__input" value={newStaff.email} placeholder="john@bfmo.edu"
                         onChange={e => setNewStaff(d => ({ ...d, email: e.target.value }))}/>
                     </div>
+<div className="admin-edit__field-group">
+  <label className="admin-edit__label">Username</label>
+  <input type="text" className="admin-edit__input"
+    value={newStaff.clerkUsername || ""}
+    placeholder="e.g. ejn2032 (for login)"
+    onChange={e => setNewStaff(d => ({ ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") }))}/>
+  <span className="admin-edit__label-hint">Staff will use this to log in. No spaces or @ symbols.</span>
+</div>
                     <div className="admin-edit__field-group">
                       <label className="admin-edit__label">Position</label>
                       <select className="admin-edit__input" value={newStaff.position} onChange={e => setNewStaff(d => ({ ...d, position: e.target.value }))}>

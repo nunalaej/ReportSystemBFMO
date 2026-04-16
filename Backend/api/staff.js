@@ -1,9 +1,8 @@
-//this is Backend/api/staff.js - API routes for managing staff records, including linking to Clerk accounts
 const express = require("express");
 const router  = express.Router();
 const Staff   = require("../models/Staff");
 
-/* GET /api/staff or /api/user/staff */
+/* GET /api/staff */
 router.get("/", async (req, res) => {
   try {
     const filter = {};
@@ -39,50 +38,79 @@ router.get("/by-email/:email", async (req, res) => {
   }
 });
 
-/* GET /api/staff/:id */
-router.get("/:id", async (req, res) => {
+/* ✅ POST /api/staff/create-clerk — MUST be before /:id routes */
+router.post("/create-clerk", async (req, res) => {
   try {
-    const s = await Staff.findById(req.params.id).lean();
-    if (!s) return res.status(404).json({ success: false, message: "Not found." });
-    return res.json({ success: true, staff: s });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: "Error." });
-  }
-});
+    const { staffId, username, password, name } = req.body;
 
-/* POST /api/staff */
-router.post("/", async (req, res) => {
-  try {
-    const { name, email, phone, position, disciplines, active, clerkId, notes } = req.body;
-    if (!name?.trim()) return res.status(400).json({ success: false, message: "Name is required." });
-    const member = await Staff.create({
-      name:        name.trim(),
-      email:       (email    || "").trim().toLowerCase(),
-      phone:       (phone    || ""),
-      position:    (position || "Staff Engineer"),
-      disciplines: Array.isArray(disciplines) ? disciplines.map(d => String(d).trim()).filter(Boolean) : [],
-      active:      active !== false,
-      clerkId:     (clerkId || "").trim(),
-      notes:       (notes   || "").trim(),
+    if (!username?.trim()) {
+      return res.status(400).json({ success: false, message: "Username is required." });
+    }
+    if (!password?.trim()) {
+      return res.status(400).json({ success: false, message: "Password is required." });
+    }
+    if (password.trim().length < 8) {
+      return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+    }
+
+    const parts     = (name || "").trim().split(" ");
+    const firstName = parts[0] || username;
+    const lastName  = parts.slice(1).join(" ") || "";
+
+    // Create Clerk user via Clerk Backend API
+    const clerkRes = await fetch("https://api.clerk.com/v1/users", {
+      method:  "POST",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${process.env.CLERK_SECRET_KEY}`,
+      },
+      body: JSON.stringify({
+        username:        username.trim(),
+        password:        password.trim(),
+        first_name:      firstName,
+        last_name:       lastName,
+        public_metadata: { role: "staff" }, // ✅ auto-assign staff role
+      }),
     });
-    return res.status(201).json({ success: true, staff: member });
+
+    const clerkData = await clerkRes.json();
+
+    if (!clerkRes.ok) {
+      const errMsg = clerkData?.errors?.[0]?.long_message
+        || clerkData?.errors?.[0]?.message
+        || "Failed to create Clerk account.";
+      return res.status(400).json({ success: false, message: errMsg });
+    }
+
+    const clerkId = clerkData.id;
+
+    // Link clerkId and clerkUsername to Staff record in MongoDB
+    if (staffId) {
+      await Staff.findByIdAndUpdate(staffId, {
+        $set: { clerkId, clerkUsername: username.trim() }
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      clerkId,
+      message: `Account "${username}" created successfully.`,
+    });
   } catch (err) {
-    console.error("POST /staff:", err);
-    return res.status(500).json({ success: false, message: "Failed to create." });
+    console.error("POST /staff/create-clerk:", err);
+    return res.status(500).json({ success: false, message: "Server error creating account." });
   }
 });
 
-/* POST /api/staff/link-clerk
-   Matches by username (since your Clerk app has no email),
-   saves clerkId to the Staff record */
+/* ✅ POST /api/staff/link-clerk */
 router.post("/link-clerk", async (req, res) => {
   try {
     const { clerkId, username, email } = req.body;
     if (!clerkId) return res.status(400).json({ success: false, message: "clerkId is required." });
 
-    // Try matching by email first, then by name as username fallback
     let staff = null;
     if (email)    staff = await Staff.findOne({ email: email.toLowerCase().trim() });
+    if (!staff && username) staff = await Staff.findOne({ clerkUsername: username.trim() });
     if (!staff && username) staff = await Staff.findOne({
       name: { $regex: new RegExp(`^${username.trim()}$`, "i") }
     });
@@ -101,7 +129,6 @@ router.post("/link-clerk", async (req, res) => {
       });
     }
 
-    // Save clerkId if not yet linked
     if (!staff.clerkId) {
       staff.clerkId = clerkId;
       await staff.save();
@@ -114,20 +141,83 @@ router.post("/link-clerk", async (req, res) => {
   }
 });
 
+/* ✅ POST /api/staff/reset-password */
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { clerkId, newPassword } = req.body;
+    if (!clerkId || !newPassword) {
+      return res.status(400).json({ success: false, message: "clerkId and newPassword required." });
+    }
+
+    const clerkRes = await fetch(`https://api.clerk.com/v1/users/${clerkId}`, {
+      method:  "PATCH",
+      headers: {
+        "Content-Type":  "application/json",
+        "Authorization": `Bearer ${process.env.CLERK_SECRET_KEY}`,
+      },
+      body: JSON.stringify({ password: newPassword }),
+    });
+
+    const data = await clerkRes.json();
+    if (!clerkRes.ok) {
+      return res.status(400).json({ success: false, message: data?.errors?.[0]?.message || "Failed." });
+    }
+
+    return res.json({ success: true, message: "Password reset successfully." });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Server error." });
+  }
+});
+
+/* GET /api/staff/:id — MUST be after named routes */
+router.get("/:id", async (req, res) => {
+  try {
+    const s = await Staff.findById(req.params.id).lean();
+    if (!s) return res.status(404).json({ success: false, message: "Not found." });
+    return res.json({ success: true, staff: s });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Error." });
+  }
+});
+
+/* POST /api/staff */
+router.post("/", async (req, res) => {
+  try {
+    const { name, email, phone, position, disciplines, active, clerkId, clerkUsername, notes } = req.body;
+    if (!name?.trim()) return res.status(400).json({ success: false, message: "Name is required." });
+    const member = await Staff.create({
+      name:          name.trim(),
+      email:         (email         || "").trim().toLowerCase(),
+      phone:         (phone         || ""),
+      position:      (position      || "Staff Engineer"),
+      disciplines:   Array.isArray(disciplines) ? disciplines.map(d => String(d).trim()).filter(Boolean) : [],
+      active:        active !== false,
+      clerkId:       (clerkId       || "").trim(),
+      clerkUsername: (clerkUsername || "").trim(), // ✅ ADD THIS
+      notes:         (notes         || "").trim(),
+    });
+    return res.status(201).json({ success: true, staff: member });
+  } catch (err) {
+    console.error("POST /staff:", err);
+    return res.status(500).json({ success: false, message: "Failed to create." });
+  }
+});
+
 /* PUT /api/staff/:id */
 router.put("/:id", async (req, res) => {
   try {
-    const { name, email, phone, position, disciplines, active, clerkId, notes } = req.body;
+    const { name, email, phone, position, disciplines, active, clerkId, clerkUsername, notes } = req.body;
     const update = {};
-    if (name        !== undefined) update.name        = String(name).trim();
-    if (email       !== undefined) update.email       = String(email).trim().toLowerCase();
-    if (phone       !== undefined) update.phone       = String(phone);
-    if (position    !== undefined) update.position    = String(position);
-    if (disciplines !== undefined) update.disciplines = Array.isArray(disciplines)
+    if (name          !== undefined) update.name          = String(name).trim();
+    if (email         !== undefined) update.email         = String(email).trim().toLowerCase();
+    if (phone         !== undefined) update.phone         = String(phone);
+    if (position      !== undefined) update.position      = String(position);
+    if (disciplines   !== undefined) update.disciplines   = Array.isArray(disciplines)
       ? disciplines.map(d => String(d).trim()).filter(Boolean) : [];
-    if (active      !== undefined) update.active      = Boolean(active);
-    if (clerkId     !== undefined) update.clerkId     = String(clerkId).trim();
-    if (notes       !== undefined) update.notes       = String(notes).trim();
+    if (active        !== undefined) update.active        = Boolean(active);
+    if (clerkId       !== undefined) update.clerkId       = String(clerkId).trim();
+    if (clerkUsername !== undefined) update.clerkUsername = String(clerkUsername).trim(); // ✅ ADD
+    if (notes         !== undefined) update.notes         = String(notes).trim();
 
     const updated = await Staff.findByIdAndUpdate(
       req.params.id, { $set: update }, { new: true, runValidators: true }
