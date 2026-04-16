@@ -836,7 +836,7 @@ export default function StaffTasksPage() {
                   <span className="tasks-modal-label">Task Info</span>
                   <div className="tasks-modal-info-grid">
                     <span className="tasks-info-key">Created by</span>
-                    <span className="tasks-info-val">{selectedTask.createdBy || "Admin"}</span>
+<span className="tasks-info-val">{selectedTask.createdBy || "Admin"}</span>
                     <span className="tasks-info-key">Created</span>
                     <span className="tasks-info-val">{selectedTask.createdAt ? new Date(selectedTask.createdAt).toLocaleString() : "—"}</span>
                     <span className="tasks-info-key">Updated</span>

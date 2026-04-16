@@ -6,6 +6,7 @@ const ChecklistItemSchema = new mongoose.Schema({
   done: { type: Boolean, default: false },
 });
 
+// ✅ ADD THIS
 const CommentSchema = new mongoose.Schema({
   text: { type: String, required: true },
   by:   { type: String, default: "Staff" },
@@ -19,18 +20,14 @@ const ListsTaskSchema = new mongoose.Schema(
     concernType:   { type: String, default: "Other" },
     reportId:      { type: String, default: null },
     assignedStaff: { type: [String], default: [] },
-    // ✅ No enum — accepts any status from meta config
     status:        { type: String, default: "Pending" },
     checklist:     { type: [ChecklistItemSchema], default: [] },
     priority:      { type: String, default: "" },
     notes:         { type: String, default: "" },
     createdBy:     { type: String, default: "Admin" },
-    // Add to ListsTaskSchema:
-comments: { type: [CommentSchema], default: [] },
+    comments:      { type: [CommentSchema], default: [] }, // ✅ ADD THIS
   },
   { timestamps: true }
 );
-
-
 
 module.exports = mongoose.models.ListsTask || mongoose.model("ListsTask", ListsTaskSchema);
