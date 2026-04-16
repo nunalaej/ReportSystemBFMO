@@ -895,3 +895,548 @@ html.dark .admin-edit__concern-card {
 .admin-edit__notify-option--active {
   background: #2563eb; color: #fff; font-weight: 600;
 }
+
+/* ── Accordion container (replaces grid) ── */
+.admin-edit__accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Collapsible panel ── */
+.admin-edit__panel--collapsible {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  transition: box-shadow 0.15s;
+}
+
+.admin-edit__panel--collapsible:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.admin-edit__panel--open {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+/* ── Toggle button (the clickable header) ── */
+.admin-edit__panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+  gap: 12px;
+}
+
+.admin-edit__panel-toggle:hover {
+  background: #f9fafb;
+}
+
+.admin-edit__panel--open .admin-edit__panel-toggle {
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.admin-edit__panel-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ── Badge (item count) ── */
+.admin-edit__panel-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.admin-edit__panel--open .admin-edit__panel-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* ── Panel title / subtitle (keep existing styles, override display) ── */
+.admin-edit__panel--collapsible .admin-edit__panel-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.admin-edit__panel--collapsible .admin-edit__panel-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+/* ── Body (shown when open) ── */
+.admin-edit__panel--collapsible .admin-edit__panel-body {
+  padding: 20px;
+  animation: panel-expand 0.2s ease;
+}
+
+@keyframes panel-expand {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Color Picker ── */
+.cp-root {
+  position: relative;
+  display: inline-block;
+}
+
+/* Trigger button */
+.cp-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #374151;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 130px;
+}
+.cp-trigger:hover  { border-color: #9ca3af; }
+.cp-trigger:focus  { outline: none; box-shadow: 0 0 0 2px #bfdbfe; border-color: #3b82f6; }
+
+.cp-trigger-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
+  flex-shrink: 0;
+}
+.cp-trigger-hex {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+}
+
+/* Dropdown panel */
+.cp-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  padding: 10px 12px 12px;
+  min-width: 220px;
+  animation: cp-appear 0.15s ease;
+}
+
+@keyframes cp-appear {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Automatic row */
+.cp-auto-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #111827;
+  margin-bottom: 8px;
+  transition: background 0.12s;
+}
+.cp-auto-btn:hover { background: #f3f4f6; border-color: #e5e7eb; }
+
+.cp-auto-swatch {
+  width: 18px;
+  height: 18px;
+  background: #000;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Section labels */
+.cp-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #374151;
+  margin: 6px 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Theme grid — 10 columns × N rows */
+.cp-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 18px);
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+/* Standard colors row */
+.cp-row {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+
+/* Individual swatch */
+.cp-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.cp-swatch:hover {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #6b7280;
+  z-index: 1;
+  position: relative;
+}
+.cp-swatch--active {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #2563eb !important;
+}
+
+/* Custom hex row */
+.cp-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+}
+.cp-custom-label {
+  font-size: 0.72rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+.cp-native {
+  width: 26px;
+  height: 26px;
+  padding: 1px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+  flex-shrink: 0;
+}
+.cp-hex-input {
+  flex: 1;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  outline: none;
+  color: #111827;
+  transition: border-color 0.15s;
+}
+.cp-hex-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+
+/* ═══════════════════════════════════════════════════════════
+   STAFF PANEL  —  add to Admin/style/admin-edit.css
+═══════════════════════════════════════════════════════════ */
+
+/* ── Top bar: filter tabs + add button ── */
+.staff-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.staff-disc-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.staff-disc-tab {
+  padding: 5px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.13s;
+  white-space: nowrap;
+}
+.staff-disc-tab:hover { background: #f3f4f6; border-color: #d1d5db; }
+.staff-disc-tab--active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+html.dark .staff-disc-tab { background: #1e293b; border-color: #334155; color: #94a3b8; }
+html.dark .staff-disc-tab:hover { background: #253347; }
+html.dark .staff-disc-tab--active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+
+.staff-add-btn { display: inline-flex; align-items: center; gap: 6px; }
+.staff-required { color: #ef4444; }
+
+/* ── Add / Edit form card ── */
+.staff-form-card {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+html.dark .staff-form-card { background: #0d1526; border-color: #1e293b; }
+
+.staff-form-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+  margin: 0 0 14px;
+}
+
+.staff-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+@media (max-width: 640px) { .staff-form-grid { grid-template-columns: 1fr; } }
+
+/* ── Discipline chip selectors ── */
+.staff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.staff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.13s;
+  user-select: none;
+}
+.staff-chip:hover { background: #f3f4f6; border-color: #d1d5db; }
+.staff-chip--on {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+html.dark .staff-chip { background: #1e293b; border-color: #334155; color: #94a3b8; }
+html.dark .staff-chip:hover { background: #253347; }
+html.dark .staff-chip--on { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+
+/* ── Form footer actions ── */
+.staff-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+}
+html.dark .staff-form-actions { border-color: #1e293b; }
+
+/* ── Staff list ── */
+.staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Empty state ── */
+.staff-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #94a3b8;
+  text-align: center;
+}
+.staff-empty p { font-size: 0.82rem; margin: 0; }
+
+/* ── Staff card ── */
+.staff-card {
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.staff-card:hover { border-color: #d1d5db; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+.staff-card--editing { border-color: #3b82f6; box-shadow: 0 0 0 2px #bfdbfe; }
+.staff-card--inactive { opacity: 0.65; }
+
+html.dark .staff-card { background: #0f172a; border-color: #1f2937; }
+html.dark .staff-card:hover { border-color: #334151; }
+html.dark .staff-card--editing { border-color: #3b82f6; }
+
+/* ── Display row ── */
+.staff-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.staff-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1e293b, #334155);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.staff-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.staff-info-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.staff-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+html.dark .staff-name { color: #f1f5f9; }
+
+.staff-pos-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.staff-inactive-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  background: #fee2e2;
+  color: #dc2626;
+  letter-spacing: 0.04em;
+}
+
+.staff-email {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+html.dark .staff-email { color: #64748b; }
+
+/* ── Discipline display pills ── */
+.staff-disc-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.staff-disc-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+html.dark .staff-disc-pill { background: #1e293b; color: #94a3b8; border-color: #334155; }
+
+.staff-no-disc {
+  font-size: 0.68rem;
+  color: #d1d5db;
+  font-style: italic;
+}
+
+.staff-notes {
+  font-size: 0.68rem;
+  color: #94a3b8;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Row action buttons ── */
+.staff-row-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* ── Edit form body (inside card) ── */
+.staff-edit-body {
+  padding: 16px;
+}

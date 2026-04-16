@@ -37,6 +37,14 @@ export default function AdminDashboard() {
           <h2>Admin Edit</h2>
           <p>Manage admin accounts, staff roles, and system settings.</p>
         </button>
+
+          <button
+          className="admin-card"
+          onClick={() => router.push("/Admin/Task")}
+        >
+          <h2>Task</h2>
+          <p>Manage tasks and their statuses.</p>
+        </button>
       </section>
     </main>
   );

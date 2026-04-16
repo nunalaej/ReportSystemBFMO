@@ -1,32 +1,25 @@
-//Users can add a Comment to their report, but cannot edit or delete comments. Comments are added by staff/admin when they update the report status or want to ask for more information.
-//Users can view the History of their report, which includes all status updates and comments in chronological order. This helps them track the progress of their report and see any feedback from staff/admin. in Modal
-//Users can Notify for Follow Up make a Bell Button with 'Follow Up'. It will pop up in the notification bell of the Staff and Admins
-
 "use client";
 
 import "@/app/style/reports.css";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { createPortal } from "react-dom";
 
 const defaultImg = "/default.jpg";
 
-// Backend base URL
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
-    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) ||
-  "";
+    process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "";
 
-type Comment = {
-  text?: string;
-  comment?: string;
-  at?: string;
-  by?: string;
-};
+/* ── Types ── */
+type Comment = { text?: string; comment?: string; at?: string; by?: string; };
+type HistoryEntry = { status: string; at: string; by?: string; note?: string; };
 
 type Report = {
   _id: string;
+  reportId?: string;
   email?: string;
   heading?: string;
   description?: string;
@@ -43,504 +36,562 @@ type Report = {
   ImageFile?: string;
   status?: string;
   createdAt?: string;
+  updatedAt?: string;
   comments?: Comment[];
+  history?: HistoryEntry[];
 };
 
-const formatConcern = (report: Report) => {
-  const base = report.concern || "Unspecified";
-  const sub = report.subConcern || report.otherConcern;
-  return sub ? `${base} : ${sub}` : base;
+type MetaStatus = { id: string; name: string; color: string; };
+
+/* ── Helpers ── */
+const formatConcern = (r: Report) => {
+  const base = r.concern || "Unspecified";
+  const sub  = r.subConcern || r.otherConcern;
+  return sub ? `${base} · ${sub}` : base;
 };
 
-const formatBuilding = (report: Report) => {
-  const rawBuilding = report.building || "Unspecified";
-  const isOther = rawBuilding && rawBuilding.toLowerCase() === "other";
-
-  const buildingLabel =
-    isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
-
-  const roomOrSpot = report.room || report.otherRoom;
-  return roomOrSpot ? `${buildingLabel} : ${roomOrSpot}` : buildingLabel;
+const formatBuilding = (r: Report) => {
+  const raw   = r.building || "Unspecified";
+  const label = raw.toLowerCase() === "other" && r.otherBuilding ? r.otherBuilding : raw;
+  const room  = r.room || r.otherRoom;
+  return room ? `${label} · ${room}` : label;
 };
 
-function getRelativeTime(dateString?: string) {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const now = new Date();
-  let diffMs = now.getTime() - date.getTime();
-  if (diffMs < 0) diffMs = 0;
-
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return "just now";
-
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) {
-    return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
-  }
-
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) {
-    return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) {
-    return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
-  }
-
-  const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) {
-    return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
-  }
-
-  const diffYears = Math.floor(diffMonths / 12);
-  return `${diffYears} year${diffYears === 1 ? "" : "s"} ago`;
+function getRelativeTime(d?: string) {
+  if (!d) return "";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return "";
+  const diff = Math.max(0, Date.now() - date.getTime());
+  const s = Math.floor(diff / 1000);
+  if (s < 60)   return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60)   return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24)   return `${h}h ago`;
+  const dy = Math.floor(h / 24);
+  if (dy < 30)  return `${dy}d ago`;
+  const mo = Math.floor(dy / 30);
+  if (mo < 12)  return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
 }
 
-const getStatusClassKey = (statusRaw?: string) => {
-  const status = statusRaw || "Pending";
-  if (status === "Waiting for Materials") return "waiting";
-  if (status === "In Progress") return "inprogress";
-  if (status === "Resolved") return "completed";
-  if (status === "Archived") return "archived";
+const FALLBACK_STATUSES: MetaStatus[] = [
+  { id: "1", name: "Pending",         color: "#F59E0B" },
+  { id: "2", name: "Pending Inspect", color: "#EAB308" },
+  { id: "3", name: "In Progress",     color: "#3B82F6" },
+  { id: "4", name: "Resolved",        color: "#22C55E" },
+  { id: "5", name: "Archived",        color: "#6B7280" },
+];
+
+const REPORTS_PER_PAGE = 10;
+
+/* ── Timeline builder ── */
+function buildTimeline(report: Report): HistoryEntry[] {
+  if (report.history?.length) {
+    return [...report.history].sort((a, b) => +new Date(a.at) - +new Date(b.at));
+  }
+  const entries: HistoryEntry[] = [];
+  if (report.createdAt) entries.push({ status: "Submitted", at: report.createdAt, by: "You", note: "Report submitted." });
+  (report.comments || []).forEach(c => {
+    if (c.at) entries.push({ status: "Update", at: c.at, by: c.by || "Staff", note: c.text || c.comment || "" });
+  });
+  if (report.status && report.status !== "Pending" && report.updatedAt)
+    entries.push({ status: report.status, at: report.updatedAt, by: "Admin" });
+  return entries.sort((a, b) => +new Date(a.at) - +new Date(b.at));
+}
+
+function buildStatusFlow(statuses: MetaStatus[]) {
+  return statuses.filter(s => s.name.toLowerCase() !== "archived");
+}
+
+function getStepState(stepName: string, current: string | undefined, statuses: MetaStatus[]): "completed" | "active" | "pending" {
+  const flow = buildStatusFlow(statuses);
+  const ci   = flow.findIndex(s => s.name === (current || "Pending"));
+  const si   = flow.findIndex(s => s.name === stepName);
+  if (si < ci)  return "completed";
+  if (si === ci) return "active";
   return "pending";
-};
+}
 
-const REPORTS_PER_PAGE = 12;
+/* ── Toast ── */
+type ToastType = "success" | "error" | "info";
+type Toast = { id: number; message: string; type: ToastType };
+let _toastId = 0;
 
-export default function ReportPage() {
+function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const show = useCallback((message: string, type: ToastType = "success") => {
+    const id = ++_toastId;
+    setToasts(p => [...p, { id, message, type }]);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000);
+  }, []);
+  const dismiss = useCallback((id: number) => setToasts(p => p.filter(t => t.id !== id)), []);
+  return { toasts, show, dismiss };
+}
+
+/* ══════════════════════════════════════════════════════════ */
+export default function StudentReportPage() {
   const router = useRouter();
   const { user, isLoaded } = useUser();
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [currentUserName, setCurrentUserName] = useState<string>("");
-
-  const [reports, setReports] = useState<Report[]>([]);
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
-  const [loadError, setLoadError] = useState("");
-
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // NEW: fullscreen image viewer
+  const [userEmail,       setUserEmail]       = useState<string | null>(null);
+  const [reports,         setReports]         = useState<Report[]>([]);
+  const [selectedReport,  setSelectedReport]  = useState<Report | null>(null);
+  const [loadError,       setLoadError]       = useState("");
+  const [isLoading,       setIsLoading]       = useState(false);
+  const [currentPage,     setCurrentPage]     = useState(1);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [isMobile,        setIsMobile]        = useState(false);
+  const [mounted,         setMounted]         = useState(false);
+  const [metaStatuses,    setMetaStatuses]    = useState<MetaStatus[]>(FALLBACK_STATUSES);
+  const [followUpSending, setFollowUpSending] = useState<string | null>(null);
 
-  // Mobile mode
-  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const updateMobile = () => setIsMobile(window.innerWidth <= 768);
-
-    updateMobile();
-    window.addEventListener("resize", updateMobile);
-    return () => window.removeEventListener("resize", updateMobile);
+    const upd = () => setIsMobile(window.innerWidth <= 768);
+    upd(); window.addEventListener("resize", upd);
+    return () => window.removeEventListener("resize", upd);
   }, []);
 
-  const handleHome = () => {
-    router.push("/Student");
-  };
+  useEffect(() => {
+    document.body.style.overflow = (!!fullscreenImage || (isMobile && !!selectedReport)) ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [fullscreenImage, isMobile, selectedReport]);
 
-  const handleLogout = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("currentUser");
-      sessionStorage.clear();
-      router.push("/");
-    }
-  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (fullscreenImage)                    { setFullscreenImage(null); return; }
+      if (isMobile && selectedReport)         { setSelectedReport(null); return; }
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [fullscreenImage, isMobile, selectedReport]);
 
+  /* ── Auth ── */
   useEffect(() => {
     if (!isLoaded || !user) return;
-
     const role = user.publicMetadata?.role;
-    if (role === "admin") return router.push("/Admin/");
-    if (role === "staff") return router.push("/Staff/");
-
-    const emailFromClerk =
-      user.primaryEmailAddress?.emailAddress ||
-      user.emailAddresses[0]?.emailAddress ||
-      "";
-
-    const usernameFromClerk =
-      user.username ||
-      (user.firstName && user.lastName
-        ? `${user.firstName} ${user.lastName}`
-        : user.firstName || "");
-
-    setUserEmail(emailFromClerk);
-    setCurrentUserName(usernameFromClerk);
+    if (role === "admin") { router.push("/Admin/"); return; }
+    if (role === "staff") { router.push("/Staff/"); return; }
+    const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses[0]?.emailAddress || "";
+    setUserEmail(email);
   }, [user, isLoaded, router]);
 
+  /* ── Fetch meta ── */
+  useEffect(() => {
+    fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => { if (d?.statuses?.length > 0) setMetaStatuses(d.statuses); })
+      .catch(() => {});
+  }, []);
+
+  /* ── Fetch reports ── */
   useEffect(() => {
     if (!userEmail) return;
-
-    const fetchReportsForUser = async () => {
+    (async () => {
       try {
-        setLoadError("");
-        const res = await fetch(`${API_BASE}/api/reports`, {
-          cache: "no-store",
-        });
-
+        setIsLoading(true); setLoadError("");
+        const res  = await fetch(`${API_BASE}/api/reports`, { cache: "no-store" });
         const data = await res.json().catch(() => null);
-
-        if (!res.ok || !data) {
-          setLoadError("Failed to load reports.");
-          setReports([]);
-          return;
-        }
-
-        let list: Report[] = [];
-
-        if (Array.isArray(data)) list = data;
-        else if (Array.isArray(data.reports)) list = data.reports;
-        else if (Array.isArray(data.data)) list = data.data;
-
-        const filtered = list.filter(
-          (r) =>
-            r.email?.toLowerCase() === userEmail.toLowerCase() &&
-            r.status !== "Archived"
-        );
-
+        if (!res.ok || !data) { setLoadError("Failed to load reports."); setReports([]); return; }
+        const list: Report[] = Array.isArray(data) ? data : Array.isArray(data.reports) ? data.reports : Array.isArray(data.data) ? data.data : [];
+        const filtered = list.filter(r => r.email?.toLowerCase() === userEmail.toLowerCase() && r.status !== "Archived");
         setReports(filtered);
         setSelectedReport(filtered[0] || null);
         setCurrentPage(1);
-      } catch (err) {
-        setLoadError("Network error loading reports.");
-      }
-    };
-
-    fetchReportsForUser();
+      } catch { setLoadError("Network error loading reports."); }
+      finally { setIsLoading(false); }
+    })();
   }, [userEmail]);
 
-  const renderStatusPill = (statusRaw?: string) => {
-    const key = getStatusClassKey(statusRaw);
-    return <span className={`status-pill status-${key}`}>{statusRaw || "Pending"}</span>;
+  const getStatusColor = useCallback((name?: string) =>
+    metaStatuses.find(s => s.name === (name || "Pending"))?.color || "#6B7280"
+  , [metaStatuses]);
+
+  /* ── Follow up ── */
+  const handleFollowUp = async (report: Report) => {
+    if (followUpSending) return;
+    try {
+      setFollowUpSending(report._id);
+      const res  = await fetch(`${API_BASE}/api/reports/${report._id}/followup`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: report.reportId || report._id, email: report.email, heading: report.heading, by: userEmail }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.message || "Failed.");
+      showToast("Follow-up notification sent to staff!", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to send follow-up.", "error");
+    } finally { setFollowUpSending(null); }
   };
 
-  const renderDetailsContent = (report: Report) => (
-    <div className="report-details-panel">
-      <div className="details-header">
-        <h3>{report.heading || "Report details"}</h3>
+  /* ── Pagination ── */
+  const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PER_PAGE));
+  const startIdx   = (currentPage - 1) * REPORTS_PER_PAGE;
+  const paginated  = reports.slice(startIdx, startIdx + REPORTS_PER_PAGE);
 
-        
-      <div className="modal-img-wrapper">
+  /* ── Inline Progress Stepper ── */
+  const renderProgressStepper = (report: Report) => {
+    const flow     = buildStatusFlow(metaStatuses);
+    const timeline = buildTimeline(report);
+    const statusColor = getStatusColor(report.status);
+
+    return (
+      <div className="sr-progress-section">
+        {/* Compact horizontal stepper */}
+        <div className="sr-stepper">
+          {flow.map((step, idx) => {
+            const state = getStepState(step.name, report.status, metaStatuses);
+            const isLast = idx === flow.length - 1;
+            return (
+              <React.Fragment key={step.id}>
+                <div className={`sr-step sr-step--${state}`}>
+                  <div
+                    className="sr-step-circle"
+                    style={
+                      state === "completed" ? { backgroundColor: step.color, borderColor: step.color } :
+                      state === "active"    ? { borderColor: step.color, boxShadow: `0 0 0 3px ${step.color}30` } :
+                      {}
+                    }
+                  >
+                    {state === "completed" ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    ) : state === "active" ? (
+                      <div className="sr-step-dot" style={{ backgroundColor: step.color }} />
+                    ) : null}
+                  </div>
+                  <span
+                    className="sr-step-label"
+                    style={state !== "pending" ? { color: step.color, fontWeight: 700 } : {}}
+                  >
+                    {step.name}
+                  </span>
+                </div>
+                {!isLast && (
+                  <div
+                    className="sr-step-connector"
+                    style={{ backgroundColor: state === "completed" ? step.color : "#e5e7eb" }}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Timeline */}
+        {timeline.length > 0 && (
+          <div className="sr-timeline">
+            <p className="sr-timeline-title">History</p>
+            {timeline.map((entry, idx) => {
+              const color  = metaStatuses.find(s => s.name === entry.status)?.color || "#6b7280";
+              const isLast = idx === timeline.length - 1;
+              return (
+                <div key={idx} className="sr-timeline-item">
+                  <div className="sr-timeline-track">
+                    <div className="sr-timeline-dot" style={{ backgroundColor: color, boxShadow: `0 0 0 3px ${color}25` }} />
+                    {!isLast && <div className="sr-timeline-line" />}
+                  </div>
+                  <div className="sr-timeline-body">
+                    <div className="sr-timeline-row">
+                      <span className="sr-timeline-badge" style={{ backgroundColor: color + "20", color, border: `1px solid ${color}40` }}>
+                        {entry.status}
+                      </span>
+                      <span className="sr-timeline-time">{getRelativeTime(entry.at)}</span>
+                    </div>
+                    {entry.note && <p className="sr-timeline-note">{entry.note}</p>}
+                    {(entry.by || entry.at) && (
+                      <p className="sr-timeline-meta">
+                        {entry.by && `by ${entry.by}`}
+                        {entry.by && entry.at && " · "}
+                        {entry.at && new Date(entry.at).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  /* ── Details content ── */
+  const renderDetails = (report: Report) => (
+    <div className="sr-details">
+
+      {/* Top bar: status + actions */}
+      <div className="sr-details-topbar">
+        <div className="sr-status-pill" style={{ backgroundColor: getStatusColor(report.status) + "22", color: getStatusColor(report.status), border: `1px solid ${getStatusColor(report.status)}55` }}>
+          {report.status || "Pending"}
+        </div>
+        <div className="sr-details-actions">
+          <button
+            type="button"
+            className={`sr-followup-btn${followUpSending === report._id ? " sr-followup-btn--loading" : ""}`}
+            onClick={() => handleFollowUp(report)}
+            disabled={!!followUpSending}
+          >
+            <svg width="13" height="13" viewBox="0 0 448 512" fill="currentColor" style={{ flexShrink: 0 }}>
+              <path d="M224 0c-17.7 0-32 14.3-32 32V49.9C119.5 61.4 64 124.2 64 200v33.4c0 45.4-15.5 89.5-43.8 124.9L5.3 377c-5.8 7.2-6.9 17.1-2.9 25.4S14.8 416 24 416H424c9.2 0 17.6-5.3 21.6-13.6s2.9-18.2-2.9-25.4l-14.9-18.6C399.5 322.9 384 278.8 384 233.4V200c0-75.8-55.5-138.6-128-150.1V32c0-17.7-14.3-32-32-32zm0 96h8c57.4 0 104 46.6 104 104v33.4c0 47.9 13.9 94.6 39.7 134.6H72.3C98.1 328 112 281.3 112 233.4V200c0-57.4 46.6-104 104-104h8zm64 352H224 160c0 17 6.7 33.3 18.7 45.3s28.3 18.7 45.3 18.7s33.3-6.7 45.3-18.7s18.7-28.3 18.7-45.3z"/>
+            </svg>
+            {followUpSending === report._id ? "Sending…" : "Follow Up"}
+          </button>
+        </div>
+      </div>
+
+      {/* Image */}
+      <div className="sr-img-wrap">
         <img
           src={report.ImageFile || report.image || defaultImg}
           alt="Report"
-          className="report-img-clickable"
-          onClick={() =>
-            setFullscreenImage(report.ImageFile || report.image || defaultImg)
-          }
-          onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
+          className="sr-img"
+          onClick={() => setFullscreenImage(report.ImageFile || report.image || defaultImg)}
+          onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
         />
-      </div>
-      
-        {renderStatusPill(report.status)}
+        <span className="sr-img-hint">Click to enlarge</span>
       </div>
 
-      
-      <p className="modal-description">
-        {report.description || "No description provided."}
-      </p>
+      {/* Meta */}
+      <h3 className="sr-details-heading">{report.heading}</h3>
+      <p className="sr-details-desc">{report.description || "No description provided."}</p>
 
-      <div className="modal-meta-grid">
-        <p><strong>Building:</strong> {formatBuilding(report)}</p>
-        <p><strong>Concern:</strong> {formatConcern(report)}</p>
-        <p><strong>College:</strong> {report.college || "Unspecified"}</p>
-        <p><strong>Email:</strong> {report.email}</p>
-        <p>
-          <strong>Submitted:</strong>{" "}
-          {report.createdAt &&
-            new Date(report.createdAt).toLocaleString()}{" "}
-          {report.createdAt && `(${getRelativeTime(report.createdAt)})`}
-        </p>
+      <div className="sr-meta-grid">
+        <div className="sr-meta-item">
+          <span className="sr-meta-key">Building</span>
+          <span className="sr-meta-val">{formatBuilding(report)}</span>
+        </div>
+        <div className="sr-meta-item">
+          <span className="sr-meta-key">Concern</span>
+          <span className="sr-meta-val">{formatConcern(report)}</span>
+        </div>
+        <div className="sr-meta-item">
+          <span className="sr-meta-key">College</span>
+          <span className="sr-meta-val">{report.college || "—"}</span>
+        </div>
+        <div className="sr-meta-item">
+          <span className="sr-meta-key">Submitted</span>
+          <span className="sr-meta-val">{report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "—"} <span className="sr-meta-rel">({getRelativeTime(report.createdAt)})</span></span>
+        </div>
       </div>
 
+      {/* ── INLINE PROGRESS (always visible) ── */}
+      {renderProgressStepper(report)}
 
-      <div className="comments-section comments-section--static">
-        <h3>Comments</h3>
-
-        {Array.isArray(report.comments) && report.comments.length > 0 ? (
-          <ul className="comments-list">
+      {/* Comments (read-only) */}
+      <div className="sr-comments">
+        <div className="sr-comments-header">
+          <span className="sr-comments-title">Staff Comments</span>
+          {(report.comments?.length || 0) > 0 && (
+            <span className="sr-comments-count">{report.comments!.length}</span>
+          )}
+        </div>
+        {report.comments && report.comments.length > 0 ? (
+          <ul className="sr-comments-list">
             {report.comments.map((c, idx) => (
-              <li key={idx} className="comment-item">
-                <p className="comment-text">{c.text || c.comment}</p>
-                <div>
-                  {c.at && (
-                    <span className="comment-date">
-                      {new Date(c.at).toLocaleString()}{" "}
-                    </span>
-                  )}
-                  {c.by && <span className="comment-date">by {c.by}</span>}
+              <li key={idx} className="sr-comment">
+                <p className="sr-comment-text">{c.text || c.comment}</p>
+                <div className="sr-comment-meta">
+                  {c.by && <span className="sr-comment-by">{c.by}</span>}
+                  {c.at && <span className="sr-comment-time">{new Date(c.at).toLocaleString()}</span>}
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="no-comments">No comments yet.</p>
+          <p className="sr-comments-empty">No comments yet. Staff will update you here.</p>
         )}
       </div>
     </div>
   );
 
-  const totalPages = Math.max(1, Math.ceil(reports.length / REPORTS_PER_PAGE));
-  const startIndex = (currentPage - 1) * REPORTS_PER_PAGE;
-  const paginatedReports = reports.slice(startIndex, startIndex + REPORTS_PER_PAGE);
-
+  /* ══════════════════════════════════════════════════════════ */
   return (
     <>
-      <div className="report-wrapper">
-        <div className="header">
+      <div className="sr-wrapper">
+
+        {/* ── Page header ── */}
+        <div className="sr-header">
           <div>
-            <h1>My reports</h1>
-            <p className="header-subtitle">
-              View all issues you have submitted.
-            </p>
+            <h1 className="sr-title">My Reports</h1>
+            <p className="sr-subtitle">Track all your submitted facility reports.</p>
           </div>
-
-  <div className="header-actions">
-  <a href="/Student/CreateReport" className="create-report-btn">
-    <span className="btn-long">+ Create</span>
-    <span className="btn-short">+ Create Report</span>
-  </a>
-</div>
-
+          <a href="/Student/CreateReport" className="sr-create-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            New Report
+          </a>
         </div>
 
-        {!isLoaded && <p>Loading...</p>}
+        {/* ── States ── */}
+        {!isLoaded && (
+          <div className="sr-shimmer-grid">
+            {[...Array(4)].map((_, i) => <div key={i} className="sr-shimmer" />)}
+          </div>
+        )}
 
         {loadError && (
-          <div className="load-error-banner">
+          <div className="sr-error">
             {loadError}
-            <button onClick={() => userEmail && location.reload()}>Retry</button>
+            <button type="button" onClick={() => userEmail && location.reload()}>Retry</button>
+          </div>
+        )}
+
+        {isLoaded && !loadError && reports.length === 0 && (
+          <div className="sr-empty">
+            <svg viewBox="0 0 64 64" fill="none" width="56" height="56">
+              <rect x="8" y="8" width="48" height="48" rx="10" stroke="currentColor" strokeWidth="1.5" opacity="0.2"/>
+              <path d="M22 32h20M32 22v20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.35"/>
+            </svg>
+            <p>No reports yet</p>
+            <span>Submit your first facility issue to get started.</span>
+            <a href="/Student/CreateReport" className="sr-create-btn" style={{ marginTop: 12 }}>+ Create Report</a>
           </div>
         )}
 
         {reports.length > 0 && (
-          <div className="reports-two-column">
-            {/* LEFT LIST */}
-            <div className="reports-list-column">
-              <div className="reports-list">
-                {paginatedReports.map((report) => {
-                  const isActive =
-                    selectedReport && selectedReport._id === report._id;
+          <div className="sr-layout">
 
-                  const latestComment =
-                    report.comments?.[report.comments.length - 1] || null;
+            {/* ── LEFT: Report list ── */}
+            <div className="sr-list-col">
+              {paginated.map(report => {
+                const isActive    = selectedReport?._id === report._id;
+                const color       = getStatusColor(report.status);
+                const latest      = report.comments?.[report.comments.length - 1];
+                const flow        = buildStatusFlow(metaStatuses);
+                const currentIdx  = flow.findIndex(s => s.name === (report.status || "Pending"));
+                const progress    = flow.length > 1 ? Math.round(((currentIdx < 0 ? 0 : currentIdx) / (flow.length - 1)) * 100) : 0;
 
-                  return (
-                    <div
-                      key={report._id}
-                      className={`report ${isActive ? "report--active" : ""}`}
-                      onClick={() => {
-                        setSelectedReport(report);
-                        if (isMobile) window.scrollTo({ top: 0, behavior: "smooth" });
-                      }}
-                    >
-                      <div className="report-img-container">
+                return (
+                  <div
+                    key={report._id}
+                    className={`sr-card${isActive ? " sr-card--active" : ""}`}
+                    style={isActive ? { borderColor: color, boxShadow: `0 0 0 2px ${color}30` } : {}}
+                    onClick={() => { setSelectedReport(report); if (isMobile) window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                  >
+                    {/* Color stripe */}
+                    <div className="sr-card-stripe" style={{ backgroundColor: color }} />
+
+                    <div className="sr-card-inner">
+                      {/* Image */}
+                      <div className="sr-card-img-wrap">
                         <img
                           src={report.ImageFile || report.image || defaultImg}
-                          alt="Report"
-                          className="report-img"
-                          onError={(e) =>
-                            ((e.target as HTMLImageElement).src = defaultImg)
-                          }
+                          alt="Report" className="sr-card-img"
+                          onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
                         />
                       </div>
 
-                      <div className="report-body">
-                        <div className="report-header-row">
-                          <h3>{report.heading || "Untitled report"}</h3>
+                      {/* Body */}
+                      <div className="sr-card-body">
+                        <div className="sr-card-head">
+                          <h3 className="sr-card-title">{report.heading || "Untitled report"}</h3>
+                          <span className="sr-card-pill" style={{ backgroundColor: color + "20", color, border: `1px solid ${color}40` }}>
+                            {report.status || "Pending"}
+                          </span>
                         </div>
 
-                        <div
-                          className={`status-focus-row status-focus-${getStatusClassKey(
-                            report.status
-                          )}`}
-                        >
-                          <span className="status-focus-label">Status</span>
-                          {renderStatusPill(report.status)}
+                        {report.reportId && <p className="sr-card-id">#{report.reportId}</p>}
+
+                        <p className="sr-card-desc">{report.description || "No description."}</p>
+
+                        <div className="sr-card-info">
+                          <span>{formatBuilding(report)}</span>
+                          <span className="sr-card-sep">·</span>
+                          <span>{formatConcern(report)}</span>
                         </div>
 
-                        <p className="report-description">
-                          {report.description || "No description provided."}
-                        </p>
-
-                        <div className="report-info">
-                          <p><strong>Building:</strong> {formatBuilding(report)}</p>
-                          <p><strong>Concern:</strong> {formatConcern(report)}</p>
-                          <p><strong>College:</strong> {report.college}</p>
+                        {/* Mini progress bar */}
+                        <div className="sr-card-progress">
+                          <div className="sr-card-progress-track">
+                            <div
+                              className="sr-card-progress-fill"
+                              style={{ width: `${progress}%`, backgroundColor: color }}
+                            />
+                          </div>
+                          <span className="sr-card-progress-label" style={{ color }}>
+                            {progress === 100 ? "Done" : `${progress}%`}
+                          </span>
                         </div>
 
-                        <p className="submitted-date">
-                          {report.createdAt &&
-                            new Date(report.createdAt).toLocaleDateString()}{" "}
-                          {report.createdAt &&
-                            `(${getRelativeTime(report.createdAt)})`}
-                        </p>
-
-                        {latestComment && (
-                          <p className="report-comment-preview">
-                            <strong>Latest comment:</strong>{" "}
-                            {latestComment.text || latestComment.comment}
-                          </p>
-                        )}
+                        <div className="sr-card-footer">
+                          <span className="sr-card-time">{getRelativeTime(report.createdAt)}</span>
+                          {latest && (
+                            <span className="sr-card-latest">
+                              {latest.text || latest.comment}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
 
-              {/* PAGINATION */}
+              {/* Pagination */}
               {totalPages > 1 && (
-                <div className="pagination">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    Previous
-                  </button>
-
+                <div className="sr-pagination">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>‹</button>
                   {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i}
-                      className={`page-btn ${currentPage === i + 1 ? "active" : ""}`}
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </button>
+                    <button key={i} className={currentPage === i + 1 ? "active" : ""} onClick={() => setCurrentPage(i + 1)}>{i + 1}</button>
                   ))}
-
-                  <button
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                  >
-                    Next
-                  </button>
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>›</button>
                 </div>
               )}
             </div>
 
-            {/* RIGHT DETAILS (DESKTOP) */}
+            {/* ── RIGHT: Detail panel (desktop) ── */}
             {!isMobile && selectedReport && (
-              <div className="report-details-column">
-                <h2 className="column-title">Details and comments</h2>
-                {renderDetailsContent(selectedReport)}
+              <div className="sr-detail-col">
+                {renderDetails(selectedReport)}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* MOBILE MODAL */}
+      {/* ── MOBILE DETAIL MODAL ── */}
       {isMobile && selectedReport && (
-        <div
-          className="report-modal-backdrop"
-          onClick={() => setSelectedReport(null)}
-        >
-          <div className="report-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedReport.heading}</h2>
-              <button
-                className="modal-close-btn"
-                onClick={() => setSelectedReport(null)}
-              >
-                ×
-              </button>
+        <div className="sr-modal-backdrop" onClick={() => setSelectedReport(null)}>
+          <div className="sr-modal" onClick={e => e.stopPropagation()}>
+            <div className="sr-modal-header">
+              <div>
+                <h2 className="sr-modal-title">{selectedReport.heading}</h2>
+                {selectedReport.reportId && <span className="sr-modal-id">#{selectedReport.reportId}</span>}
+              </div>
+              <button className="sr-modal-close" onClick={() => setSelectedReport(null)}>✕</button>
             </div>
-
-            <div className="modal-content">
-              <div className="modal-img-wrapper">
-                <img
-                  src={
-                    selectedReport.ImageFile ||
-                    selectedReport.image ||
-                    defaultImg
-                  }
-                  alt="Report"
-                  className="report-img-clickable"
-                  onClick={() =>
-                    setFullscreenImage(
-                      selectedReport.ImageFile ||
-                        selectedReport.image ||
-                        defaultImg
-                    )
-                  }
-                  onError={(e) => ((e.target as HTMLImageElement).src = defaultImg)}
-                />
-              </div>
-
-              <div className="modal-info">
-                <div className="status-panel">
-                  <div className="status-panel-header">
-                    <span className="status-panel-title">Current status</span>
-                    {renderStatusPill(selectedReport.status)}
-                  </div>
-                  <div className="status-row-inline">
-                    <span className="status-row-label">
-                      Submitted {getRelativeTime(selectedReport.createdAt)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="modal-description">
-                  {selectedReport.description || "No description provided."}
-                </p>
-
-                <div className="modal-meta-grid">
-                  <p><strong>Building:</strong> {formatBuilding(selectedReport)}</p>
-                  <p><strong>Concern:</strong> {formatConcern(selectedReport)}</p>
-                  <p><strong>College:</strong> {selectedReport.college}</p>
-                  <p><strong>Email:</strong> {selectedReport.email}</p>
-                </div>
-
-                <div className="comments-section comments-section--static">
-                  <h3>Comments</h3>
-
-                  {selectedReport.comments?.length ? (
-                    <ul className="comments-list">
-                      {selectedReport.comments.map((c, idx) => (
-                        <li key={idx} className="comment-item">
-                          <p className="comment-text">
-                            {c.text || c.comment}
-                          </p>
-                          <div>
-                            {c.at && (
-                              <span className="comment-date">
-                                {new Date(c.at).toLocaleString()}{" "}
-                              </span>
-                            )}
-                            {c.by && <span className="comment-date">by {c.by}</span>}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="no-comments">No comments yet.</p>
-                  )}
-                </div>
-              </div>
+            <div className="sr-modal-body">
+              {renderDetails(selectedReport)}
             </div>
           </div>
         </div>
       )}
 
-      {/* FULLSCREEN IMAGE OVERLAY (DESKTOP + MOBILE) */}
+      {/* ── FULLSCREEN IMAGE ── */}
       {fullscreenImage && (
-        <div
-          className="image-fullscreen-backdrop"
-          onClick={() => setFullscreenImage(null)}
-        >
-          <img
-            src={fullscreenImage}
-            className="image-fullscreen-img"
-            onClick={(e) => e.stopPropagation()}
-          />
+        <div className="sr-fullscreen" onClick={() => setFullscreenImage(null)}>
+          <img src={fullscreenImage} className="sr-fullscreen-img" onClick={e => e.stopPropagation()} />
+          <button className="sr-fullscreen-close" onClick={() => setFullscreenImage(null)}>✕</button>
         </div>
+      )}
+
+      {/* ── TOASTS ── */}
+      {mounted && createPortal(
+        <div className="sr-toast-container" aria-live="polite">
+          {toasts.map(t => (
+            <div key={t.id} className={`sr-toast sr-toast--${t.type}`}>
+              <span>{t.message}</span>
+              <button type="button" onClick={() => dismissToast(t.id)}>✕</button>
+            </div>
+          ))}
+        </div>, document.body
       )}
     </>
   );

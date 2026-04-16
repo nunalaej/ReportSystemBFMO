@@ -266,6 +266,60 @@ if (status && status !== oldStatus) {
   }
 });
 
+
+router.post("/:id/followup", async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id).lean();
+    if (!report) return res.status(404).json({ success: false, message: "Report not found." });
+ 
+    const { reportId, email, heading, by } = req.body;
+ 
+    // ── Option A: store in a Notifications collection ──────────────────
+    // Uncomment if you have a Notification model
+    /*
+    const Notification = require("../models/Notification");
+    await Notification.create({
+      type:      "followup",
+      message:   `Follow-up requested for report #${reportId || report.reportId} — "${heading || report.heading}" by ${by || email || "reporter"}.`,
+      reportId:  report._id,
+      createdAt: new Date(),
+      read:      false,
+    });
+    */
+ 
+    // ── Option B: push a comment to the report as a system note ────────
+    // This surfaces the follow-up in the existing comments timeline.
+    const followupNote = {
+      text: `🔔 Follow-up requested by reporter (${by || email || "unknown"}).`,
+      at:   new Date(),
+      by:   "System",
+    };
+ 
+    await Report.findByIdAndUpdate(req.params.id, {
+      $push: { comments: followupNote },
+    });
+ 
+    // ── Option C (recommended): emit a socket event if you use Socket.IO
+    /*
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("followup-notification", {
+        type:      "followup",
+        message:   `Follow-up requested for report #${reportId || report.reportId} — "${heading || report.heading}".`,
+        reportId:  report._id.toString(),
+        timestamp: new Date().toISOString(),
+      });
+    }
+    */
+ 
+    return res.json({ success: true, message: "Follow-up notification sent." });
+  } catch (err) {
+    console.error("POST /reports/:id/followup error:", err);
+    return res.status(500).json({ success: false, message: "Failed to send follow-up." });
+  }
+});
+
+
 /* ============================================================
    ADD COMMENT
    POST /api/reports/:id/comments
