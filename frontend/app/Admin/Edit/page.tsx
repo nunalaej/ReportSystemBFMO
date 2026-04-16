@@ -43,7 +43,18 @@ type BuildingMeta  = { id: string; name: string; floors: number; roomsPerFloor: 
 type ConcernMeta   = { id: string; label: string; subconcerns: string[]; };
 type StatusMeta    = { id: string; name: string; color: string; };
 type PriorityMeta  = { id: string; name: string; color: string; notifyInterval?: string; };
-type StaffMember   = { _id?: string; name: string; email: string; phone?: string; position: string; disciplines: string[]; active: boolean; notes?: string; };
+type StaffMember   = {
+  _id?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  position: string;
+  disciplines: string[];
+  active: boolean;
+  notes?: string;
+  clerkUsername?: string;
+  clerkId?: string;
+};
 
 /* ─────────────────────────── Constants ──────────────────────── */
 const POSITION_OPTIONS = ["Head Engineer", "Staff Engineer", "Supervisor", "Technician", "Other"];
@@ -56,7 +67,12 @@ const POSITION_COLORS: Record<string, { bg: string; text: string }> = {
   "Other":          { bg: "#f1f5f9", text: "#475569" },
 };
 
-const EMPTY_STAFF: Omit<StaffMember, "_id"> = { name: "", email: "", phone: "", position: "Staff Engineer", disciplines: [], active: true, notes: "" };
+const EMPTY_STAFF: Omit<StaffMember, "_id"> = {
+  name: "", email: "", phone: "",
+  position: "Staff Engineer",
+  disciplines: [], active: true, notes: "",
+  clerkUsername: "",
+};
 
 const DEFAULT_BUILDINGS: BuildingMeta[] = [
   { id: "ayuntamiento", name: "Ayuntamiento", floors: 4, roomsPerFloor: 20, hasRooms: false },
@@ -265,15 +281,21 @@ export default function AdminEditPage() {
   const [newPriDraft,    setNewPriDraft]    = useState<PriorityMeta>({ id: "", name: "", color: "#6C757D", notifyInterval: "1month" });
 
   /* ── Staff state ── */
-  const [staffList,       setStaffList]       = useState<StaffMember[]>([]);
-  const [staffLoading,    setStaffLoading]    = useState(false);
-  const [staffError,      setStaffError]      = useState("");
-  const [staffSaving,     setStaffSaving]     = useState(false);
-  const [discFilter,      setDiscFilter]      = useState("All");
-  const [showAddStaff,    setShowAddStaff]    = useState(false);
-  const [newStaff,        setNewStaff]        = useState<Omit<StaffMember, "_id">>(EMPTY_STAFF);
-  const [editStaffId,     setEditStaffId]     = useState<string | null>(null);
-  const [editStaffDraft,  setEditStaffDraft]  = useState<StaffMember | null>(null);
+  const [staffList,      setStaffList]      = useState<StaffMember[]>([]);
+  const [staffLoading,   setStaffLoading]   = useState(false);
+  const [staffError,     setStaffError]     = useState("");
+  const [staffSaving,    setStaffSaving]    = useState(false);
+  const [discFilter,     setDiscFilter]     = useState("All");
+  const [showAddStaff,   setShowAddStaff]   = useState(false);
+  const [newStaff,       setNewStaff]       = useState<Omit<StaffMember, "_id">>(EMPTY_STAFF);
+  const [editStaffId,    setEditStaffId]    = useState<string | null>(null);
+  const [editStaffDraft, setEditStaffDraft] = useState<StaffMember | null>(null);
+
+  /* ── Clerk account creation state ── */
+  const [clerkCreating, setClerkCreating] = useState(false);
+  const [clerkResult,   setClerkResult]   = useState<{ success: boolean; message: string } | null>(null);
+  const [newClerkPw,    setNewClerkPw]    = useState("");
+  const [showClerkForm, setShowClerkForm] = useState<string | null>(null);
 
   /* Discipline options = concern labels (excluding "Other") */
   const disciplineOptions = useMemo(
@@ -380,9 +402,9 @@ export default function AdminEditPage() {
   const selStatus   = useMemo(() => statuses.find(s  => s.id === selStatusId),   [statuses,  selStatusId]);
 
   /* ── Building handlers ── */
-  const setBName = (v: string)  => setBuildings(p => p.map(b => b.id === selBuildingId ? { ...b, name: v } : b));
-  const toggleHasRooms = ()     => setBuildings(p => p.map(b => b.id === selBuildingId ? { ...b, hasRooms: b.hasRooms === false } : b));
-  const setFloors = (v: string) => {
+  const setBName       = (v: string) => setBuildings(p => p.map(b => b.id === selBuildingId ? { ...b, name: v } : b));
+  const toggleHasRooms = ()          => setBuildings(p => p.map(b => b.id === selBuildingId ? { ...b, hasRooms: b.hasRooms === false } : b));
+  const setFloors      = (v: string) => {
     const fl = Math.min(Math.max(parseInt(v, 10) || 1, 1), 20);
     setBuildings(p => p.map(b => b.id !== selBuildingId ? b : { ...b, floors: fl, roomsPerFloor: normaliseRPF(normaliseRPF(b.roomsPerFloor, b.floors), fl) }));
   };
@@ -403,8 +425,8 @@ export default function AdminEditPage() {
   };
 
   /* ── Concern handlers ── */
-  const setCLabel = (v: string) => setConcerns(p => p.map(c => c.id === selConcernId ? { ...c, label: v } : c));
-  const addConcern = () => {
+  const setCLabel    = (v: string) => setConcerns(p => p.map(c => c.id === selConcernId ? { ...c, label: v } : c));
+  const addConcern   = () => {
     const nc: ConcernMeta = { id: `c-${Date.now()}`, label: "New Concern", subconcerns: [] };
     setConcerns(p => [...p, nc]); setSelConcernId(nc.id);
     addNotification(`Concern "${nc.label}" was added.`, "concern");
@@ -503,6 +525,38 @@ export default function AdminEditPage() {
       addNotification(`Staff "${m.name}" removed.`, "staff");
     } catch { setStaffError("Failed to delete."); }
     finally { setStaffSaving(false); }
+  };
+
+  /* ── Clerk account creation ── */
+  const createClerkAccount = async (member: StaffMember) => {
+    if (!member.clerkUsername?.trim() || !newClerkPw.trim()) {
+      setClerkResult({ success: false, message: "Username and password are required." });
+      return;
+    }
+    try {
+      setClerkCreating(true);
+      setClerkResult(null);
+      const res  = await fetch(`${API_BASE}/api/staff/create-clerk`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          staffId:  member._id,
+          username: member.clerkUsername.trim(),
+          password: newClerkPw.trim(),
+          name:     member.name,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to create account.");
+      setClerkResult({ success: true, message: `Account "${member.clerkUsername}" created successfully!` });
+      setNewClerkPw("");
+      setShowClerkForm(null);
+      loadStaff();
+    } catch (err: any) {
+      setClerkResult({ success: false, message: err.message || "Failed." });
+    } finally {
+      setClerkCreating(false);
+    }
   };
 
   const filteredStaff = staffList.filter(s => discFilter === "All" || s.disciplines.includes(discFilter));
@@ -763,16 +817,13 @@ export default function AdminEditPage() {
               </div>
             </Panel>
 
-            {/* ══════════════════════════════════════════════════════
-                STAFF MANAGEMENT
-            ══════════════════════════════════════════════════════ */}
+            {/* ══ STAFF MANAGEMENT ══ */}
             <Panel title="Staff Management" subtitle="Configure engineers and technicians — assign disciplines and positions" badge={staffList.length}>
 
               {staffError && <div className="admin-edit__alert admin-edit__alert--error" style={{ marginBottom: 12 }}>{staffError}</div>}
 
-              {/* ── Top bar ── */}
+              {/* Top bar */}
               <div className="staff-topbar">
-                {/* Discipline filter tabs */}
                 <div className="staff-disc-tabs">
                   {["All", ...disciplineOptions].map(d => (
                     <button key={d} type="button"
@@ -786,7 +837,7 @@ export default function AdminEditPage() {
                 </button>
               </div>
 
-              {/* ── Add form ── */}
+              {/* Add form */}
               {showAddStaff && (
                 <div className="staff-form-card">
                   <p className="staff-form-card-title">New Staff Member</p>
@@ -844,7 +895,7 @@ export default function AdminEditPage() {
                 </div>
               )}
 
-              {/* ── Staff list ── */}
+              {/* Staff list */}
               {staffLoading ? <p className="admin-edit__loading">Loading staff…</p> : (
                 <div className="staff-list">
                   {filteredStaff.length === 0 && (
@@ -856,104 +907,198 @@ export default function AdminEditPage() {
                       <p>{discFilter === "All" ? 'No staff yet. Click "Add Staff" to get started.' : `No ${discFilter} engineers assigned.`}</p>
                     </div>
                   )}
+
                   {filteredStaff.map(member => {
-                    const isEditing  = editStaffId === member._id;
-                    const posStyle   = POSITION_COLORS[member.position] || POSITION_COLORS["Other"];
-                    const initials   = member.name.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("");
+                    const isEditing = editStaffId === member._id;
+                    const posStyle  = POSITION_COLORS[member.position] || POSITION_COLORS["Other"];
+                    const initials  = member.name.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("");
                     return (
-                      <div key={member._id} className={`staff-card${isEditing ? " staff-card--editing" : ""}${!member.active ? " staff-card--inactive" : ""}`}>
-                        {isEditing && editStaffDraft ? (
-                          /* ── Edit form ── */
-                          <div className="staff-edit-body">
-                            <div className="staff-form-grid">
-                              <div className="admin-edit__field-group">
-                                <label className="admin-edit__label">Full Name</label>
-                                <input type="text" className="admin-edit__input" value={editStaffDraft.name}
-                                  onChange={e => setEditStaffDraft(d => d ? { ...d, name: e.target.value } : d)}/>
+                      <div key={member._id}>
+
+                        {/* ── Staff card ── */}
+                        <div className={`staff-card${isEditing ? " staff-card--editing" : ""}${!member.active ? " staff-card--inactive" : ""}`}>
+                          {isEditing && editStaffDraft ? (
+                            /* Edit form */
+                            <div className="staff-edit-body">
+                              <div className="staff-form-grid">
+                                <div className="admin-edit__field-group">
+                                  <label className="admin-edit__label">Full Name</label>
+                                  <input type="text" className="admin-edit__input" value={editStaffDraft.name}
+                                    onChange={e => setEditStaffDraft(d => d ? { ...d, name: e.target.value } : d)}/>
+                                </div>
+                                <div className="admin-edit__field-group">
+                                  <label className="admin-edit__label">Email</label>
+                                  <input type="email" className="admin-edit__input" value={editStaffDraft.email}
+                                    onChange={e => setEditStaffDraft(d => d ? { ...d, email: e.target.value } : d)}/>
+                                </div>
+                                <div className="admin-edit__field-group">
+                                  <label className="admin-edit__label">Position</label>
+                                  <select className="admin-edit__input" value={editStaffDraft.position}
+                                    onChange={e => setEditStaffDraft(d => d ? { ...d, position: e.target.value } : d)}>
+                                    {POSITION_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                                  </select>
+                                </div>
+                                <div className="admin-edit__field-group">
+                                  <label className="admin-edit__label">Phone</label>
+                                  <input type="text" className="admin-edit__input" value={editStaffDraft.phone || ""}
+                                    onChange={e => setEditStaffDraft(d => d ? { ...d, phone: e.target.value } : d)}/>
+                                </div>
                               </div>
-                              <div className="admin-edit__field-group">
-                                <label className="admin-edit__label">Email</label>
-                                <input type="email" className="admin-edit__input" value={editStaffDraft.email}
-                                  onChange={e => setEditStaffDraft(d => d ? { ...d, email: e.target.value } : d)}/>
+                              <div className="admin-edit__field-group" style={{ marginTop: 10 }}>
+                                <label className="admin-edit__label">Disciplines</label>
+                                <div className="staff-chips">
+                                  {disciplineOptions.map(d => {
+                                    const on = editStaffDraft.disciplines.includes(d);
+                                    return (
+                                      <button key={d} type="button" className={`staff-chip${on ? " staff-chip--on" : ""}`}
+                                        onClick={() => toggleDisc(d, editStaffDraft.disciplines, setEditStaffDraft)}>
+                                        {on && <IconCheck/>}{d}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
-                              <div className="admin-edit__field-group">
-                                <label className="admin-edit__label">Position</label>
-                                <select className="admin-edit__input" value={editStaffDraft.position}
-                                  onChange={e => setEditStaffDraft(d => d ? { ...d, position: e.target.value } : d)}>
-                                  {POSITION_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                                </select>
+                              <div className="admin-edit__field-group" style={{ marginTop: 8 }}>
+                                <label className="admin-edit__label">Notes</label>
+                                <input type="text" className="admin-edit__input" value={editStaffDraft.notes || ""}
+                                  onChange={e => setEditStaffDraft(d => d ? { ...d, notes: e.target.value } : d)}/>
                               </div>
-                              <div className="admin-edit__field-group">
-                                <label className="admin-edit__label">Phone</label>
-                                <input type="text" className="admin-edit__input" value={editStaffDraft.phone || ""}
-                                  onChange={e => setEditStaffDraft(d => d ? { ...d, phone: e.target.value } : d)}/>
+                              <label className="admin-edit__switch" style={{ marginTop: 10 }}>
+                                <input type="checkbox" checked={editStaffDraft.active}
+                                  onChange={() => setEditStaffDraft(d => d ? { ...d, active: !d.active } : d)}/>
+                                <span className="admin-edit__switch-pill"><span className="admin-edit__switch-knob"/></span>
+                                <span className="admin-edit__switch-text">{editStaffDraft.active ? "Active" : "Inactive"}</span>
+                              </label>
+                              <div className="staff-form-actions">
+                                <button type="button" className="btn btn-secondary btn-sm"
+                                  onClick={() => { setEditStaffId(null); setEditStaffDraft(null); }} disabled={staffSaving}>Cancel</button>
+                                <button type="button" className="btn btn-primary btn-sm" onClick={saveStaff}
+                                  disabled={staffSaving || !editStaffDraft.name.trim()}>
+                                  {staffSaving ? "Saving…" : "Save Changes"}
+                                </button>
                               </div>
                             </div>
-                            <div className="admin-edit__field-group" style={{ marginTop: 10 }}>
-                              <label className="admin-edit__label">Disciplines</label>
-                              <div className="staff-chips">
-                                {disciplineOptions.map(d => {
-                                  const on = editStaffDraft.disciplines.includes(d);
-                                  return (
-                                    <button key={d} type="button" className={`staff-chip${on ? " staff-chip--on" : ""}`}
-                                      onClick={() => toggleDisc(d, editStaffDraft.disciplines, setEditStaffDraft)}>
-                                      {on && <IconCheck/>}{d}
-                                    </button>
-                                  );
-                                })}
+                          ) : (
+                            /* Display row */
+                            <div className="staff-row">
+                              <div className="staff-avatar">{initials}</div>
+                              <div className="staff-info">
+                                <div className="staff-info-top">
+                                  <span className="staff-name">{member.name}</span>
+                                  <span className="staff-pos-badge" style={{ backgroundColor: posStyle.bg, color: posStyle.text }}>
+                                    {member.position}
+                                  </span>
+                                  {!member.active && <span className="staff-inactive-tag">Inactive</span>}
+                                  {member.clerkId && (
+                                    <span style={{ fontSize: 11, background: "#dcfce7", color: "#166534", borderRadius: 4, padding: "2px 6px" }}>
+                                      ✓ Clerk linked
+                                    </span>
+                                  )}
+                                </div>
+                                {member.email && <span className="staff-email">{member.email}</span>}
+                                <div className="staff-disc-pills">
+                                  {member.disciplines.length === 0
+                                    ? <span className="staff-no-disc">No disciplines</span>
+                                    : member.disciplines.map(d => <span key={d} className="staff-disc-pill">{d}</span>)
+                                  }
+                                </div>
+                                {member.notes && <span className="staff-notes">{member.notes}</span>}
+                              </div>
+                              <div className="staff-row-btns">
+                                {/* Create Clerk Account button */}
+                                <button
+                                  type="button"
+                                  className="admin-edit__icon-btn admin-edit__icon-btn--clerk"
+                                  title={member.clerkId ? "Clerk account linked" : "Create Clerk account"}
+                                  onClick={() => {
+                                    setShowClerkForm(showClerkForm === member._id ? null : (member._id || null));
+                                    setClerkResult(null);
+                                    setNewClerkPw("");
+                                    setEditStaffDraft({ ...member, clerkUsername: member.clerkUsername || member.name.toLowerCase().replace(/\s+/g, "") });
+                                  }}
+                                >
+                                  {member.clerkId ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                      <circle cx="12" cy="7" r="4"/>
+                                      <polyline points="16 11 18 13 22 9"/>
+                                    </svg>
+                                  ) : (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                      <circle cx="12" cy="7" r="4"/>
+                                      <line x1="12" y1="11" x2="12" y2="17"/>
+                                      <line x1="9" y1="14" x2="15" y2="14"/>
+                                    </svg>
+                                  )}
+                                </button>
+                                <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
+                                  onClick={() => { setEditStaffId(member._id || ""); setEditStaffDraft({ ...member }); setShowAddStaff(false); setShowClerkForm(null); }}
+                                  title="Edit"><IconPencil/></button>
+                                <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                                  onClick={() => deleteStaff(member)} title="Remove"><IconTrash/></button>
                               </div>
                             </div>
-                            <div className="admin-edit__field-group" style={{ marginTop: 8 }}>
-                              <label className="admin-edit__label">Notes</label>
-                              <input type="text" className="admin-edit__input" value={editStaffDraft.notes || ""}
-                                onChange={e => setEditStaffDraft(d => d ? { ...d, notes: e.target.value } : d)}/>
-                            </div>
-                            <label className="admin-edit__switch" style={{ marginTop: 10 }}>
-                              <input type="checkbox" checked={editStaffDraft.active}
-                                onChange={() => setEditStaffDraft(d => d ? { ...d, active: !d.active } : d)}/>
-                              <span className="admin-edit__switch-pill"><span className="admin-edit__switch-knob"/></span>
-                              <span className="admin-edit__switch-text">{editStaffDraft.active ? "Active" : "Inactive"}</span>
-                            </label>
-                            <div className="staff-form-actions">
-                              <button type="button" className="btn btn-secondary btn-sm"
-                                onClick={() => { setEditStaffId(null); setEditStaffDraft(null); }} disabled={staffSaving}>Cancel</button>
-                              <button type="button" className="btn btn-primary btn-sm" onClick={saveStaff}
-                                disabled={staffSaving || !editStaffDraft.name.trim()}>
-                                {staffSaving ? "Saving…" : "Save Changes"}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          /* ── Display row ── */
-                          <div className="staff-row">
-                            <div className="staff-avatar">{initials}</div>
-                            <div className="staff-info">
-                              <div className="staff-info-top">
-                                <span className="staff-name">{member.name}</span>
-                                <span className="staff-pos-badge" style={{ backgroundColor: posStyle.bg, color: posStyle.text }}>
-                                  {member.position}
-                                </span>
-                                {!member.active && <span className="staff-inactive-tag">Inactive</span>}
-                              </div>
-                              {member.email && <span className="staff-email">{member.email}</span>}
-                              <div className="staff-disc-pills">
-                                {member.disciplines.length === 0
-                                  ? <span className="staff-no-disc">No disciplines</span>
-                                  : member.disciplines.map(d => <span key={d} className="staff-disc-pill">{d}</span>)
-                                }
-                              </div>
-                              {member.notes && <span className="staff-notes">{member.notes}</span>}
-                            </div>
-                            <div className="staff-row-btns">
-                              <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
-                                onClick={() => { setEditStaffId(member._id || ""); setEditStaffDraft({ ...member }); setShowAddStaff(false); }}
-                                title="Edit"><IconPencil/></button>
-                              <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
-                                onClick={() => deleteStaff(member)} title="Remove"><IconTrash/></button>
-                            </div>
+                          )}
+                        </div>
+
+                        {/* ── Clerk Account Creation Form — inside map, has access to `member` ── */}
+                        {showClerkForm === member._id && (
+                          <div className="staff-clerk-form">
+                            <p className="staff-clerk-form-title">
+                              {member.clerkId ? "✓ Clerk account already linked" : "Create Clerk Login Account"}
+                            </p>
+                            {!member.clerkId ? (
+                              <>
+                                <div className="staff-clerk-fields">
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Username</label>
+                                    <input
+                                      type="text"
+                                      className="admin-edit__input"
+                                      placeholder="e.g. jdoe_bfmo"
+                                      value={editStaffDraft?.clerkUsername || ""}
+                                      onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value } : d)}
+                                    />
+                                    <span className="admin-edit__label-hint">Staff will use this username to log in</span>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Password</label>
+                                    <input
+                                      type="password"
+                                      className="admin-edit__input"
+                                      placeholder="Min 8 characters"
+                                      value={newClerkPw}
+                                      onChange={e => setNewClerkPw(e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                                {clerkResult && (
+                                  <div className={`staff-clerk-result${clerkResult.success ? " staff-clerk-result--ok" : " staff-clerk-result--err"}`}>
+                                    {clerkResult.message}
+                                  </div>
+                                )}
+                                <div className="staff-form-actions">
+                                  <button type="button" className="btn btn-secondary btn-sm"
+                                    onClick={() => { setShowClerkForm(null); setClerkResult(null); setNewClerkPw(""); }}>
+                                    Cancel
+                                  </button>
+                                  <button type="button" className="btn btn-primary btn-sm"
+                                    onClick={() => createClerkAccount({ ...member, clerkUsername: editStaffDraft?.clerkUsername || "" })}
+                                    disabled={clerkCreating || !newClerkPw.trim() || !editStaffDraft?.clerkUsername?.trim()}>
+                                    {clerkCreating ? "Creating…" : "Create Account"}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="admin-edit__label-hint" style={{ marginTop: 8 }}>
+                                Clerk ID: <code style={{ fontSize: 11 }}>{member.clerkId}</code>
+                              </p>
+                            )}
                           </div>
                         )}
-                      </div>
+
+                      </div> // closes key={member._id} wrapper
                     );
                   })}
                 </div>

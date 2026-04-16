@@ -1440,3 +1440,44 @@ html.dark .staff-disc-pill { background: #1e293b; color: #94a3b8; border-color: 
 .staff-edit-body {
   padding: 16px;
 }
+
+/* Clerk account form */
+.staff-clerk-form {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 8px;
+}
+
+.staff-clerk-form-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 12px;
+}
+
+.staff-clerk-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.staff-clerk-result {
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.staff-clerk-result--ok  { background: #dcfce7; color: #166534; }
+.staff-clerk-result--err { background: #fee2e2; color: #991b1b; }
+
+/* Clerk icon button style */
+.admin-edit__icon-btn--clerk {
+  color: #6b7280;
+}
+.admin-edit__icon-btn--clerk:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}

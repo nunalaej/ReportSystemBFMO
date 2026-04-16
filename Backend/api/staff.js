@@ -1,8 +1,9 @@
+//this is Backend/api/staff.js - API routes for managing staff records, including linking to Clerk accounts
 const express = require("express");
 const router  = express.Router();
-const Staff = require("../models/Staff");
+const Staff   = require("../models/Staff");
 
-/* GET /api/staff */
+/* GET /api/staff or /api/user/staff */
 router.get("/", async (req, res) => {
   try {
     const filter = {};
@@ -16,22 +17,22 @@ router.get("/", async (req, res) => {
   }
 });
 
-/* GET /api/staff/by-clerk/:clerkId — find staff by Clerk user ID */
+/* GET /api/staff/by-clerk/:clerkId */
 router.get("/by-clerk/:clerkId", async (req, res) => {
   try {
     const s = await Staff.findOne({ clerkId: req.params.clerkId }).lean();
-    if (!s) return res.status(404).json({ success: false, message: "No staff record linked to this account." });
+    if (!s) return res.status(404).json({ success: false, message: "No staff record linked." });
     return res.json({ success: true, staff: s });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Error." });
   }
 });
 
-/* GET /api/staff/by-email/:email — find staff by email */
+/* GET /api/staff/by-email/:email */
 router.get("/by-email/:email", async (req, res) => {
   try {
     const s = await Staff.findOne({ email: req.params.email.toLowerCase().trim() }).lean();
-    if (!s) return res.status(404).json({ success: false, message: "No staff record found for this email." });
+    if (!s) return res.status(404).json({ success: false, message: "No staff record found." });
     return res.json({ success: true, staff: s });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Error." });
@@ -54,7 +55,6 @@ router.post("/", async (req, res) => {
   try {
     const { name, email, phone, position, disciplines, active, clerkId, notes } = req.body;
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Name is required." });
-
     const member = await Staff.create({
       name:        name.trim(),
       email:       (email    || "").trim().toLowerCase(),
@@ -73,25 +73,35 @@ router.post("/", async (req, res) => {
 });
 
 /* POST /api/staff/link-clerk
-   Called after a staff member signs up/logs in via Clerk.
-   Matches by email, then saves their clerkId to the Staff record. */
+   Matches by username (since your Clerk app has no email),
+   saves clerkId to the Staff record */
 router.post("/link-clerk", async (req, res) => {
   try {
-    const { clerkId, email } = req.body;
-    if (!clerkId || !email) {
-      return res.status(400).json({ success: false, message: "clerkId and email are required." });
-    }
+    const { clerkId, username, email } = req.body;
+    if (!clerkId) return res.status(400).json({ success: false, message: "clerkId is required." });
 
-    // Find staff by email (case-insensitive)
-    const staff = await Staff.findOne({ email: email.toLowerCase().trim() });
+    // Try matching by email first, then by name as username fallback
+    let staff = null;
+    if (email)    staff = await Staff.findOne({ email: email.toLowerCase().trim() });
+    if (!staff && username) staff = await Staff.findOne({
+      name: { $regex: new RegExp(`^${username.trim()}$`, "i") }
+    });
+
     if (!staff) {
       return res.status(404).json({
         success: false,
-        message: "No staff record found for this email. Contact your administrator.",
+        message: "No staff record found for this account. Contact your administrator.",
       });
     }
 
-    // Link Clerk ID if not already linked
+    if (!staff.active) {
+      return res.status(403).json({
+        success: false,
+        message: "This staff account is inactive. Contact your administrator.",
+      });
+    }
+
+    // Save clerkId if not yet linked
     if (!staff.clerkId) {
       staff.clerkId = clerkId;
       await staff.save();
@@ -120,9 +130,7 @@ router.put("/:id", async (req, res) => {
     if (notes       !== undefined) update.notes       = String(notes).trim();
 
     const updated = await Staff.findByIdAndUpdate(
-      req.params.id,
-      { $set: update },
-      { new: true, runValidators: true }
+      req.params.id, { $set: update }, { new: true, runValidators: true }
     ).lean();
     if (!updated) return res.status(404).json({ success: false, message: "Not found." });
     return res.json({ success: true, staff: updated });
