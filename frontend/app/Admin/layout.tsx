@@ -55,6 +55,7 @@ export default function AdminLayout({
       </header>
 
       {children}
+      
     </NotificationProvider>
   );
 }
