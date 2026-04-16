@@ -57,6 +57,7 @@ const HeaderNav: FC = () => {
   const gotoTask = () => router.push("/Admin/Task");
 
   const gotoActivityLogs = () => router.push("/Logs");
+  const gotoNotification = () => router.push("/Notification");
 
   return (
     <nav className="input">
@@ -79,6 +80,12 @@ const HeaderNav: FC = () => {
         <button className="value" onClick={gotoTask}>
           Task
         </button>
+
+        
+        <button className="value" onClick={gotoNotification}>
+          Notification
+        </button>
+
 
 
       {/* Logs */}

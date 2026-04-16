@@ -45,6 +45,14 @@ export default function AdminDashboard() {
           <h2>Task</h2>
           <p>Manage tasks and their statuses.</p>
         </button>
+
+        <button
+          className="admin-card"
+          onClick={() => router.push("/Notification")}
+        >
+          <h2>Notification</h2>
+          <p>Manage notifications and their statuses.</p>
+        </button>
       </section>
     </main>
   );
