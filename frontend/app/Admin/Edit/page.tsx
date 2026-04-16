@@ -1010,12 +1010,17 @@ export default function AdminEditPage() {
                                   type="button"
                                   className="admin-edit__icon-btn admin-edit__icon-btn--clerk"
                                   title={member.clerkId ? "Clerk account linked" : "Create Clerk account"}
-                                  onClick={() => {
-                                    setShowClerkForm(showClerkForm === member._id ? null : (member._id || null));
-                                    setClerkResult(null);
-                                    setNewClerkPw("");
-                                    setEditStaffDraft({ ...member, clerkUsername: member.clerkUsername || member.name.toLowerCase().replace(/\s+/g, "") });
-                                  }}
+                                 onClick={() => {
+  setShowClerkForm(showClerkForm === member._id ? null : (member._id || null));
+  setClerkResult(null);
+  setNewClerkPw("");
+  // ✅ Auto-generate username from email prefix (ejn-2032@dlsud.edu.ph → ejn2032)
+  const emailPrefix = (member.email || "").split("@")[0].replace(/[^a-zA-Z0-9_]/g, "");
+  setEditStaffDraft({
+    ...member,
+    clerkUsername: member.clerkUsername || emailPrefix,
+  });
+}}
                                 >
                                   {member.clerkId ? (
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1044,59 +1049,139 @@ export default function AdminEditPage() {
 
                         {/* ── Clerk Account Creation Form — inside map, has access to `member` ── */}
                         {showClerkForm === member._id && (
-                          <div className="staff-clerk-form">
-                            <p className="staff-clerk-form-title">
-                              {member.clerkId ? "✓ Clerk account already linked" : "Create Clerk Login Account"}
-                            </p>
-                            {!member.clerkId ? (
-                              <>
-                                <div className="staff-clerk-fields">
-                                  <div className="admin-edit__field-group">
-                                    <label className="admin-edit__label">Username</label>
-                                    <input
-                                      type="text"
-                                      className="admin-edit__input"
-                                      placeholder="e.g. jdoe_bfmo"
-                                      value={editStaffDraft?.clerkUsername || ""}
-                                      onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value } : d)}
-                                    />
-                                    <span className="admin-edit__label-hint">Staff will use this username to log in</span>
-                                  </div>
-                                  <div className="admin-edit__field-group">
-                                    <label className="admin-edit__label">Password</label>
-                                    <input
-                                      type="password"
-                                      className="admin-edit__input"
-                                      placeholder="Min 8 characters"
-                                      value={newClerkPw}
-                                      onChange={e => setNewClerkPw(e.target.value)}
-                                    />
-                                  </div>
-                                </div>
-                                {clerkResult && (
-                                  <div className={`staff-clerk-result${clerkResult.success ? " staff-clerk-result--ok" : " staff-clerk-result--err"}`}>
-                                    {clerkResult.message}
-                                  </div>
-                                )}
-                                <div className="staff-form-actions">
-                                  <button type="button" className="btn btn-secondary btn-sm"
-                                    onClick={() => { setShowClerkForm(null); setClerkResult(null); setNewClerkPw(""); }}>
-                                    Cancel
-                                  </button>
-                                  <button type="button" className="btn btn-primary btn-sm"
-                                    onClick={() => createClerkAccount({ ...member, clerkUsername: editStaffDraft?.clerkUsername || "" })}
-                                    disabled={clerkCreating || !newClerkPw.trim() || !editStaffDraft?.clerkUsername?.trim()}>
-                                    {clerkCreating ? "Creating…" : "Create Account"}
-                                  </button>
-                                </div>
-                              </>
-                            ) : (
-                              <p className="admin-edit__label-hint" style={{ marginTop: 8 }}>
-                                Clerk ID: <code style={{ fontSize: 11 }}>{member.clerkId}</code>
-                              </p>
-                            )}
-                          </div>
-                        )}
+  <div className="staff-clerk-form">
+    <p className="staff-clerk-form-title">
+      {member.clerkId ? "✓ Clerk account already linked" : "Create Login Account"}
+    </p>
+
+    {!member.clerkId ? (
+      <>
+        <div className="staff-clerk-fields">
+
+          {/* Email — pre-filled from staff record, read-only display */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Email</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value={member.email || ""}
+              readOnly
+              style={{ background: "#f3f4f6", color: "#6b7280" }}
+            />
+            <span className="admin-edit__label-hint">Pulled from staff record</span>
+          </div>
+
+          {/* Username — auto-generated from email prefix, editable */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Username <span className="staff-required">*</span></label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              placeholder="e.g. ejn2032"
+              value={editStaffDraft?.clerkUsername || ""}
+              onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") } : d)}
+            />
+            <span className="admin-edit__label-hint">
+              No spaces or special characters. Staff uses this to log in.
+            </span>
+          </div>
+
+          {/* Temporary password */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Temporary Password <span className="staff-required">*</span></label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              placeholder="Min 8 characters"
+              value={newClerkPw}
+              onChange={e => setNewClerkPw(e.target.value)}
+            />
+            <span className="admin-edit__label-hint">
+              Share this with the staff member. They can change it after logging in.
+            </span>
+          </div>
+
+          {/* Name — read-only */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Name</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value={member.name}
+              readOnly
+              style={{ background: "#f3f4f6", color: "#6b7280" }}
+            />
+          </div>
+
+          {/* Position — read-only */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Position</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value={member.position}
+              readOnly
+              style={{ background: "#f3f4f6", color: "#6b7280" }}
+            />
+          </div>
+
+          {/* Disciplines — read-only */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Disciplines</label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+              {member.disciplines.length === 0
+                ? <span className="staff-no-disc">None assigned</span>
+                : member.disciplines.map(d => (
+                    <span key={d} className="staff-disc-pill">{d}</span>
+                  ))
+              }
+            </div>
+          </div>
+
+          {/* Role/Accessibility */}
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">Accessibility (Role)</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value="Staff — can view reports and tasks"
+              readOnly
+              style={{ background: "#f3f4f6", color: "#6b7280" }}
+            />
+            <span className="admin-edit__label-hint">
+              Role is automatically set to "staff" in Clerk.
+            </span>
+          </div>
+
+        </div>
+
+        {clerkResult && (
+          <div className={`staff-clerk-result${clerkResult.success ? " staff-clerk-result--ok" : " staff-clerk-result--err"}`}>
+            {clerkResult.message}
+          </div>
+        )}
+
+        <div className="staff-form-actions" style={{ marginTop: 16 }}>
+          <button type="button" className="btn btn-secondary btn-sm"
+            onClick={() => { setShowClerkForm(null); setClerkResult(null); setNewClerkPw(""); }}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary btn-sm"
+            onClick={() => createClerkAccount({ ...member, clerkUsername: editStaffDraft?.clerkUsername || "" })}
+            disabled={clerkCreating || !newClerkPw.trim() || !editStaffDraft?.clerkUsername?.trim()}>
+            {clerkCreating ? "Creating…" : "Create Account"}
+          </button>
+        </div>
+      </>
+    ) : (
+      <div style={{ marginTop: 8 }}>
+        <p style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ This staff member has a Clerk account.</p>
+        <p className="admin-edit__label-hint">Username: <code>{member.clerkUsername || "—"}</code></p>
+        <p className="admin-edit__label-hint">Clerk ID: <code style={{ fontSize: 11 }}>{member.clerkId}</code></p>
+      </div>
+    )}
+  </div>
+)}
 
                       </div> // closes key={member._id} wrapper
                     );
