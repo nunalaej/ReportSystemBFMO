@@ -1,17 +1,13 @@
-// Backend/api/staff.js
-// Register with:  app.use("/api/staff", require("./api/staff"));
-
 const express = require("express");
 const router  = express.Router();
 const Staff   = require("../models/Staff");
 
-/* GET /api/staff?discipline=Civil  — list (optionally filtered) */
+/* GET /api/staff  — optionally filtered by discipline */
 router.get("/", async (req, res) => {
   try {
     const filter = {};
-    // only return active staff unless ?all=true
     if (req.query.all !== "true") filter.active = true;
-    if (req.query.discipline)     filter.disciplines = req.query.discipline;
+    if (req.query.discipline) filter.disciplines = req.query.discipline;
 
     const staff = await Staff.find(filter).sort({ name: 1 }).lean();
     return res.json({ success: true, staff });
@@ -40,13 +36,13 @@ router.post("/", async (req, res) => {
 
     const member = await Staff.create({
       name:        name.trim(),
-      email:       (email       || "").trim(),
-      phone:       (phone       || ""),
-      position:    (position    || "Staff Engineer"),
+      email:       (email    || "").trim(),
+      phone:       (phone    || ""),
+      position:    (position || "Staff Engineer"),
       disciplines: Array.isArray(disciplines) ? disciplines.map(d => String(d).trim()).filter(Boolean) : [],
       active:      active !== false,
-      clerkId:     (clerkId     || "").trim(),
-      notes:       (notes       || "").trim(),
+      clerkId:     (clerkId || "").trim(),
+      notes:       (notes   || "").trim(),
     });
     return res.status(201).json({ success: true, staff: member });
   } catch (err) {
@@ -64,12 +60,17 @@ router.put("/:id", async (req, res) => {
     if (email       !== undefined) update.email       = String(email).trim();
     if (phone       !== undefined) update.phone       = String(phone);
     if (position    !== undefined) update.position    = String(position);
-    if (disciplines !== undefined) update.disciplines = Array.isArray(disciplines) ? disciplines.map(d => String(d).trim()).filter(Boolean) : [];
+    if (disciplines !== undefined) update.disciplines = Array.isArray(disciplines)
+      ? disciplines.map(d => String(d).trim()).filter(Boolean) : [];
     if (active      !== undefined) update.active      = Boolean(active);
     if (clerkId     !== undefined) update.clerkId     = String(clerkId).trim();
     if (notes       !== undefined) update.notes       = String(notes).trim();
 
-    const updated = await Staff.findByIdAndUpdate(req.params.id, { $set: update }, { new: true, runValidators: true }).lean();
+    const updated = await Staff.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true, runValidators: true }
+    ).lean();
     if (!updated) return res.status(404).json({ success: false, message: "Not found." });
     return res.json({ success: true, staff: updated });
   } catch (err) {

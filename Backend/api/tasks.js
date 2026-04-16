@@ -1,13 +1,9 @@
-// Backend/api/tasks.js
-// This is the route your frontend expects at /api/tasks
-// Register in server: app.use("/api/tasks", require("./api/tasks"));
-
-const express = require("express");
-const router  = express.Router();
+const express   = require("express");
+const router    = express.Router();
 const ListsTask = require("../models/Liststask");
 const Report    = require("../models/Report");
 
-/* GET /api/tasks?userId=xxx */
+/* GET /api/tasks */
 router.get("/", async (req, res) => {
   try {
     const tasks = await ListsTask.find({}).sort({ createdAt: -1 }).lean();
@@ -36,14 +32,13 @@ router.post("/", async (req, res) => {
 
     if (!name?.trim()) return res.status(400).json({ success: false, message: "Task name is required." });
 
-    // Prevent duplicate reportId
     if (reportId) {
       const existing = await ListsTask.findOne({ reportId });
       if (existing) return res.status(400).json({ success: false, message: "A task with this Report ID already exists." });
     }
 
     const newTask = await ListsTask.create({
-      userId:        userId || "admin",
+      userId:        userId        || "admin",
       name:          name.trim(),
       concernType:   concernType   || "Other",
       reportId:      reportId      || null,
@@ -55,7 +50,6 @@ router.post("/", async (req, res) => {
       createdBy:     createdBy     || "Admin",
     });
 
-    // Sync report status to In Progress
     if (reportId) {
       await Report.updateOne({ reportId }, { status: "In Progress" }).catch(console.error);
     }
@@ -70,7 +64,7 @@ router.post("/", async (req, res) => {
 /* PUT /api/tasks/:id */
 router.put("/:id", async (req, res) => {
   try {
-    const { name, concernType, status, checklist, assignedStaff, priority, notes, updatedBy } = req.body;
+    const { name, concernType, status, checklist, assignedStaff, priority, notes } = req.body;
 
     const task = await ListsTask.findById(req.params.id);
     if (!task) return res.status(404).json({ success: false, message: "Task not found." });
@@ -85,7 +79,6 @@ router.put("/:id", async (req, res) => {
 
     const updated = await task.save();
 
-    // Sync report status
     if (status && task.reportId) {
       await Report.updateOne({ reportId: task.reportId }, { status }).catch(console.error);
     }
