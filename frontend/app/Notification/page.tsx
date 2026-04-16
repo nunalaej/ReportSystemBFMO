@@ -1,10 +1,9 @@
 "use client";
 
-import "./notifications.css";
+import "../style/notif.css";
 
 import React, { useState, useMemo } from "react";
 import { useNotifications, Notification } from "../context/notification";
-import "@/app/components/notif.css";
 
 /* ── Type meta ── */
 interface TypeMetaItem {
