@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from "react";
 import { UserButton, useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "@/app/ThemeToggle";
+import HeaderNav from "@/app/HeaderNav";
 
 export default function StaffLayout({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, user } = useUser();
@@ -30,12 +31,18 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
   return (
     <>
       <header className="layout">
-        <div className="flex items-center gap-3">
-          <img src="/logo-dlsud.png" alt="DLSU-D Logo" className="w-10 h-10 object-contain" />
-          <h1 className="text-base sm:text-lg font-semibold site-title">
-            BFMO Report System
-          </h1>
-        </div>
+      <div
+  className="flex items-center gap-3"
+  onClick={() => router.push("/Staff/Dashboard")}
+  style={{ cursor: "pointer" }}
+>
+  <img src="/logo-dlsud.png" alt="DLSU-D Logo" className="w-10 h-10 object-contain" />
+  <h1 className="text-base sm:text-lg font-semibold site-title">
+    BFMO Report System
+  </h1>
+</div>
+        <HeaderNav />
+
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <UserButton />

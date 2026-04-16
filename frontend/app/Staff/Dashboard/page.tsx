@@ -13,20 +13,19 @@ export default function StaffDashboard() {
       </header>
 
       <section className="admin-card-grid">
-        <button
-          className="admin-card"
-          onClick={() => router.push("/Staff/Reports")}
-        >
+        <button className="admin-card" onClick={() => router.push("/Staff/Reports")}>
           <h2>View Reports</h2>
           <p>See all facility reports submitted by students and staff.</p>
         </button>
 
-        <button
-          className="admin-card"
-          onClick={() => router.push("/Staff/Analytics")}
-        >
+        <button className="admin-card" onClick={() => router.push("/Staff/Analytics")}>
           <h2>Analytics</h2>
           <p>Check statistics by status, building, and concern type.</p>
+        </button>
+
+        <button className="admin-card" onClick={() => router.push("/Staff/Task")}>
+          <h2>My Tasks</h2>
+          <p>View and update maintenance tasks assigned to you.</p>
         </button>
       </section>
     </main>
