@@ -1,6 +1,6 @@
 "use client";
 
-import "../style/notif.css";
+import "@/app/style/notif.css";
 
 import React, { useState, useMemo } from "react";
 import { useNotifications, Notification } from "../context/notification";
