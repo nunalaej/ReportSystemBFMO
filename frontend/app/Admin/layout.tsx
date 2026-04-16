@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import ThemeToggle from "@/app/ThemeToggle";
 import HeaderNav from "@/app/HeaderNav";
+import { NotificationProvider } from "@/app/context/notification";
+import { NotificationBell } from "@/app/components/notificationbell";
 import "@/app/Admin/style/dashboard.css";
 
 export default function AdminLayout({
@@ -17,33 +19,20 @@ export default function AdminLayout({
 
   useEffect(() => {
     if (!isLoaded) return;
-
-    if (!isSignedIn) {
-      router.replace("/");
-      return;
-    }
-
+    if (!isSignedIn) { router.replace("/"); return; }
     const rawRole = (user?.publicMetadata as any)?.role;
-    const role = Array.isArray(rawRole)
-      ? rawRole[0]?.toLowerCase()
-      : rawRole?.toLowerCase();
-
-    if (role !== "admin") {
-      router.replace("/");
-    }
+    const role = Array.isArray(rawRole) ? rawRole[0]?.toLowerCase() : rawRole?.toLowerCase();
+    if (role !== "admin") router.replace("/");
   }, [isLoaded, isSignedIn, user, router]);
 
   if (!isLoaded || !isSignedIn) return null;
 
   const rawRole = (user?.publicMetadata as any)?.role;
-  const role = Array.isArray(rawRole)
-    ? rawRole[0]?.toLowerCase()
-    : rawRole?.toLowerCase();
-
+  const role = Array.isArray(rawRole) ? rawRole[0]?.toLowerCase() : rawRole?.toLowerCase();
   if (role !== "admin") return null;
 
   return (
-    <>
+    <NotificationProvider>
       <header className="layout">
         <div className="flex items-center gap-3">
           <img
@@ -59,12 +48,13 @@ export default function AdminLayout({
         <HeaderNav />
 
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <ThemeToggle />
           <UserButton />
         </div>
       </header>
 
       {children}
-    </>
+    </NotificationProvider>
   );
 }

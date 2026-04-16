@@ -1,3 +1,5 @@
+//Can filter specific words, Others are mainly long words if there's any specific word for example Concern: Other : Bathroom  & Building & Facilities: ICTC : Hallway outside the entrance It should be able to detect the "Bathroom", "Bathrooms" or "Hallway" / "Hallways"
+
 "use client";
 
 import "@/app/style/create.css";
@@ -88,6 +90,10 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
 const COLLEGE_OPTIONS: string[] = [
   "CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff",
 ];
+
+const YEAR_OPTIONS: string[] = [
+  "1st Year","2nd Year","3rd Year","4th Year",
+] as const;
 
 const USER_TYPE_OPTIONS: string[] = ["Student", "Staff/Faculty"];
 
@@ -1200,7 +1206,7 @@ export default function Create() {
               {/* Heading & College */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
-                  <label htmlFor="heading">Heading <RequiredStar value={formData.heading} /></label>
+                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
                   <input
                     id="heading" type="text" name="heading"
                     placeholder="Short title of the issue"
@@ -1208,10 +1214,14 @@ export default function Create() {
                   />
                 </div>
                 <div className="create-scope__group">
-                  <label htmlFor="college">College <RequiredStar value={formData.college} /></label>
+                  <label htmlFor="college">College & Year<RequiredStar value={formData.college} /></label>
                   <select id="college" name="college" value={formData.college} onChange={handleChange} required>
                     <option value="">Select college</option>
                     {COLLEGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select id="college" name="college" value={formData.college} onChange={handleChange} required>
+                    <option value="">Select Year</option>
+                    {YEAR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -1219,9 +1229,8 @@ export default function Create() {
               {/* User Type */}
               <div className="create-scope__group">
                 <label htmlFor="userType">User Type <RequiredStar value={formData.userType} /></label>
-                <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
-                  {USER_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
-                </select>
+//Change this if Email is xxx0000@dlsud.edu.ph format Student automatically, no need for drop down. Hide this
+//if other Dropdown Staff / Faculty
               </div>
 
               {/* Description */}
@@ -1239,7 +1248,7 @@ export default function Create() {
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
                   <div className="concern-label-wrapper">
-                    <label htmlFor="concern">Concern <RequiredStar value={formData.concern} /></label>
+                    <label htmlFor="concern">Concern Type<RequiredStar value={formData.concern} /></label>
                     {formData.concern && CONCERN_INFO[formData.concern] && (
                       <InfoTooltip text={CONCERN_INFO[formData.concern]} />
                     )}
@@ -1256,7 +1265,7 @@ export default function Create() {
 
                 {showSubConcern && (
                   <div className="create-scope__group">
-                    <label htmlFor="subConcern">Sub concern <RequiredStar value={formData.subConcern} /></label>
+                    <label htmlFor="subConcern">Concern Category<RequiredStar value={formData.subConcern} /></label>
                     {formData.subConcern === "Other" ? (
                       <div style={{ display: "flex", gap: "8px" }}>
                         <select
@@ -1279,7 +1288,7 @@ export default function Create() {
                         id="subConcern" name="subConcern"
                         value={formData.subConcern} onChange={handleChange} required
                       >
-                        <option value="">Select sub concern</option>
+                        <option value="">Select concern</option>
                         {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     )}
@@ -1302,7 +1311,7 @@ export default function Create() {
               {/* Building & Specific Room Toggle */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
-                  <label htmlFor="building">Building <RequiredStar value={formData.building} /></label>
+                  <label htmlFor="building">Building & Facilities <RequiredStar value={formData.building} /></label>
                   <select
                     id="building" name="building"
                     value={formData.building} onChange={handleChange}
@@ -1403,7 +1412,7 @@ export default function Create() {
 
               {/* Image Upload */}
               <div className="create-scope__group">
-                <label>Attach an image (Required)</label>
+                <label>Attach an image. If there's more than one image to upload, please compile them into a single image.</label>
                 <label
                   className="create-scope__dropzone"
                   onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}

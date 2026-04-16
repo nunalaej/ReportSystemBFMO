@@ -1,0 +1,236 @@
+/* ── Wrapper ── */
+.nb-root {
+  position: relative;
+  display: inline-flex;
+}
+
+/* ── Bell button ── */
+.nb-bell-btn {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  transition: background 0.15s, color 0.15s;
+}
+.nb-bell-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+/* ── Uiverse bell label ── */
+.nb-container {
+  --color: #6b7280;
+  --size: 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  font-size: var(--size);
+  user-select: none;
+  fill: var(--color);
+  width: var(--size);
+  height: var(--size);
+  pointer-events: none;
+}
+
+.nb-container .bell-regular {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  animation: keyframes-fill 0.5s;
+}
+
+.nb-container .bell-solid {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  display: none;
+  animation: keyframes-fill 0.5s;
+  fill: #F97316;
+}
+
+.nb-container input:checked ~ .bell-regular { display: none; }
+.nb-container input:checked ~ .bell-solid   { display: block; }
+
+.nb-container input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+}
+
+@keyframes keyframes-fill {
+  0%   { opacity: 0; }
+  25%  { transform: rotate(25deg); }
+  50%  { transform: rotate(-20deg) scale(1.2); }
+  75%  { transform: rotate(15deg); }
+  100% { opacity: 1; transform: rotate(0); }
+}
+
+/* ── Badge ── */
+.nb-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── Dropdown ── */
+.nb-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 360px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.nb-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.nb-dropdown-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.nb-dropdown-sub {
+  font-size: 0.72rem;
+  color: #6b7280;
+  margin: 2px 0 0;
+}
+
+.nb-dropdown-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.nb-icon-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.nb-icon-btn--blue { color: #3b82f6; }
+.nb-icon-btn--blue:hover { background: #eff6ff; }
+.nb-icon-btn--gray { color: #6b7280; }
+.nb-icon-btn--gray:hover { background: #f3f4f6; }
+
+/* ── List ── */
+.nb-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.nb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  color: #d1d5db;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+/* ── Item ── */
+.nb-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f9fafb;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.nb-item:hover { background: #f9fafb; }
+.nb-item--unread { background: #eff6ff; }
+.nb-item--unread:hover { background: #dbeafe; }
+
+.nb-item-body { flex: 1; min-width: 0; }
+
+.nb-item-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.nb-type-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.nb-unread-dot {
+  width: 7px;
+  height: 7px;
+  background: #3b82f6;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.nb-item-msg {
+  font-size: 0.8rem;
+  color: #111827;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.nb-item-time {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin: 3px 0 0;
+}
+
+.nb-read-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 5px;
+  color: #3b82f6;
+  flex-shrink: 0;
+  transition: background 0.12s;
+  display: flex;
+  align-items: center;
+}
+.nb-read-btn:hover { background: #dbeafe; }

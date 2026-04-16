@@ -1,3 +1,7 @@
+//Users can add a Comment to their report, but cannot edit or delete comments. Comments are added by staff/admin when they update the report status or want to ask for more information.
+//Users can view the History of their report, which includes all status updates and comments in chronological order. This helps them track the progress of their report and see any feedback from staff/admin. in Modal
+//Users can Notify for Follow Up make a Bell Button with 'Follow Up'. It will pop up in the notification bell of the Staff and Admins
+
 "use client";
 
 import "@/app/style/reports.css";

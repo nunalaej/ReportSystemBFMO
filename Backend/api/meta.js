@@ -1,5 +1,3 @@
-// Backend/api/meta.js
-
 const express = require("express");
 const router  = express.Router();
 const Meta    = require("../models/Meta");
@@ -8,15 +6,15 @@ const Meta    = require("../models/Meta");
 const DEFAULT_BUILDINGS = [
   { id: "ayuntamiento", name: "Ayuntamiento", floors: 4, roomsPerFloor: [20,20,20,20], hasRooms: false },
   { id: "jfh",          name: "JFH",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "ictc",         name: "ICTC",          floors: 2, roomsPerFloor: [13,13],       hasRooms: true  },
-  { id: "pch",          name: "PCH",           floors: 3, roomsPerFloor: [10,10,10],    hasRooms: true  },
-  { id: "food-square",  name: "Food Square",   floors: 1, roomsPerFloor: [20],          hasRooms: false },
-  { id: "cos",          name: "COS",           floors: 1, roomsPerFloor: [10],          hasRooms: true  },
-  { id: "cbaa",         name: "CBAA",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "cthm",         name: "CTHM",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "gmh",          name: "GMH",           floors: 2, roomsPerFloor: [6,6],         hasRooms: true  },
-  { id: "ceat",         name: "CEAT",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "other",        name: "Other",         floors: 1, roomsPerFloor: [1],           hasRooms: false },
+  { id: "ictc",         name: "ICTC",         floors: 2, roomsPerFloor: [13,13],       hasRooms: true  },
+  { id: "pch",          name: "PCH",          floors: 3, roomsPerFloor: [10,10,10],    hasRooms: true  },
+  { id: "food-square",  name: "Food Square",  floors: 1, roomsPerFloor: [20],          hasRooms: false },
+  { id: "cos",          name: "COS",          floors: 1, roomsPerFloor: [10],          hasRooms: true  },
+  { id: "cbaa",         name: "CBAA",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "cthm",         name: "CTHM",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "gmh",          name: "GMH",          floors: 2, roomsPerFloor: [6,6],         hasRooms: true  },
+  { id: "ceat",         name: "CEAT",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "other",        name: "Other",        floors: 1, roomsPerFloor: [1],           hasRooms: false },
 ];
 
 const DEFAULT_CONCERNS = [
@@ -27,8 +25,22 @@ const DEFAULT_CONCERNS = [
   { id: "other",         label: "Other",         subconcerns: ["Other"] },
 ];
 
-/* ── Helpers ──────────────────────────────────────────────── */
+const DEFAULT_STATUSES = [
+  { id: "1", name: "Pending",         color: "#FFA500" },
+  { id: "2", name: "Pending Inspect", color: "#FFD700" },
+  { id: "3", name: "In Progress",     color: "#4169E1" },
+  { id: "4", name: "Resolved",        color: "#28A745" },
+  { id: "5", name: "Archived",        color: "#6C757D" },
+];
 
+const DEFAULT_PRIORITIES = [
+  { id: "1", name: "Low",    color: "#28A745" },
+  { id: "2", name: "Medium", color: "#FFC107" },
+  { id: "3", name: "High",   color: "#ce4f01" },
+  { id: "4", name: "Urgent", color: "#a40010" },
+];
+
+/* ── Helpers ──────────────────────────────────────────────── */
 const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
 
 function normaliseRoomsPerFloor(raw, floors) {
@@ -77,11 +89,26 @@ function sanitiseConcern(c, idx) {
     ? c.subconcerns.map((s) => String(s || "").trim()).filter(Boolean)
     : [];
 
-  // "Other" always last, no duplicates
   subs = subs.filter((s) => norm(s) !== "other");
   subs.push("Other");
 
   return { id, label, subconcerns: subs };
+}
+
+function sanitiseStatus(s, idx) {
+  const name = String(s?.name || "").trim();
+  if (!name) return null;
+  const id    = String(s?.id || String(idx + 1)).trim();
+  const color = String(s?.color || "#6C757D").trim();
+  return { id, name, color };
+}
+
+function sanitisePriority(p, idx) {
+  const name = String(p?.name || "").trim();
+  if (!name) return null;
+  const id    = String(p?.id || String(idx + 1)).trim();
+  const color = String(p?.color || "#6C757D").trim();
+  return { id, name, color };
 }
 
 /* ── GET /api/meta ────────────────────────────────────────── */
@@ -90,18 +117,26 @@ router.get("/", async (req, res) => {
     let doc = await Meta.findOne({ key: "main" }).lean();
 
     if (!doc || !doc.buildings?.length) {
-      // Seed defaults on first access
       doc = await Meta.findOneAndUpdate(
         { key: "main" },
-        { $setOnInsert: { buildings: DEFAULT_BUILDINGS, concerns: DEFAULT_CONCERNS } },
-        { upsert: true, returnDocument: "after" }   // ← no more `new: true`
+        {
+          $setOnInsert: {
+            buildings:  DEFAULT_BUILDINGS,
+            concerns:   DEFAULT_CONCERNS,
+            statuses:   DEFAULT_STATUSES,
+            priorities: DEFAULT_PRIORITIES,
+          },
+        },
+        { upsert: true, returnDocument: "after" }
       ).lean();
     }
 
     return res.json({
-      success:   true,
-      buildings: doc.buildings || DEFAULT_BUILDINGS,
-      concerns:  doc.concerns  || DEFAULT_CONCERNS,
+      success:    true,
+      buildings:  doc.buildings  || DEFAULT_BUILDINGS,
+      concerns:   doc.concerns   || DEFAULT_CONCERNS,
+      statuses:   doc.statuses   || DEFAULT_STATUSES,
+      priorities: doc.priorities || DEFAULT_PRIORITIES,
     });
   } catch (err) {
     console.error("GET /meta error:", err);
@@ -112,12 +147,13 @@ router.get("/", async (req, res) => {
 /* ── PUT /api/meta ────────────────────────────────────────── */
 router.put("/", async (req, res) => {
   try {
-    const rawBuildings = Array.isArray(req.body?.buildings) ? req.body.buildings : [];
-    const rawConcerns  = Array.isArray(req.body?.concerns)  ? req.body.concerns  : [];
+    const rawBuildings  = Array.isArray(req.body?.buildings)  ? req.body.buildings  : [];
+    const rawConcerns   = Array.isArray(req.body?.concerns)   ? req.body.concerns   : [];
+    const rawStatuses   = Array.isArray(req.body?.statuses)   ? req.body.statuses   : [];
+    const rawPriorities = Array.isArray(req.body?.priorities) ? req.body.priorities : [];
 
     /* Sanitise buildings */
     let buildings = rawBuildings.map((b, i) => sanitiseBuilding(b, i)).filter(Boolean);
-
     const otherBuildings  = buildings.filter((b) => norm(b.name) === "other");
     const normalBuildings = buildings.filter((b) => norm(b.name) !== "other");
     if (otherBuildings.length === 0) {
@@ -130,7 +166,6 @@ router.put("/", async (req, res) => {
 
     /* Sanitise concerns */
     let concerns = rawConcerns.map((c, i) => sanitiseConcern(c, i)).filter(Boolean);
-
     const otherConcerns  = concerns.filter((c) => norm(c.label) === "other");
     const normalConcerns = concerns.filter((c) => norm(c.label) !== "other");
     if (otherConcerns.length === 0) {
@@ -138,17 +173,27 @@ router.put("/", async (req, res) => {
     }
     concerns = [...normalConcerns, ...otherConcerns.slice(0, 1)];
 
+    /* Sanitise statuses — keep at least the defaults if none provided */
+    let statuses = rawStatuses.map((s, i) => sanitiseStatus(s, i)).filter(Boolean);
+    if (statuses.length === 0) statuses = DEFAULT_STATUSES;
+
+    /* Sanitise priorities — keep at least the defaults if none provided */
+    let priorities = rawPriorities.map((p, i) => sanitisePriority(p, i)).filter(Boolean);
+    if (priorities.length === 0) priorities = DEFAULT_PRIORITIES;
+
     /* Upsert */
     const updated = await Meta.findOneAndUpdate(
       { key: "main" },
-      { $set: { buildings, concerns } },
-      { upsert: true, returnDocument: "after" }    // ← no more `new: true`
+      { $set: { buildings, concerns, statuses, priorities } },
+      { upsert: true, returnDocument: "after" }
     ).lean();
 
     return res.json({
-      success:   true,
-      buildings: updated.buildings,
-      concerns:  updated.concerns,
+      success:    true,
+      buildings:  updated.buildings,
+      concerns:   updated.concerns,
+      statuses:   updated.statuses,
+      priorities: updated.priorities,
     });
   } catch (err) {
     console.error("PUT /meta error:", err);
