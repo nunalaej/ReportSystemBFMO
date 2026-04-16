@@ -208,7 +208,7 @@ router.delete("/:id/comments/:index", async (req, res) => {
 });
 
 /* ============================================================
-   PURGE RESOLVED/ARCHIVED
+   PURGE RESOLVED/ARCHIVED HELLO?
 ============================================================ */
 router.delete("/purge-resolved-archived", async (req, res) => {
   try {
