@@ -1,6 +1,6 @@
 "use client";
 
-import "../style/task.css";
+import "@/app/Admin/style/task.css";
 
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
