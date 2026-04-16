@@ -6,10 +6,11 @@ require("dotenv").config();
 
 const listsRouter     = require("./routes/lists");
 const liststaskRouter = require("./api/liststask.js");
-const staffRouter     = require("./api/user/staff");
+const staffRouter     = require("./api/staff");
 const reportsRouter   = require("./api/reports");
 const metaRouter      = require("./api/meta");
-const tasksRouter     = require("./api/tasks");          // ✅ NEW
+const tasksRouter     = require("./api/tasks");
+
 const { sendReportStatusEmail } = require("./utils/mailer");
 
 const app = express();
@@ -22,10 +23,10 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/reports",   reportsRouter);
 app.use("/api/lists",     listsRouter);
 app.use("/api/liststask", liststaskRouter);
-app.use("/api/user",      staffRouter);
+app.use("/api/tasks",     tasksRouter);
 app.use("/api/meta",      metaRouter);
-app.use("/api/tasks",     tasksRouter);   // ✅ NEW — frontend calls /api/tasks
-app.use("/api/staff",     staffRouter);   // ✅ NEW — frontend calls /api/staff (same handler)
+app.use("/api/user",      staffRouter);   // keep existing
+app.use("/api/staff",     staffRouter);   // ✅ ADD THIS — frontend calls /api/staff
 
 const mongoUri = process.env.MONGODB_URI;
 const dbName   = process.env.MONGODB_NAME;
