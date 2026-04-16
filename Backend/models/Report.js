@@ -33,13 +33,18 @@ const ReportSchema = new mongoose.Schema(
     otherRoom:     { type: String },
     image:         { type: String },
     ImageFile:     { type: String },
-
-    // ✅ No enum — accepts any status string from meta config
-    status:   { type: String, default: "Pending" },
-    comments: [CommentSchema],
-    history:  [HistoryEntrySchema],
+    status:        { type: String, default: "Pending" },
+    comments:      [CommentSchema],
+    history:       [HistoryEntrySchema],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // ✅ This tells Mongoose which collection to use
+    // Change "reports" to whatever your actual MongoDB collection is named
+    collection: "reports",
+  }
 );
 
-module.exports = mongoose.models.Report || mongoose.model("Report", ReportSchema);
+// ✅ Delete cached model to avoid stale schema issues
+delete mongoose.connection.models["Report"];
+module.exports = mongoose.model("Report", ReportSchema);
