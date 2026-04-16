@@ -14,7 +14,7 @@ const ALLOWED_IMAGE_MIME_TYPES = [
   "image/heif", "image/webp", "image/gif",
 ];
 
-/* ── Report ID Generator: DDMMYYNNN ── */
+/* ── Report ID Generator ── */
 async function generateReportId() {
   const now    = new Date();
   const dd     = String(now.getDate()).padStart(2, "0");
@@ -82,9 +82,7 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       stream.end(req.file.buffer);
     });
 
-    const reportId = await generateReportId();
-
-    // ✅ Accept any status string — no hardcoded enum
+    const reportId     = await generateReportId();
     const startingStatus = inheritedStatus || "Pending";
 
     const report = await Report.create({
@@ -94,6 +92,13 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
       otherRoom, userType,
       ImageFile: uploaded.secure_url,
       status: startingStatus,
+      // ✅ Seed the first history entry on creation
+      history: [{
+        status: startingStatus,
+        at:     new Date(),
+        by:     email || "Reporter",
+        note:   "Report submitted.",
+      }],
     });
 
     return res.status(201).json({ success: true, report });
@@ -108,15 +113,26 @@ router.post("/", upload.single("ImageFile"), async (req, res) => {
 ============================================================ */
 router.put("/:id", async (req, res) => {
   try {
-    const { status, overwriteComments, comments, comment } = req.body;
+    const { status, overwriteComments, comments, comment, updatedBy } = req.body;
 
     const existing = await Report.findById(req.params.id);
     if (!existing) return res.status(404).json({ success: false, message: "Report not found." });
 
     const oldStatus = existing.status || "Pending";
 
-    if (status !== undefined)                          existing.status   = status;
-    if (overwriteComments && Array.isArray(comments))  existing.comments = comments;
+    if (status !== undefined) existing.status = status;
+    if (overwriteComments && Array.isArray(comments)) existing.comments = comments;
+
+    // ✅ APPEND a new history entry whenever status changes — never overwrite
+    if (status && status !== oldStatus) {
+      if (!Array.isArray(existing.history)) existing.history = [];
+      existing.history.push({
+        status: status,
+        at:     new Date(),
+        by:     updatedBy || "Admin",
+        note:   comment || "",
+      });
+    }
 
     const updated = await existing.save();
 
@@ -208,7 +224,7 @@ router.delete("/:id/comments/:index", async (req, res) => {
 });
 
 /* ============================================================
-   PURGE RESOLVED/ARCHIVED HELLO?
+   PURGE RESOLVED/ARCHIVED
 ============================================================ */
 router.delete("/purge-resolved-archived", async (req, res) => {
   try {

@@ -344,12 +344,17 @@ export default function ReportPage() {
     return "pending";
   };
 
-  const statusMatchesFilter = useCallback((reportStatus: string | undefined, filter: string) => {
-    const current       = reportStatus || "Pending";
-    const archivedName  = metaStatuses.find(s => s.name.toLowerCase() === "archived")?.name || "Archived";
-    if (filter === "All Statuses") return current !== archivedName;
-    return current === filter;
-  }, [metaStatuses]);
+const statusMatchesFilter = useCallback((reportStatus: string | undefined, filter: string) => {
+  const current      = reportStatus || "Pending";
+  const archivedName = metaStatuses.find(s => s.name.toLowerCase() === "archived")?.name  || "Archived";
+  const resolvedName = metaStatuses.find(s => s.name.toLowerCase() === "resolved")?.name  || "Resolved";
+
+  if (filter === "All Statuses") {
+    // ✅ Hide both Archived AND Resolved from the default view
+    return current !== archivedName && current !== resolvedName;
+  }
+  return current === filter;
+}, [metaStatuses]);
 
   /* ── Fetch reports ── */
   const fetchReports = async () => {
