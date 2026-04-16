@@ -1,0 +1,90 @@
+/* app/Staff/style/login.css */
+
+.staff-auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  padding: 24px;
+}
+
+.staff-auth-box {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.staff-auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 15px;
+  color: #6b7280;
+}
+
+.staff-auth-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #029006;
+  border-radius: 50%;
+  animation: staff-spin 0.7s linear infinite;
+  margin-bottom: 16px;
+}
+@keyframes staff-spin { to { transform: rotate(360deg); } }
+
+.staff-auth-status-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: #111827;
+}
+
+.staff-auth-status-sub {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 8px;
+}
+
+.staff-auth-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 8px 0 20px;
+  line-height: 1.6;
+}
+
+.staff-auth-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.staff-auth-icon--success { background: #dcfce7; color: #16a34a; }
+.staff-auth-icon--error   { background: #fee2e2; color: #dc2626; }
+
+.staff-auth-retry-btn {
+  margin-top: 8px;
+  padding: 10px 24px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.staff-auth-retry-btn:hover { background: #e5e7eb; }
