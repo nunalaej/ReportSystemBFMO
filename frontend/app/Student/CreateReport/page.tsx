@@ -1,5 +1,3 @@
-//Can filter specific words, Others are mainly long words if there's any specific word for example Concern: Other : Bathroom  & Building & Facilities: ICTC : Hallway outside the entrance It should be able to detect the "Bathroom", "Bathrooms" or "Hallway" / "Hallways"
-
 "use client";
 
 import "@/app/style/create.css";
@@ -20,65 +18,43 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useTheme } from "@/app/ThemeProvider";
 
-/* ===============================
-   CONSTANTS & CONFIGURATION
-=============================== */
-
-const ALLOWED_IMAGE_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/heic",
-  "image/heif",
-  "image/webp",
-  "image/gif",
-] as const;
-
-const ALLOWED_IMAGE_EXTENSIONS = [
-  "jpg",
-  "jpeg",
-  "png",
-  "heic",
-  "heif",
-  "webp",
-  "gif",
-] as const;
-
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+/* ── Constants ── */
+const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg","image/png","image/heic","image/heif","image/webp","image/gif"] as const;
+const ALLOWED_IMAGE_EXTENSIONS = ["jpg","jpeg","png","heic","heif","webp","gif"] as const;
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const CONCERN_INFO: Record<string, string> = {
-  Civil:
-    "Environment concerns in campus including paint, cracks, flooring, tiles, bathrooms, walls, ceilings, doors, windows, etc.",
-  Electrical:
-    "Electric concerns range from minor appliance issues to life-threatening safety hazards. Includes lightbulbs, aircons, switches, circuits, wires, outlets, etc.",
-  Mechanical:
-    "Issues with physical parts, systems, or machinery that cause inefficient operation, breakdown, or safety risks. Includes elevators, doors, machines, TV, projectors, fans, etc.",
-  "Safety Hazard":
-    "Physical dangers like slippery floors, uneven walkways, poorly lit areas, overloaded outlets, faulty wiring, improper chemical storage, loose handrails, broken windows, spikes, sharp objects, fire hazards, etc.",
+  Civil: "Environment concerns including paint, cracks, flooring, tiles, bathrooms, walls, ceilings, doors, windows, etc.",
+  Electrical: "Electric concerns from minor appliance issues to safety hazards. Includes lightbulbs, aircons, switches, wires, outlets, etc.",
+  Mechanical: "Issues with physical parts or machinery. Includes elevators, doors, TV, projectors, fans, etc.",
+  "Safety Hazard": "Physical dangers like slippery floors, overloaded outlets, faulty wiring, loose handrails, broken windows, fire hazards, etc.",
 };
 
-interface BuildingMeta {
-  id: string;
-  name: string;
-  floors: number;
-  roomsPerFloor: number | number[];
-  hasRooms: boolean;
-  singleLocationLabel?: string;
+interface BuildingMeta { id: string; name: string; floors: number; roomsPerFloor: number | number[]; hasRooms: boolean; singleLocationLabel?: string; }
+interface ConcernMeta  { id?: string; label: string; subconcerns?: string[]; }
+interface MetaState    { buildings: BuildingMeta[]; concerns: ConcernMeta[]; }
+interface FormDataState {
+  email: string; heading: string; description: string;
+  concern: string; subConcern: string; building: string;
+  college: string; year: string; userType: string;
+  floor: string; room: string; ImageFile: File | null;
+  otherConcern: string; otherBuilding: string; otherRoom: string;
 }
+interface Report { _id?: string; reportId?: string; building?: string; concern?: string; subConcern?: string; otherConcern?: string; status?: string; room?: string; otherRoom?: string; }
 
 const FALLBACK_BUILDINGS: BuildingMeta[] = [
   { id: "ayuntamiento", name: "Ayuntamiento", floors: 4, roomsPerFloor: [20,20,20,20], hasRooms: false },
   { id: "jfh",          name: "JFH",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "ictc",         name: "ICTC",          floors: 2, roomsPerFloor: [13,13],       hasRooms: true  },
-  { id: "pch",          name: "PCH",           floors: 3, roomsPerFloor: [10,10,10],    hasRooms: true  },
-  { id: "food-square",  name: "Food Square",   floors: 1, roomsPerFloor: [20],          hasRooms: false },
-  { id: "cos",          name: "COS",           floors: 1, roomsPerFloor: [10],          hasRooms: true  },
-  { id: "cbaa",         name: "CBAA",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "cthm",         name: "CTHM",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "gmh",          name: "GMH",           floors: 2, roomsPerFloor: [6,6],         hasRooms: true  },
-  { id: "ceat",         name: "CEAT",          floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
-  { id: "other",        name: "Other",         floors: 1, roomsPerFloor: [1],           hasRooms: false },
+  { id: "ictc",         name: "ICTC",         floors: 2, roomsPerFloor: [13,13],       hasRooms: true  },
+  { id: "pch",          name: "PCH",          floors: 3, roomsPerFloor: [10,10,10],    hasRooms: true  },
+  { id: "food-square",  name: "Food Square",  floors: 1, roomsPerFloor: [20],          hasRooms: false },
+  { id: "cos",          name: "COS",          floors: 1, roomsPerFloor: [10],          hasRooms: true  },
+  { id: "cbaa",         name: "CBAA",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "cthm",         name: "CTHM",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "gmh",          name: "GMH",          floors: 2, roomsPerFloor: [6,6],         hasRooms: true  },
+  { id: "ceat",         name: "CEAT",         floors: 4, roomsPerFloor: [10,10,10,10], hasRooms: true  },
+  { id: "other",        name: "Other",        floors: 1, roomsPerFloor: [1],           hasRooms: false },
 ];
-
 const FALLBACK_CONCERNS: ConcernMeta[] = [
   { id: "electrical",    label: "Electrical",    subconcerns: ["Lights","Aircons","Wires","Outlets","Switches","Other"] },
   { id: "civil",         label: "Civil",         subconcerns: ["Walls","Ceilings","Cracks","Doors","Windows","Other"] },
@@ -87,1428 +63,1127 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
   { id: "other",         label: "Other",         subconcerns: ["Other"] },
 ];
 
-const COLLEGE_OPTIONS: string[] = [
-  "CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff",
-];
+const COLLEGE_OPTIONS = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE"];
+const YEAR_OPTIONS    = ["1st Year","2nd Year","3rd Year","4th Year"];
+const FLOOR_ORDINALS  = ["1st Floor","2nd Floor","3rd Floor","4th Floor","5th Floor","6th Floor","7th Floor","8th Floor","9th Floor","10th Floor"];
 
-const YEAR_OPTIONS: string[] = [
-  "1st Year","2nd Year","3rd Year","4th Year",
-] as const;
-
-const USER_TYPE_OPTIONS: string[] = ["Student", "Staff/Faculty"];
-
-const FLOOR_ORDINALS = [
-  "1st Floor","2nd Floor","3rd Floor","4th Floor",
-  "5th Floor","6th Floor","7th Floor","8th Floor",
-  "9th Floor","10th Floor",
-] as const;
-
-const getFloorLabel = (index: number): string =>
-  FLOOR_ORDINALS[index] ?? `${index + 1}th Floor`;
+const STATUS_PRIORITY: Record<string, number> = { "Resolved": 4, "In Progress": 3, "Waiting for Materials": 2, "Pending": 1 };
+const STATUS_COLOR: Record<string, string>    = { "Resolved": "#16a34a", "In Progress": "#2563eb", "Waiting for Materials": "#d97706" };
 
 const PROFANITY_PATTERNS: RegExp[] = [
   /potangina/i, /p0t4ng1na/i, /shit/i, /sh\*t/i, /sht/i,
-  /fuck/i,      /fck/i,       /f\*ck/i,/bitch/i,  /b1tch/i,
-  /ul0l/i,      /gago/i,      /gag0/i, /yawa/i,   /y4wa/i, /pakyu/i,
+  /fuck/i, /fck/i, /f\*ck/i, /bitch/i, /b1tch/i,
+  /ul0l/i, /gago/i, /gag0/i, /yawa/i, /y4wa/i, /pakyu/i,
 ];
-
-// Status priority — higher number = more meaningful to surface
-const STATUS_PRIORITY: Record<string, number> = {
-  "Resolved":               4,
-  "In Progress":            3,
-  "Waiting for Materials":  2,
-  "Pending":                1,
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  "Resolved":               "#16a34a",
-  "In Progress":            "#2563eb",
-  "Waiting for Materials":  "#d97706",
-};
 
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
 const META_URL = API_BASE ? `${API_BASE}/api/meta` : "/api/meta";
 
-/* ===============================
-   TYPE DEFINITIONS
-=============================== */
+/* ── Detect student email: xxx0000@dlsud.edu.ph ── */
+const isStudentEmail = (email: string): boolean =>
+  /^[a-z]{2,4}\d{4}@dlsud\.edu\.ph$/i.test(email.trim());
 
-interface PanelProps {
-  title?: string;
-  subtitle?: string;
-  actions?: ReactNode;
-  children: ReactNode;
-}
-
-interface ConcernMeta {
-  id?: string;
-  label: string;
-  subconcerns?: string[];
-}
-
-interface MetaState {
-  buildings: BuildingMeta[];
-  concerns: ConcernMeta[];
-}
-
-interface FormDataState {
-  email: string;
-  heading: string;
-  description: string;
-  concern: string;
-  subConcern: string;
-  building: string;
-  college: string;
-  userType: string;
-  floor: string;
-  room: string;
-  ImageFile: File | null;
-  otherConcern: string;
-  otherBuilding: string;
-  otherRoom: string;
-}
-
-interface Report {
-  _id?: string;
-  reportId?: string;
-  building?: string;
-  concern?: string;
-  subConcern?: string;
-  otherConcern?: string;
-  status?: string;
-  room?: string;
-  otherRoom?: string;
-}
-
-/* ===============================
-   UTILITY FUNCTIONS
-=============================== */
-
+/* ── Utilities ── */
 const isValidImageFile = (file: File): boolean => {
-  const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(
-    file.type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]
-  );
+  const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(file.type as any);
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const extValid = ALLOWED_IMAGE_EXTENSIONS.includes(
-    ext as (typeof ALLOWED_IMAGE_EXTENSIONS)[number]
-  );
-  const sizeValid = file.size <= MAX_IMAGE_SIZE_BYTES;
-  return (mimeValid || extValid) && sizeValid;
+  const extValid = ALLOWED_IMAGE_EXTENSIONS.includes(ext as any);
+  return (mimeValid || extValid) && file.size <= MAX_IMAGE_SIZE_BYTES;
 };
-
-const norm = (v: unknown): string =>
-  v == null ? "" : String(v).trim().toLowerCase();
-
-const normalizeLeet = (text: string): string =>
-  text.toLowerCase()
-    .replace(/0/g,"o").replace(/1/g,"i").replace(/3/g,"e")
-    .replace(/4/g,"a").replace(/5/g,"s").replace(/7/g,"t");
-
-const containsProfanity = (text: string | undefined | null): boolean => {
+const norm = (v: unknown): string => v == null ? "" : String(v).trim().toLowerCase();
+const normalizeLeet = (t: string) => t.toLowerCase().replace(/0/g,"o").replace(/1/g,"i").replace(/3/g,"e").replace(/4/g,"a").replace(/5/g,"s").replace(/7/g,"t");
+const containsProfanity = (text?: string | null) => {
   if (!text) return false;
-  const lower = text.toLowerCase();
-  const leet  = normalizeLeet(text);
-  return PROFANITY_PATTERNS.some((re) => re.test(lower) || re.test(leet));
+  return PROFANITY_PATTERNS.some(re => re.test(text.toLowerCase()) || re.test(normalizeLeet(text)));
 };
-
-const getSimilarityKey = (r: {
-  building?: string; concern?: string; subConcern?: string;
-  otherConcern?: string; room?: string; otherRoom?: string;
-}): string => {
+const getSimilarityKey = (r: { building?: string; concern?: string; subConcern?: string; otherConcern?: string; room?: string; otherRoom?: string }) => {
   const building = (r.building || "").trim();
   const concern  = (r.concern  || "").trim();
   const sub      = (r.subConcern || r.otherConcern || "").trim();
-  const room     = r.room && r.room !== "Other"
-    ? r.room.trim()
-    : (r.otherRoom || "").trim();
-  return room
-    ? `${building}|${concern}|${sub}|${room}`
-    : `${building}|${concern}|${sub}`;
+  const room     = r.room && r.room !== "Other" ? r.room.trim() : (r.otherRoom || "").trim();
+  return room ? `${building}|${concern}|${sub}|${room}` : `${building}|${concern}|${sub}`;
 };
+const getFloorLabel = (i: number) => FLOOR_ORDINALS[i] ?? `${i + 1}th Floor`;
 
-function normaliseRoomsPerFloor(
-  raw: number | number[] | unknown,
-  floors: number
-): number[] {
+function normaliseRPF(raw: unknown, floors: number): number[] {
   let arr: number[];
   if (Array.isArray(raw)) {
-    arr = (raw as unknown[]).map((v) => {
-      const n = parseInt(String(v), 10);
-      return Number.isNaN(n) || n < 1 ? 1 : n;
-    });
+    arr = (raw as unknown[]).map(v => { const n = parseInt(String(v),10); return isNaN(n)||n<1?1:n; });
   } else {
-    const flat  = parseInt(String(raw), 10);
-    const count = Number.isNaN(flat) || flat < 1 ? 1 : flat;
-    arr = Array.from({ length: floors }, () => count);
+    const flat = parseInt(String(raw),10);
+    arr = Array.from({ length: floors }, () => isNaN(flat)||flat<1?1:flat);
   }
-  while (arr.length < floors) arr.push(arr[arr.length - 1] ?? 1);
+  while (arr.length < floors) arr.push(arr[arr.length-1]??1);
   return arr.slice(0, floors);
 }
 
 function parseBuildingMeta(raw: unknown, idx: number): BuildingMeta {
   if (typeof raw === "string") {
     const name = raw.trim();
-    return {
-      id: norm(name).replace(/\s+/g, "-") || `b-${idx}`,
-      name: name || "Unnamed",
-      floors: 1,
-      roomsPerFloor: [1],
-      hasRooms: true,
-    };
+    return { id: norm(name).replace(/\s+/g,"-")||`b-${idx}`, name: name||"Unnamed", floors:1, roomsPerFloor:[1], hasRooms:true };
   }
   const obj = raw as any;
-  const name   = String(obj?.name  || "").trim();
-  const id     = String(obj?.id    || "").trim()
-    || norm(name).replace(/\s+/g, "-")
-    || `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-  const floors = typeof obj?.floors === "number" && obj.floors > 0
-    ? Math.round(obj.floors) : 1;
-  return {
-    id,
-    name: name || "Unnamed",
-    floors,
-    roomsPerFloor: normaliseRoomsPerFloor(obj?.roomsPerFloor, floors),
-    hasRooms: obj?.hasRooms === false ? false : true,
-    singleLocationLabel: typeof obj?.singleLocationLabel === "string"
-      ? obj.singleLocationLabel.trim() : "",
-  };
+  const name   = String(obj?.name||"").trim();
+  const id     = String(obj?.id||"").trim() || norm(name).replace(/\s+/g,"-") || `b-${idx}`;
+  const floors = typeof obj?.floors==="number"&&obj.floors>0 ? Math.round(obj.floors) : 1;
+  return { id, name: name||"Unnamed", floors, roomsPerFloor: normaliseRPF(obj?.roomsPerFloor, floors), hasRooms: obj?.hasRooms===false?false:true, singleLocationLabel: String(obj?.singleLocationLabel||"").trim() };
 }
 
-function getRoomsForFloor(
-  building: BuildingMeta | null,
-  floorLabel: string
-): string[] | null {
-  if (!building || building.hasRooms === false) return null;
-  if (!floorLabel || floorLabel === "Other") return null;
-
+function getRoomsForFloor(building: BuildingMeta|null, floorLabel: string): string[]|null {
+  if (!building||building.hasRooms===false||!floorLabel||floorLabel==="Other") return null;
   const match = floorLabel.match(/^(\d+)/);
   if (!match) return null;
-  const floorNum = parseInt(match[1], 10);
-  const floorIdx = floorNum - 1;
-
-  const arr   = normaliseRoomsPerFloor(building.roomsPerFloor, building.floors);
-  const count = arr[floorIdx];
-  if (!count || count < 1) return null;
-
-  const base = floorNum * 100;
-  return Array.from({ length: count }, (_, i) => String(base + i + 1));
+  const floorNum = parseInt(match[1],10);
+  const arr   = normaliseRPF(building.roomsPerFloor, building.floors);
+  const count = arr[floorNum-1];
+  if (!count||count<1) return null;
+  return Array.from({ length: count }, (_,i) => String(floorNum*100+i+1));
 }
 
-/* ===============================
-   REUSABLE COMPONENTS
-=============================== */
-
-const Panel = memo(({ title, subtitle, actions, children }: PanelProps) => (
-  <section className="create-scope__panel">
-    <header className="create-scope__panel-head">
-      <div>
-        {title    && <h3 className="create-scope__panel-title">{title}</h3>}
-        {subtitle && <p  className="create-scope__panel-subtitle">{subtitle}</p>}
-      </div>
-      {actions && <div className="create-scope__panel-actions">{actions}</div>}
-    </header>
-    <div className="create-scope__panel-body">{children}</div>
-  </section>
-));
-Panel.displayName = "Panel";
-
-const InfoTooltip = memo(({ text }: { text: string }) => (
-  <div className="tooltip-container">
-    <span className="tooltip">{text}</span>
-    <span className="text">More Info</span>
-  </div>
-));
-InfoTooltip.displayName = "InfoTooltip";
-
+/* ── Components ── */
 const RequiredStar = memo(({ value }: { value: unknown }) => {
   const str = value == null ? "" : String(value).trim();
-  if (!str) return <span className="create-scope__required-star"> *</span>;
-  return null;
+  return str ? null : <span style={{ color: "#ef4444", marginLeft: 2 }}>*</span>;
 });
 RequiredStar.displayName = "RequiredStar";
 
-/* ===============================
-   CUSTOM HOOKS
-=============================== */
+const FieldGroup = ({ label, hint, children, htmlFor }: { label: ReactNode; hint?: string; children: ReactNode; htmlFor?: string }) => (
+  <div className="cf-field">
+    <label className="cf-label" htmlFor={htmlFor}>{label}</label>
+    {children}
+    {hint && <p className="cf-hint">{hint}</p>}
+  </div>
+);
 
+/* ── Hooks ── */
 const useBodyScrollLock = (lock: boolean) => {
   useLayoutEffect(() => {
-    if (lock) {
-      document.body.style.overflow = "hidden";
-      document.documentElement.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-    };
+    document.body.style.overflow = lock ? "hidden" : "";
+    document.documentElement.style.overflow = lock ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; document.documentElement.style.overflow = ""; };
   }, [lock]);
 };
 
-const useSidebarState = () => {
-  const [sidebarOpen,        setSidebarOpen]        = useState<boolean>(true);
-  const [sidebarOverlayOpen, setSidebarOverlayOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("create_sidebar_open");
-    if (saved !== null) setSidebarOpen(saved === "true");
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("create_sidebar_open", String(sidebarOpen));
-  }, [sidebarOpen]);
-
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth >= 1024) setSidebarOverlayOpen(false);
-    };
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  return { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen };
-};
-
-/* ===============================
-   MAIN COMPONENT
-=============================== */
-
+/* ══════════════════════════════════════════════════════════════════════ */
 export default function Create() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const { theme } = useTheme();
   const light = theme === "light";
 
-  const { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen } =
-    useSidebarState();
-
-  const [isConfirming,      setIsConfirming]      = useState<boolean>(false);
-  useBodyScrollLock(sidebarOverlayOpen || isConfirming);
+  const [isConfirming, setIsConfirming] = useState(false);
+  useBodyScrollLock(isConfirming);
 
   const [formData, setFormData] = useState<FormDataState>({
     email: "", heading: "", description: "",
     concern: "", subConcern: "", building: "",
-    college: "", userType: "Student",
-    floor: "", room: "",
-    ImageFile: null,
+    college: "", year: "", userType: "Student",
+    floor: "", room: "", ImageFile: null,
     otherConcern: "", otherBuilding: "", otherRoom: "",
   });
 
-  const [preview,           setPreview]           = useState<string | null>(null);
-  const [message,           setMessage]           = useState<string>("");
+  const [preview,           setPreview]           = useState<string|null>(null);
+  const [message,           setMessage]           = useState("");
   const [messageType,       setMessageType]       = useState<"success"|"error"|"info"|"">("");
-  const [submitting,        setSubmitting]        = useState<boolean>(false);
-  const [specificRoom,      setSpecificRoom]      = useState<boolean>(false);
-  const [currentUserEmail,  setCurrentUserEmail]  = useState<string>("");
-  const [generatedReportId, setGeneratedReportId] = useState<string>("");
+  const [submitting,        setSubmitting]        = useState(false);
+  const [specificRoom,      setSpecificRoom]      = useState(false);
+  const [currentUserEmail,  setCurrentUserEmail]  = useState("");
+  const [generatedReportId, setGeneratedReportId] = useState("");
   const [existingReports,   setExistingReports]   = useState<Report[]>([]);
-  const [hasProfanity,      setHasProfanity]      = useState<boolean>(false);
+  const [hasProfanity,      setHasProfanity]      = useState(false);
+  const [meta,              setMeta]              = useState<MetaState>({ buildings: FALLBACK_BUILDINGS, concerns: FALLBACK_CONCERNS });
+  const [metaLoading,       setMetaLoading]       = useState(true);
+  const [metaError,         setMetaError]         = useState("");
 
-  const [meta,        setMeta]        = useState<MetaState>({
-    buildings: FALLBACK_BUILDINGS,
-    concerns:  FALLBACK_CONCERNS,
-  });
-  const [metaLoading, setMetaLoading] = useState<boolean>(true);
-  const [metaError,   setMetaError]   = useState<string>("");
+  useEffect(() => { return () => { if (preview) URL.revokeObjectURL(preview); }; }, [preview]);
 
-  useEffect(() => {
-    return () => { if (preview) URL.revokeObjectURL(preview); };
-  }, [preview]);
-
+  /* ── Auto-fill email + detect student ── */
   useEffect(() => {
     if (!isLoaded || !user) return;
-    const emailFromClerk =
-      user.primaryEmailAddress?.emailAddress ||
-      user.emailAddresses[0]?.emailAddress || "";
-    if (emailFromClerk) {
-      setCurrentUserEmail(emailFromClerk);
-      setFormData((f) => ({ ...f, email: emailFromClerk }));
+    const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses[0]?.emailAddress || "";
+    if (email) {
+      setCurrentUserEmail(email);
+      const userType = isStudentEmail(email) ? "Student" : "Staff/Faculty";
+      setFormData(f => ({ ...f, email, userType }));
     }
   }, [isLoaded, user]);
 
+  /* ── Load meta ── */
   useEffect(() => {
     let alive = true;
-    async function loadMeta() {
+    (async () => {
       setMetaLoading(true);
-      setMetaError("");
       try {
         const res  = await fetch(META_URL, { credentials: "omit" });
-        if (!res.ok) throw new Error(`Failed to load options. Status ${res.status}`);
-        const data = await res.json() as { buildings?: unknown; concerns?: unknown };
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = await res.json();
         if (!alive) return;
-
-        const incomingBuildings: BuildingMeta[] =
-          Array.isArray(data.buildings) && data.buildings.length
-            ? (data.buildings as unknown[]).map(parseBuildingMeta)
-            : FALLBACK_BUILDINGS;
-
-        const incomingConcerns: ConcernMeta[] =
-          Array.isArray(data.concerns) && data.concerns.length
-            ? (data.concerns as ConcernMeta[])
-            : FALLBACK_CONCERNS;
-
-        setMeta({ buildings: incomingBuildings, concerns: incomingConcerns });
-      } catch (err) {
-        console.error("Error loading meta:", err);
+        setMeta({
+          buildings: Array.isArray(data.buildings) && data.buildings.length ? data.buildings.map(parseBuildingMeta) : FALLBACK_BUILDINGS,
+          concerns:  Array.isArray(data.concerns)  && data.concerns.length  ? data.concerns                         : FALLBACK_CONCERNS,
+        });
+      } catch {
         if (!alive) return;
         setMeta({ buildings: FALLBACK_BUILDINGS, concerns: FALLBACK_CONCERNS });
-        setMetaError("Could not load latest options. Using defaults.");
-      } finally {
-        if (alive) setMetaLoading(false);
-      }
-    }
-    loadMeta();
+        setMetaError("Using default options.");
+      } finally { if (alive) setMetaLoading(false); }
+    })();
     return () => { alive = false; };
   }, []);
 
+  /* ── Load existing reports for similarity ── */
   useEffect(() => {
-    const fetchReports = async () => {
+    (async () => {
       try {
         const url = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
         const res = await fetch(url, { credentials: "omit" });
         if (!res.ok) return;
         const data = await res.json();
-        let list: Report[] = [];
-        if      (Array.isArray(data))                   list = data as Report[];
-        else if (Array.isArray((data as any).reports))  list = (data as any).reports as Report[];
-        else if (Array.isArray((data as any).data))     list = (data as any).data as Report[];
+        const list: Report[] = Array.isArray(data) ? data : Array.isArray(data.reports) ? data.reports : Array.isArray(data.data) ? data.data : [];
         setExistingReports(list);
-      } catch (err) {
-        console.error("Error fetching reports for similarity:", err);
-      }
-    };
-    fetchReports();
+      } catch {}
+    })();
   }, []);
 
-  /* ── Meta-driven building/floor/room state ─────────────────── */
+  /* ── Derived building state ── */
+  const selectedBuildingMeta = useMemo(() =>
+    (!formData.building || formData.building === "Other") ? null :
+    meta.buildings.find(b => b.name === formData.building) ?? null
+  , [meta.buildings, formData.building]);
 
-  const selectedBuildingMeta = useMemo((): BuildingMeta | null => {
-    if (!formData.building || formData.building === "Other") return null;
-    return meta.buildings.find((b) => b.name === formData.building) ?? null;
-  }, [meta.buildings, formData.building]);
+  const buildingHasRooms = selectedBuildingMeta?.hasRooms === true;
 
-  const buildingHasRooms = useMemo((): boolean => {
-    return selectedBuildingMeta?.hasRooms === true;
-  }, [selectedBuildingMeta]);
-
-  const visibleFloorOptions = useMemo((): string[] => {
+  const visibleFloorOptions = useMemo(() => {
     if (!selectedBuildingMeta || !buildingHasRooms) return [];
-    const count = selectedBuildingMeta.floors ?? 1;
-    const opts  = Array.from({ length: count }, (_, i) => getFloorLabel(i));
-    opts.push("Other");
-    return opts;
+    const opts = Array.from({ length: selectedBuildingMeta.floors }, (_,i) => getFloorLabel(i));
+    return [...opts, "Other"];
   }, [selectedBuildingMeta, buildingHasRooms]);
 
-  const availableRooms = useMemo((): string[] | null => {
-    if (!buildingHasRooms || !formData.floor || formData.floor === "Other")
-      return null;
+  const availableRooms = useMemo(() => {
+    if (!buildingHasRooms || !formData.floor || formData.floor === "Other") return null;
     return getRoomsForFloor(selectedBuildingMeta, formData.floor);
   }, [selectedBuildingMeta, buildingHasRooms, formData.floor]);
 
-  const availableRoomsWithOther = useMemo((): string[] | null => {
-    if (!availableRooms) return null;
-    return [...availableRooms, "Other"];
-  }, [availableRooms]);
+  const availableRoomsWithOther = availableRooms ? [...availableRooms, "Other"] : null;
+  const hasRoom = Array.isArray(availableRooms) && availableRooms.length > 0;
 
-  const hasRoom = useMemo((): boolean => {
-    return Array.isArray(availableRooms) && availableRooms.length > 0;
-  }, [availableRooms]);
-
-  /* ── Conditional flags ─────────────────────────────────────── */
-
+  /* ── Conditional flags ── */
   const showSubConcern       = !!formData.concern && formData.concern !== "Other";
   const needsOtherConcern    = formData.concern === "Other";
   const needsOtherSubConcern = formData.subConcern === "Other";
   const needsOtherBuilding   = formData.building === "Other";
   const roomIsOther          = formData.room === "Other";
+  const showFloorDropdown    = specificRoom && buildingHasRooms && !!formData.building && formData.building !== "Other";
+  const showRoomDropdown     = showFloorDropdown && !!formData.floor && formData.floor !== "Other" && hasRoom;
+  const needsOtherRoomText   = specificRoom && buildingHasRooms && !!formData.building && formData.building !== "Other" && (roomIsOther || formData.floor === "Other");
+  const needsOtherRoom       = specificRoom && !!formData.building && formData.building !== "Other" && !buildingHasRooms;
 
-  const showFloorDropdown =
-    specificRoom && buildingHasRooms &&
-    !!formData.building && formData.building !== "Other";
+  /* ── isStudent detection ── */
+  const isStudent = isStudentEmail(formData.email);
 
-  const showRoomDropdown =
-    showFloorDropdown &&
-    !!formData.floor && formData.floor !== "Other" &&
-    hasRoom;
-
-  const needsOtherRoomText =
-    specificRoom && buildingHasRooms &&
-    !!formData.building && formData.building !== "Other" &&
-    (roomIsOther || formData.floor === "Other");
-
-  const needsOtherRoom =
-    specificRoom &&
-    !!formData.building && formData.building !== "Other" &&
-    !buildingHasRooms;
-
-  /* ── Required fields ───────────────────────────────────────── */
-
-  const requiredNow = useMemo((): (keyof FormDataState)[] => {
-    const req: (keyof FormDataState)[] = [
-      "email","heading","description","concern","building","college","userType",
-    ];
-    if (showSubConcern)       req.push("subConcern");
+  /* ── Required fields ── */
+  const requiredNow = useMemo(() => {
+    const req: (keyof FormDataState)[] = ["email","heading","description","concern","building","college","year"];
+    if (!isStudent) req.push("userType");
+    if (showSubConcern) req.push("subConcern");
     if (needsOtherConcern || needsOtherSubConcern) req.push("otherConcern");
-    if (needsOtherBuilding)   req.push("otherBuilding");
-    if (showFloorDropdown)    req.push("floor");
-    if (showRoomDropdown)     req.push("room");
+    if (needsOtherBuilding) req.push("otherBuilding");
+    if (showFloorDropdown)  req.push("floor");
+    if (showRoomDropdown)   req.push("room");
     if (needsOtherRoomText || needsOtherRoom) req.push("otherRoom");
-    if (roomIsOther && showRoomDropdown)      req.push("otherRoom");
+    if (roomIsOther && showRoomDropdown) req.push("otherRoom");
     return req;
-  }, [
-    showSubConcern, needsOtherConcern, needsOtherSubConcern,
-    needsOtherBuilding, showFloorDropdown, showRoomDropdown,
-    needsOtherRoomText, needsOtherRoom, roomIsOther,
-  ]);
+  }, [showSubConcern, needsOtherConcern, needsOtherSubConcern, needsOtherBuilding, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom, roomIsOther, isStudent]);
 
-  const filledCount = useMemo(
-    () => requiredNow.reduce((acc, key) => {
-      const val = formData[key];
-      return acc + (val && String(val).trim() ? 1 : 0);
-    }, 0),
-    [requiredNow, formData]
-  );
-
-  const progressPct   = useMemo(() => {
-    const total = requiredNow.length || 1;
-    return Math.round((filledCount / total) * 100);
-  }, [filledCount, requiredNow]);
-
+  const filledCount   = useMemo(() => requiredNow.reduce((a, k) => { const v = formData[k]; return a + (v && String(v).trim() ? 1 : 0); }, 0), [requiredNow, formData]);
+  const progressPct   = Math.round((filledCount / (requiredNow.length || 1)) * 100);
   const readyToSubmit = progressPct === 100;
 
-  /* ── Similarity check — now also captures highest status ───── */
-
-  const similarMatches = useMemo((): Report[] => {
+  /* ── Similarity ── */
+  const similarMatches = useMemo(() => {
     if (!formData.building || !formData.concern) return [];
-    const currentKey = getSimilarityKey({
+    const key = getSimilarityKey({
       building:     formData.building === "Other" ? formData.otherBuilding : formData.building,
       concern:      formData.concern,
       subConcern:   formData.concern === "Other" ? "" : formData.subConcern,
       otherConcern: formData.concern === "Other" ? formData.otherConcern : undefined,
-      room:         formData.room    || undefined,
-      otherRoom:    formData.room    ? undefined : formData.otherRoom || undefined,
+      room:         formData.room || undefined,
+      otherRoom:    formData.room ? undefined : formData.otherRoom || undefined,
     });
-    if (!currentKey.trim()) return [];
-    return existingReports.filter((r) => {
-      if (norm(r.status || "Pending") === "archived") return false;
-      return getSimilarityKey(r) === currentKey;
-    });
+    if (!key.trim()) return [];
+    return existingReports.filter(r => norm(r.status||"Pending") !== "archived" && getSimilarityKey(r) === key);
   }, [existingReports, formData]);
 
-  const similarReportsCount = useMemo(() => similarMatches.length, [similarMatches]);
-
-  /** The highest-priority status among all matching reports. */
-  const similarStatus = useMemo((): string | null => {
-    if (similarMatches.length === 0) return null;
-    const best = similarMatches.reduce((prev, curr) => {
-      const prevP = STATUS_PRIORITY[prev.status || "Pending"] ?? 0;
-      const currP = STATUS_PRIORITY[curr.status || "Pending"] ?? 0;
-      return currP > prevP ? curr : prev;
-    });
-    return best.status || "Pending";
+  const similarReportsCount = similarMatches.length;
+  const similarStatus = useMemo(() => {
+    if (!similarMatches.length) return null;
+    return similarMatches.reduce((prev, curr) => (STATUS_PRIORITY[curr.status||"Pending"]??0) > (STATUS_PRIORITY[prev.status||"Pending"]??0) ? curr : prev).status || "Pending";
   }, [similarMatches]);
 
-  /* ── Summary text ──────────────────────────────────────────── */
-
-  const summaryText = useMemo((): string => {
-    const parts: string[] = [];
-    parts.push(`Title: ${formData.heading || "-"}`);
-
-    let concernDisplay = formData.concern || "-";
-    if (formData.concern === "Other" && formData.otherConcern) {
-      concernDisplay = `Other: ${formData.otherConcern}`;
-    } else if (formData.subConcern) {
-      concernDisplay += formData.subConcern === "Other" && formData.otherConcern
-        ? ` / Other: ${formData.otherConcern}`
-        : ` / ${formData.subConcern}`;
-    }
-    parts.push(`Concern: ${concernDisplay}`);
-
-    let buildingDisplay = formData.building || "-";
-    if (formData.building === "Other" && formData.otherBuilding)
-      buildingDisplay = `Other: ${formData.otherBuilding}`;
-    parts.push(`Building: ${buildingDisplay}`);
-    parts.push(`User Type: ${formData.userType || "-"}`);
-
-    if (specificRoom) {
-      if (showFloorDropdown && formData.floor)
-        parts.push(`Floor: ${formData.floor}`);
-      if (showRoomDropdown || needsOtherRoomText) {
-        const roomDisplay = formData.room === "Other" && formData.otherRoom
-          ? `Other: ${formData.otherRoom}`
-          : formData.room || "-";
-        parts.push(`Room: ${roomDisplay}`);
-      } else if (needsOtherRoom) {
-        parts.push(`Spot: ${formData.otherRoom || "-"}`);
-      }
-    } else {
-      parts.push("Specific room: No");
-    }
-
-    if (formData.college) parts.push(`College: ${formData.college}`);
-    parts.push(`Photo attached: ${formData.ImageFile ? "Yes" : "No"}`);
-    return parts.join("\n");
-  }, [formData, specificRoom, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom]);
-
-  /* ── Concern / building options ────────────────────────────── */
-
-  const buildingOptions = useMemo((): string[] => {
-    const list = meta.buildings
-      .map((b) => String(b.name || "").trim())
-      .filter((name) => name.length > 0);
-    const others = list.filter((x) => norm(x) === "other");
-    const normal = list.filter((x) => norm(x) !== "other");
-    normal.sort((a, b) => a.localeCompare(b));
-    return [...normal, ...others];
+  /* ── Concern/building options ── */
+  const buildingOptions = useMemo(() => {
+    const list = meta.buildings.map(b => b.name).filter(Boolean);
+    return [...list.filter(x => norm(x) !== "other").sort(), ...list.filter(x => norm(x) === "other")];
   }, [meta.buildings]);
 
-  const concernOptions = useMemo((): string[] => {
-    const list = meta.concerns
-      .map((c) => c.label)
-      .filter((label) => label && String(label).trim().length > 0);
-    const others = list.filter((x) => norm(x) === "other");
-    const normal = list.filter((x) => norm(x) !== "other");
-    normal.sort((a, b) => String(a).localeCompare(String(b)));
-    return [...normal, ...others];
+  const concernOptions = useMemo(() => {
+    const list = meta.concerns.map(c => c.label).filter(Boolean);
+    return [...list.filter(x => norm(x) !== "other").sort(), ...list.filter(x => norm(x) === "other")];
   }, [meta.concerns]);
 
-  const selectedConcern = useMemo(
-    () => meta.concerns.find((c) => c.label === formData.concern) || null,
-    [meta.concerns, formData.concern]
-  );
+  const selectedConcern         = meta.concerns.find(c => c.label === formData.concern) || null;
+  const dynamicSubconcernOptions = selectedConcern?.subconcerns || [];
 
-  const dynamicSubconcernOptions = useMemo((): string[] => {
-    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns)) return [];
-    return selectedConcern.subconcerns;
-  }, [selectedConcern]);
-
-  /* ── Profanity check ───────────────────────────────────────── */
-
+  /* ── Profanity ── */
   useEffect(() => {
-    setHasProfanity([
-      formData.heading, formData.description,
-      formData.otherConcern, formData.otherBuilding,
-      formData.otherRoom, formData.room,
-    ].some((t) => containsProfanity(t)));
+    setHasProfanity([formData.heading, formData.description, formData.otherConcern, formData.otherBuilding, formData.otherRoom].some(containsProfanity));
   }, [formData]);
 
-  /* ── Event handlers ────────────────────────────────────────── */
+  /* ── Handlers ── */
+  const showMsg = useCallback((type: "success"|"error"|"info", text: string) => { setMessageType(type); setMessage(text); }, []);
 
-  const showMsg = useCallback((type: "success"|"error"|"info", text: string) => {
-    setMessageType(type);
-    setMessage(text);
-  }, []);
+  const handleChange = useCallback((e: ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    const target = e.target as HTMLInputElement;
 
-  const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-      const { name, value } = e.target;
-      const target = e.target as HTMLInputElement;
+    if (name === "room" && value === "Other") { setFormData(p => ({ ...p, room: "Other", otherRoom: "" })); return; }
 
-      if (name === "room" && value === "Other") {
-        setFormData((prev) => ({ ...prev, room: "Other", otherRoom: "" }));
-        return;
-      }
-
-      if (target.files && target.files[0]) {
-        const file = target.files[0];
-        if (!isValidImageFile(file)) {
-          showMsg("error", "Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP).");
-          target.value = "";
-          setFormData((prev) => ({ ...prev, ImageFile: null }));
-          setPreview(null);
-          return;
-        }
-        setFormData((prev) => ({ ...prev, ImageFile: file }));
-        setPreview(URL.createObjectURL(file));
-        return;
-      }
-
-      setFormData((prev) => {
-        const next = { ...prev, [name]: value } as FormDataState;
-        if (name === "concern")  { next.subConcern = ""; next.otherConcern = ""; }
-        if (name === "building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
-        if (name === "floor")    { next.room = ""; next.otherRoom = ""; }
-        if (name === "room" && value !== "Other") { next.otherRoom = ""; }
-        return next;
-      });
-    },
-    [showMsg]
-  );
-
-  const onDrop = useCallback((e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.classList.remove("is-dragover");
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    if (!isValidImageFile(file)) {
-      showMsg("error", "Unsupported file type. Only image files are allowed.");
+    if (target.files?.[0]) {
+      const file = target.files[0];
+      if (!isValidImageFile(file)) { showMsg("error","Unsupported file. Please upload JPG, PNG, HEIC, or WEBP."); target.value = ""; setFormData(p => ({ ...p, ImageFile: null })); setPreview(null); return; }
+      setFormData(p => ({ ...p, ImageFile: file }));
+      setPreview(URL.createObjectURL(file));
       return;
     }
-    setFormData((prev) => ({ ...prev, ImageFile: file }));
-    setPreview(URL.createObjectURL(file));
+
+    setFormData(prev => {
+      const next = { ...prev, [name]: value } as FormDataState;
+      if (name === "concern")  { next.subConcern = ""; next.otherConcern = ""; }
+      if (name === "building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
+      if (name === "floor")    { next.room = ""; next.otherRoom = ""; }
+      if (name === "room" && value !== "Other") next.otherRoom = "";
+      return next;
+    });
   }, [showMsg]);
 
-  const onDragOver  = useCallback((e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault(); e.currentTarget.classList.add("is-dragover");
-  }, []);
-  const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault(); e.currentTarget.classList.remove("is-dragover");
-  }, []);
+  const onDrop      = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.remove("is-dragover"); const file = e.dataTransfer.files?.[0]; if (!file||!isValidImageFile(file)) { showMsg("error","Only image files allowed."); return; } setFormData(p => ({...p,ImageFile:file})); setPreview(URL.createObjectURL(file)); }, [showMsg]);
+  const onDragOver  = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.add("is-dragover"); }, []);
+  const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.remove("is-dragover"); }, []);
+
+  const resetForm = useCallback(() => {
+    setFormData({ email: currentUserEmail||"", heading:"", description:"", concern:"", subConcern:"", building:"", college:"", year:"", userType: isStudentEmail(currentUserEmail)?"Student":"", floor:"", room:"", ImageFile:null, otherConcern:"", otherBuilding:"", otherRoom:"" });
+    setPreview(null); setSpecificRoom(false); setIsConfirming(false); setGeneratedReportId(""); showMsg("info","Form cleared.");
+  }, [currentUserEmail, showMsg]);
 
   const performSubmit = useCallback(async () => {
-    setSubmitting(true);
-    setIsConfirming(false);
-    showMsg("info", "Submitting report...");
-
+    setSubmitting(true); setIsConfirming(false); showMsg("info","Submitting...");
     try {
       const data = new FormData();
       data.append("email",       formData.email);
       data.append("heading",     formData.heading);
       data.append("description", formData.description);
-      data.append("userType",    formData.userType);
-
-      if (formData.concern === "Other") {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", "");
-      } else {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", formData.subConcern === "Other" ? "Other" : formData.subConcern);
-      }
-
-      data.append("building",
-        formData.building === "Other"
-          ? `Other: ${formData.otherBuilding.trim()}`
-          : formData.building
-      );
-      data.append("college",  formData.college);
-      data.append("floor",    formData.floor);
-      data.append("room",
-        formData.room === "Other"
-          ? `Other: ${formData.otherRoom.trim()}`
-          : formData.room
-      );
+      data.append("userType",    isStudent ? "Student" : formData.userType);
+      data.append("college",     `${formData.college}${formData.year ? ` - ${formData.year}` : ""}`);
+      data.append("concern",     formData.concern);
+      data.append("subConcern",  formData.subConcern === "Other" ? "Other" : formData.subConcern);
+      data.append("building",    formData.building === "Other" ? `Other: ${formData.otherBuilding.trim()}` : formData.building);
+      data.append("floor",       formData.floor);
+      data.append("room",        formData.room === "Other" ? `Other: ${formData.otherRoom.trim()}` : formData.room);
       data.append("otherConcern",  formData.otherConcern.trim());
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom",     formData.otherRoom);
-
-      // Pass the matching status so the backend can inherit it
-      if (similarStatus && similarStatus !== "Pending") {
-        data.append("inheritedStatus", similarStatus);
-      }
-
+      if (similarStatus && similarStatus !== "Pending") data.append("inheritedStatus", similarStatus);
       if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
-      const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
-      const res = await fetch(submitUrl, { method: "POST", body: data });
-      const raw = await res.text().catch(() => "");
-
-      if (!res.ok) {
-        console.error("Submit error status:", res.status, raw);
-        showMsg("error", raw || `Submission failed with status ${res.status}`);
-        return;
-      }
-
+      const res  = await fetch(API_BASE ? `${API_BASE}/api/reports` : "/api/reports", { method: "POST", body: data });
+      const raw  = await res.text().catch(() => "");
+      if (!res.ok) { showMsg("error", raw || `Submission failed (${res.status})`); return; }
       let result: any = {};
       try { result = raw ? JSON.parse(raw) : {}; } catch {}
-
       if (result.success) {
-        if (result.report && typeof result.report === "object") {
-          setExistingReports((prev) => [...prev, result.report as Report]);
-          if (result.report.reportId) setGeneratedReportId(result.report.reportId);
-        }
-        showMsg("success", `Report submitted successfully.`);
-        setFormData({
-          email: currentUserEmail || "",
-          heading: "", description: "",
-          concern: "", subConcern: "", building: "",
-          college: "", userType: "Student",
-          floor: "", room: "", ImageFile: null,
-          otherConcern: "", otherBuilding: "", otherRoom: "",
-        });
-        setPreview(null);
-        setSpecificRoom(false);
-      } else {
-        showMsg("error", result.message || "Submission failed.");
-      }
-    } catch (err) {
-      console.error("Submit error:", err);
-      showMsg("error", "Network error while submitting report.");
-    } finally {
-      setSubmitting(false);
-    }
-  }, [formData, currentUserEmail, showMsg, similarStatus]);
+        if (result.report?.reportId) { setExistingReports(p => [...p, result.report]); setGeneratedReportId(result.report.reportId); }
+        showMsg("success", "Report submitted successfully.");
+        setFormData({ email: currentUserEmail||"", heading:"", description:"", concern:"", subConcern:"", building:"", college:"", year:"", userType: isStudentEmail(currentUserEmail)?"Student":"", floor:"", room:"", ImageFile:null, otherConcern:"", otherBuilding:"", otherRoom:"" });
+        setPreview(null); setSpecificRoom(false);
+      } else { showMsg("error", result.message || "Submission failed."); }
+    } catch { showMsg("error","Network error."); }
+    finally { setSubmitting(false); }
+  }, [formData, currentUserEmail, showMsg, similarStatus, isStudent]);
 
-  const handleSubmit = useCallback(
-    (e: FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) {
-        showMsg("error", "Invalid attachment detected. Please upload a valid image file.");
-        return;
-      }
-      if (!formData.ImageFile) {
-        showMsg("error", "Please attach an image before submitting.");
-        return;
-      }
-      if (hasProfanity) {
-        showMsg("error", "Your report contains foul or inappropriate language. Please remove it before submitting.");
-        return;
-      }
-      if (similarReportsCount > 0) {
-        setIsConfirming(true);
-        return;
-      }
-      void performSubmit();
-    },
-    [formData, hasProfanity, similarReportsCount, showMsg, performSubmit]
-  );
+  const handleSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) { showMsg("error","Invalid image file."); return; }
+    if (!formData.ImageFile) { showMsg("error","Please attach a photo before submitting."); return; }
+    if (hasProfanity) { showMsg("error","Please remove inappropriate language before submitting."); return; }
+    if (similarReportsCount > 0) { setIsConfirming(true); return; }
+    void performSubmit();
+  }, [formData, hasProfanity, similarReportsCount, showMsg, performSubmit]);
 
-  const copySummary = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(summaryText);
-      showMsg("success", "Summary copied to clipboard.");
-    } catch {
-      showMsg("error", "Could not copy summary.");
-    }
-  }, [summaryText, showMsg]);
-
-  const viewreports = useCallback(() => {
-    localStorage.removeItem("currentUser");
-    router.push("/Student/ViewReports");
-  }, [router]);
-
-  const resetForm = useCallback(() => {
-    setFormData({
-      email: currentUserEmail || "",
-      heading: "", description: "",
-      concern: "", subConcern: "", building: "",
-      college: "", userType: "Student",
-      floor: "", room: "", ImageFile: null,
-      otherConcern: "", otherBuilding: "", otherRoom: "",
-    });
-    setPreview(null);
-    setSpecificRoom(false);
-    setIsConfirming(false);
-    setGeneratedReportId("");
-    showMsg("info", "Form cleared.");
-  }, [currentUserEmail, showMsg]);
-
-  /* ── Render ─────────────────────────────────────────────────── */
-
+  /* ══════════ RENDER ══════════ */
   return (
-    <div className={`create-scope ${light ? "create-scope--light" : ""}`}>
+    <div className={`cf-root ${light ? "cf-root--light" : ""}`}>
       <style>{`
-        .tooltip-container {
-          --background-light: #ff5555;
-          --background-dark: #000000;
-          --text-color-light: #ffffff;
-          --text-color-dark: #ffffff;
-          --bubble-size: 12px;
-          --glow-color: rgba(255, 255, 255, 0.5);
-          position: relative;
-          background: var(--background-light);
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 14px;
-          padding: 0.4em 1em;
-          color: var(--text-color-light);
-          border-radius: 8px;
-          display: inline-block;
-          margin-left: 8px;
-          border: none;
+        /* ── Design System ── */
+        .cf-root {
+          --cf-bg:        #0f1117;
+          --cf-surface:   #1a1d27;
+          --cf-border:    #2a2d3a;
+          --cf-accent:    #3b82f6;
+          --cf-accent-2:  #06b6d4;
+          --cf-text:      #e2e8f0;
+          --cf-muted:     #64748b;
+          --cf-error:     #ef4444;
+          --cf-success:   #22c55e;
+          --cf-warning:   #f59e0b;
+          --cf-radius:    10px;
+          --cf-radius-sm: 6px;
+          min-height: 100vh;
+          background: var(--cf-bg);
+          color: var(--cf-text);
+          font-family: 'DM Sans', 'Outfit', system-ui, sans-serif;
         }
-        .tooltip {
-          position: absolute;
-          bottom: 125%;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 0.8em 1.2em;
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transition: all 0.3s;
-          border-radius: var(--bubble-size);
-          background: var(--background-light);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-          width: max-content;
-          max-width: 300px;
+        .cf-root--light {
+          --cf-bg:      #f1f5f9;
+          --cf-surface: #ffffff;
+          --cf-border:  #e2e8f0;
+          --cf-text:    #0f172a;
+          --cf-muted:   #94a3b8;
+        }
+
+        /* ── Layout ── */
+        .cf-layout {
+          display: grid;
+          grid-template-columns: 300px 1fr;
+          min-height: 100vh;
+        }
+        @media (max-width: 900px) {
+          .cf-layout { grid-template-columns: 1fr; }
+          .cf-sidebar { display: none; }
+        }
+
+        /* ── Sidebar ── */
+        .cf-sidebar {
+          background: var(--cf-surface);
+          border-right: 1px solid var(--cf-border);
+          padding: 28px 20px;
+          position: sticky;
+          top: 0;
+          height: 100vh;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .cf-brand {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding-bottom: 20px;
+          border-bottom: 1px solid var(--cf-border);
+        }
+        .cf-brand img { width: 38px; height: 38px; border-radius: 8px; }
+        .cf-brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+        .cf-brand-sub  { font-size: 11px; color: var(--cf-muted); margin-top: 1px; }
+
+        .cf-sidebar-section { display: flex; flex-direction: column; gap: 8px; }
+        .cf-sidebar-title { font-size: 11px; font-weight: 600; color: var(--cf-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        .cf-progress-wrap { display: flex; flex-direction: column; gap: 6px; }
+        .cf-progress-bar-bg { height: 6px; background: var(--cf-border); border-radius: 999px; overflow: hidden; }
+        .cf-progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--cf-accent), var(--cf-accent-2)); border-radius: 999px; transition: width 0.4s ease; }
+        .cf-progress-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--cf-muted); }
+        .cf-progress-pct { font-weight: 700; color: var(--cf-accent); }
+
+        .cf-summary-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12px; }
+        .cf-summary-key { color: var(--cf-muted); white-space: nowrap; }
+        .cf-summary-val { color: var(--cf-text); word-break: break-word; font-weight: 500; }
+
+        .cf-report-id-box {
+          background: color-mix(in srgb, var(--cf-success) 10%, transparent);
+          border: 1px solid color-mix(in srgb, var(--cf-success) 30%, transparent);
+          border-radius: var(--cf-radius-sm);
+          padding: 10px 14px;
           font-size: 13px;
-          line-height: 1.4;
-          z-index: 1000;
-          white-space: normal;
         }
-        .tooltip::before {
-          content: "";
-          position: absolute;
-          top: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          border-style: solid;
-          border-width: 8px 8px 0;
-          border-color: var(--background-light) transparent transparent;
+        .cf-report-id-label { color: var(--cf-muted); font-size: 11px; margin-bottom: 2px; }
+        .cf-report-id-value { font-weight: 700; color: var(--cf-success); font-size: 15px; letter-spacing: 0.5px; }
+
+        .cf-similar-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 8px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 600;
+          margin-left: 6px;
         }
-        .tooltip-container:hover {
-          background: var(--background-dark);
-          color: var(--text-color-dark);
-          box-shadow: 0 0 20px var(--glow-color);
+
+        .cf-preview-img {
+          width: 100%;
+          border-radius: var(--cf-radius-sm);
+          border: 1px solid var(--cf-border);
+          object-fit: cover;
+          max-height: 140px;
         }
-        .tooltip-container:hover .tooltip {
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
+        .cf-preview-empty {
+          aspect-ratio: 16/7;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--cf-border);
+          border-radius: var(--cf-radius-sm);
+          color: var(--cf-muted);
+          font-size: 12px;
         }
-        .concern-label-wrapper {
+
+        /* ── Main ── */
+        .cf-main {
+          padding: 32px 36px;
+          max-width: 820px;
+        }
+        @media (max-width: 700px) { .cf-main { padding: 20px 16px; } }
+
+        .cf-page-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 28px;
+          gap: 16px;
+        }
+        .cf-page-title    { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+        .cf-page-subtitle { font-size: 13px; color: var(--cf-muted); }
+        .cf-head-btns     { display: flex; gap: 8px; flex-shrink: 0; }
+
+        /* ── Buttons ── */
+        .cf-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 9px 18px;
+          border-radius: var(--cf-radius-sm);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          border: none;
+          transition: all 0.15s;
+        }
+        .cf-btn-primary {
+          background: var(--cf-accent);
+          color: #fff;
+        }
+        .cf-btn-primary:hover { background: #2563eb; }
+        .cf-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .cf-btn-ghost {
+          background: transparent;
+          color: var(--cf-muted);
+          border: 1px solid var(--cf-border);
+        }
+        .cf-btn-ghost:hover { color: var(--cf-text); border-color: var(--cf-text); }
+        .cf-btn-full { width: 100%; justify-content: center; padding: 13px; font-size: 15px; }
+
+        /* ── Message ── */
+        .cf-message {
+          padding: 12px 16px;
+          border-radius: var(--cf-radius-sm);
+          font-size: 13px;
+          font-weight: 500;
+          margin-bottom: 20px;
+          border-left: 3px solid;
+        }
+        .cf-message-error   { background: color-mix(in srgb, var(--cf-error)   10%, transparent); border-color: var(--cf-error);   color: var(--cf-error); }
+        .cf-message-success { background: color-mix(in srgb, var(--cf-success) 10%, transparent); border-color: var(--cf-success); color: var(--cf-success); }
+        .cf-message-info    { background: color-mix(in srgb, var(--cf-accent)  10%, transparent); border-color: var(--cf-accent);  color: var(--cf-accent); }
+
+        /* ── Form sections ── */
+        .cf-section {
+          background: var(--cf-surface);
+          border: 1px solid var(--cf-border);
+          border-radius: var(--cf-radius);
+          padding: 22px;
+          margin-bottom: 16px;
+        }
+        .cf-section-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--cf-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          margin-bottom: 18px;
           display: flex;
           align-items: center;
           gap: 8px;
         }
-        .similar-status-badge {
-          display: inline-block;
-          padding: 2px 10px;
-          border-radius: 999px;
-          font-size: 0.8rem;
-          font-weight: 600;
-          margin-left: 4px;
+        .cf-section-title::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: var(--cf-border);
         }
+
+        .cf-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 600px) { .cf-grid-2 { grid-template-columns: 1fr; } }
+
+        /* ── Field ── */
+        .cf-field { display: flex; flex-direction: column; gap: 5px; }
+        .cf-label { font-size: 13px; font-weight: 600; color: var(--cf-text); display: flex; align-items: center; gap: 4px; }
+
+        .cf-input,
+        .cf-select,
+        .cf-textarea {
+          background: var(--cf-bg);
+          border: 1px solid var(--cf-border);
+          border-radius: var(--cf-radius-sm);
+          color: var(--cf-text);
+          font-size: 14px;
+          padding: 10px 12px;
+          width: 100%;
+          outline: none;
+          transition: border-color 0.15s;
+          font-family: inherit;
+        }
+        .cf-input:focus, .cf-select:focus, .cf-textarea:focus { border-color: var(--cf-accent); }
+        .cf-input[readonly] { opacity: 0.6; cursor: default; }
+        .cf-select option { background: var(--cf-surface); }
+        .cf-textarea { resize: vertical; min-height: 120px; }
+        .cf-hint { font-size: 12px; color: var(--cf-muted); margin-top: 3px; }
+        .cf-hint-error { color: var(--cf-error); }
+
+        /* ── User type badge ── */
+        .cf-usertype-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: var(--cf-radius-sm);
+          font-size: 13px;
+          font-weight: 600;
+          background: color-mix(in srgb, var(--cf-accent) 12%, transparent);
+          border: 1px solid color-mix(in srgb, var(--cf-accent) 30%, transparent);
+          color: var(--cf-accent);
+        }
+
+        /* ── Concern tooltip ── */
+        .cf-tooltip-wrap { position: relative; display: inline-block; }
+        .cf-tooltip-btn {
+          font-size: 11px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          border: 1px solid var(--cf-border);
+          background: transparent;
+          color: var(--cf-muted);
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .cf-tooltip-btn:hover { border-color: var(--cf-accent); color: var(--cf-accent); }
+        .cf-tooltip-popup {
+          position: absolute;
+          bottom: calc(100% + 8px);
+          left: 0;
+          background: var(--cf-surface);
+          border: 1px solid var(--cf-border);
+          border-radius: var(--cf-radius-sm);
+          padding: 10px 14px;
+          font-size: 12px;
+          line-height: 1.5;
+          width: 260px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+          z-index: 100;
+          color: var(--cf-text);
+        }
+
+        /* ── Toggle switch ── */
+        .cf-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+        .cf-switch input { display: none; }
+        .cf-switch-pill {
+          width: 40px; height: 22px;
+          background: var(--cf-border);
+          border-radius: 999px;
+          position: relative;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+        .cf-switch input:checked ~ .cf-switch-pill { background: var(--cf-accent); }
+        .cf-switch-knob {
+          position: absolute;
+          top: 3px; left: 3px;
+          width: 16px; height: 16px;
+          background: #fff;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+        .cf-switch input:checked ~ .cf-switch-pill .cf-switch-knob { transform: translateX(18px); }
+        .cf-switch-text { font-size: 13px; color: var(--cf-text); }
+
+        /* ── Dropzone ── */
+        .cf-dropzone {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          border: 2px dashed var(--cf-border);
+          border-radius: var(--cf-radius);
+          padding: 32px 20px;
+          cursor: pointer;
+          transition: all 0.15s;
+          text-align: center;
+        }
+        .cf-dropzone:hover, .cf-dropzone.is-dragover { border-color: var(--cf-accent); background: color-mix(in srgb, var(--cf-accent) 5%, transparent); }
+        .cf-dropzone input { display: none; }
+        .cf-dropzone-icon { color: var(--cf-muted); }
+        .cf-dropzone-text { font-size: 13px; font-weight: 500; color: var(--cf-text); }
+        .cf-dropzone-sub  { font-size: 12px; color: var(--cf-muted); }
+        .cf-preview-attached { width: 100%; border-radius: var(--cf-radius-sm); object-fit: cover; max-height: 200px; margin-top: 12px; border: 1px solid var(--cf-border); }
+
+        /* ── Sub-concern inline ── */
+        .cf-inline-row { display: flex; gap: 8px; }
+        .cf-inline-row .cf-select { flex: 0 0 140px; }
+        .cf-inline-row .cf-input  { flex: 1; }
+
+        /* ── Confirm modal ── */
+        .cf-confirm-overlay {
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          padding: 20px;
+        }
+        .cf-confirm-card {
+          background: var(--cf-surface);
+          border: 1px solid var(--cf-border);
+          border-radius: 14px;
+          padding: 28px;
+          max-width: 460px;
+          width: 100%;
+          box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+        }
+        .cf-confirm-title { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+        .cf-confirm-body  { font-size: 14px; color: var(--cf-muted); line-height: 1.6; margin-bottom: 20px; }
+        .cf-confirm-btns  { display: flex; gap: 10px; justify-content: flex-end; }
       `}</style>
 
-      <div className={`create-scope__layout ${sidebarOpen ? "" : "is-collapsed"}`}>
+      <div className="cf-layout">
 
-        {/* ── Sidebar ─────────────────────────────────────── */}
-        <aside
-          id="app-sidebar"
-          className={`create-scope__sidebar ${sidebarOverlayOpen ? "is-open" : ""}`}
-          aria-label="Sidebar"
-        >
-          <div className="create-scope__sidebar-inner">
-            <div className="create-scope__brand">
-              <div className="create-scope__brand-badge">
-                <img
-                  src="https://upload.wikimedia.org/wikipedia/en/8/8c/DLSU-Dasmari%C3%B1as_Seal.png"
-                  alt="DLSU-D Logo"
-                />
-              </div>
-              <div className="create-scope__brand-title">BFMO</div>
+        {/* ════ SIDEBAR ════ */}
+        <aside className="cf-sidebar">
+          <div className="cf-brand">
+            <img src="https://upload.wikimedia.org/wikipedia/en/8/8c/DLSU-Dasmari%C3%B1as_Seal.png" alt="DLSU-D" />
+            <div>
+              <div className="cf-brand-name">BFMO</div>
+              <div className="cf-brand-sub">Facility Report System</div>
             </div>
+          </div>
 
-            <Panel title="Quick tips">
-              <div className="create-scope__kv">
-                <div>Similar reports</div>
-                <div>
-                  {formData.building && formData.concern
-                    ? similarReportsCount === 0
-                      ? "None found"
-                      : <>
-                          {similarReportsCount} similar{" "}
-                          {similarReportsCount === 1 ? "report" : "reports"}
-                          {similarStatus && similarStatus !== "Pending" && (
-                            <span
-                              className="similar-status-badge"
-                              style={{
-                                background: STATUS_COLOR[similarStatus]
-                                  ? STATUS_COLOR[similarStatus] + "22"
-                                  : "#88888822",
-                                color: STATUS_COLOR[similarStatus] ?? "#888",
-                                border: `1px solid ${STATUS_COLOR[similarStatus] ?? "#888"}55`,
-                              }}
-                            >
-                              {similarStatus}
-                            </span>
-                          )}
-                        </>
-                    : "Set building and concern"}
-                </div>
-                <div>Attach clear photo</div>
-                <div>Required</div>
-                <div>Include room number</div>
-                <div>If applicable</div>
+          {/* Progress */}
+          <div className="cf-sidebar-section">
+            <div className="cf-sidebar-title">Form Progress</div>
+            <div className="cf-progress-wrap">
+              <div className="cf-progress-bar-bg">
+                <div className="cf-progress-bar-fill" style={{ width: `${progressPct}%` }} />
               </div>
-            </Panel>
+              <div className="cf-progress-row">
+                <span>{filledCount} of {requiredNow.length} fields</span>
+                <span className="cf-progress-pct">{progressPct}%</span>
+              </div>
+            </div>
+          </div>
 
-            <Panel
-              title="Summary report"
-              subtitle="Auto updates while you type"
-              actions={
-                <button type="button" className="create-scope__ghost-btn" onClick={copySummary}>
-                  Copy
-                </button>
-              }
-            >
-              <div className="create-scope__summary">
-                <div className="create-scope__progress">
-                  <div
-                    className="create-scope__progress-bar"
-                    style={{ width: `${progressPct}%` }}
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="create-scope__summary-row">
-                  <span>Form completeness</span>
-                  <strong>{progressPct}%</strong>
-                </div>
-                <div className="create-scope__summary-row">
-                  <span>Ready to submit</span>
-                  <strong className={readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"}>
-                    {readyToSubmit && !hasProfanity ? "Yes" : "No"}
-                  </strong>
-                </div>
+          {/* Report ID */}
+          {generatedReportId && (
+            <div className="cf-report-id-box">
+              <div className="cf-report-id-label">Report Submitted</div>
+              <div className="cf-report-id-value">{generatedReportId}</div>
+            </div>
+          )}
 
-                {generatedReportId && (
+          {/* Similar reports */}
+          {formData.building && formData.concern && (
+            <div className="cf-sidebar-section">
+              <div className="cf-sidebar-title">Similar Reports</div>
+              <div style={{ fontSize: 13, color: similarReportsCount > 0 ? "var(--cf-warning)" : "var(--cf-success)" }}>
+                {similarReportsCount === 0 ? "✓ No similar reports found" : (
                   <>
-                    <hr className="create-scope__summary-rule" />
-                    <div className="create-scope__summary-row">
-                      <span>Report ID</span>
-                      <strong className="is-ok">{generatedReportId}</strong>
-                    </div>
+                    {similarReportsCount} similar {similarReportsCount === 1 ? "report" : "reports"}
+                    {similarStatus && similarStatus !== "Pending" && (
+                      <span className="cf-similar-badge" style={{
+                        background: (STATUS_COLOR[similarStatus]||"#888") + "22",
+                        color: STATUS_COLOR[similarStatus] || "#888",
+                        border: `1px solid ${STATUS_COLOR[similarStatus]||"#888"}55`
+                      }}>{similarStatus}</span>
+                    )}
                   </>
                 )}
-
-                <hr className="create-scope__summary-rule" />
-
-                <div className="create-scope__summary-kv">
-                  <div>Title</div>
-                  <div>{formData.heading || "-"}</div>
-                  <div>Concern</div>
-                  <div>
-                    {formData.concern || "-"}
-                    {formData.concern === "Other" && formData.otherConcern
-                      ? `: ${formData.otherConcern}`
-                      : formData.subConcern === "Other" && formData.otherConcern
-                      ? ` / Other: ${formData.otherConcern}`
-                      : formData.subConcern
-                      ? ` / ${formData.subConcern}`
-                      : ""}
-                  </div>
-                  <div>Building</div>
-                  <div>
-                    {formData.building || "-"}
-                    {formData.building === "Other" && formData.otherBuilding
-                      ? `: ${formData.otherBuilding}` : ""}
-                  </div>
-                  <div>User Type</div>
-                  <div>{formData.userType || "-"}</div>
-                  <div>Specific room</div>
-                  <div>{specificRoom ? "Yes" : "No"}</div>
-
-                  {specificRoom && showFloorDropdown && (
-                    <>
-                      <div>Floor</div>
-                      <div>{formData.floor || "-"}</div>
-                    </>
-                  )}
-
-                  {specificRoom && (showRoomDropdown || needsOtherRoomText) && (
-                    <>
-                      <div>Room</div>
-                      <div>
-                        {formData.room === "Other" && formData.otherRoom
-                          ? `Other: ${formData.otherRoom}`
-                          : formData.room || "-"}
-                      </div>
-                    </>
-                  )}
-
-                  {specificRoom && needsOtherRoom && (
-                    <>
-                      <div>Spot</div>
-                      <div>{formData.otherRoom || "-"}</div>
-                    </>
-                  )}
-
-                  <div>College</div>
-                  <div>{formData.college || "-"}</div>
-                  <div>Photo</div>
-                  <div>{formData.ImageFile ? "Attached" : "None"}</div>
-                </div>
-
-                <Panel>
-                  <div className="create-scope__preview">
-                    {preview
-                      ? <img src={preview} alt="Attachment preview" />
-                      : <div className="create-scope__preview-empty">No image yet</div>
-                    }
-                  </div>
-                </Panel>
               </div>
-            </Panel>
+            </div>
+          )}
+
+          {/* Summary */}
+          <div className="cf-sidebar-section">
+            <div className="cf-sidebar-title">Summary</div>
+            <div className="cf-summary-kv">
+              <span className="cf-summary-key">Subject</span>
+              <span className="cf-summary-val">{formData.heading || "—"}</span>
+              <span className="cf-summary-key">Concern</span>
+              <span className="cf-summary-val">
+                {formData.concern || "—"}
+                {formData.subConcern && formData.subConcern !== "Other" ? ` / ${formData.subConcern}` : ""}
+                {formData.subConcern === "Other" && formData.otherConcern ? ` / ${formData.otherConcern}` : ""}
+              </span>
+              <span className="cf-summary-key">Building</span>
+              <span className="cf-summary-val">
+                {formData.building || "—"}
+                {formData.building === "Other" && formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
+              </span>
+              {formData.college && <>
+                <span className="cf-summary-key">College</span>
+                <span className="cf-summary-val">{formData.college}{formData.year ? ` · ${formData.year}` : ""}</span>
+              </>}
+              <span className="cf-summary-key">Photo</span>
+              <span className="cf-summary-val">{formData.ImageFile ? "✓ Attached" : "None"}</span>
+            </div>
           </div>
+
+          {/* Preview */}
+          {preview
+            ? <img className="cf-preview-img" src={preview} alt="Preview" />
+            : <div className="cf-preview-empty">No image attached</div>
+          }
         </aside>
 
-        {sidebarOverlayOpen && (
-          <div className="create-scope__scrim is-open" onClick={() => setSidebarOverlayOpen(false)} />
-        )}
-
-        {/* ── Main form ───────────────────────────────────── */}
-        <main className="create-scope__main">
-          <header className="create-scope__topbar">
-            <div className="create-scope__topbar-left">
-              <label className="burger">
-                <input
-                  type="checkbox"
-                  checked={sidebarOverlayOpen}
-                  onChange={(e) => setSidebarOverlayOpen(e.target.checked)}
-                />
-                <span></span><span></span><span></span>
-              </label>
+        {/* ════ MAIN ════ */}
+        <main className="cf-main">
+          <div className="cf-page-head">
+            <div>
+              <h1 className="cf-page-title">Submit a Report</h1>
+              <p className="cf-page-subtitle">Fill in all required fields and attach a photo.</p>
             </div>
-          </header>
+            <div className="cf-head-btns">
+              <button type="button" className="cf-btn cf-btn-ghost" onClick={() => router.push("/Student/ViewReports")}>
+                View Reports
+              </button>
+              <button type="button" className="cf-btn cf-btn-ghost" onClick={resetForm}>
+                Reset
+              </button>
+            </div>
+          </div>
 
-          <Panel
-            title="Create a report"
-            subtitle="Fill the form and attach a photo if available."
-            actions={
-              <div className="create-scope__toolbar">
-                <button type="button" className="view-reports-btn" onClick={viewreports} title="View Reports">
-                  View Reports
-                </button>
-                <button type="button" className="create-scope__reset-btn" onClick={resetForm}>
-                  Reset
-                </button>
-              </div>
-            }
-          >
-            {message && (
-              <div
-                className={`create-scope__message ${
-                  messageType === "error" ? "is-error"
-                  : messageType === "success" ? "is-success"
-                  : "is-info"
-                }`}
-                role="status"
-                aria-live="polite"
-              >
-                {message}
-              </div>
-            )}
+          {message && (
+            <div className={`cf-message ${messageType === "error" ? "cf-message-error" : messageType === "success" ? "cf-message-success" : "cf-message-info"}`}>
+              {message}
+            </div>
+          )}
+          {metaError && <div className="cf-message cf-message-info">{metaError}</div>}
 
-            {metaError && (
-              <div className="create-scope__message is-info">{metaError}</div>
-            )}
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
-            <form onSubmit={handleSubmit} className="create-scope__form">
+            {/* ── Section: Basic Info ── */}
+            <div className="cf-section">
+              <div className="cf-section-title">Basic Information</div>
 
-              {/* Email */}
-              <div className="create-scope__group">
-                <label htmlFor="email">Email <RequiredStar value={formData.email} /></label>
-                <input
-                  id="email" type="email" name="email"
+              <FieldGroup label={<>Email <RequiredStar value={formData.email} /></>} htmlFor="email">
+                <input id="email" type="email" name="email" className="cf-input"
                   placeholder="name@dlsud.edu.ph"
                   value={formData.email} onChange={handleChange}
-                  required autoComplete="email"
-                  readOnly={Boolean(currentUserEmail)}
-                />
-              </div>
+                  readOnly={Boolean(currentUserEmail)} required />
+              </FieldGroup>
 
-              {/* Heading & College */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
-                  <input
-                    id="heading" type="text" name="heading"
+              <div style={{ marginTop: 14 }} />
+
+              <div className="cf-grid-2">
+                <FieldGroup label={<>Subject <RequiredStar value={formData.heading} /></>} htmlFor="heading">
+                  <input id="heading" type="text" name="heading" className="cf-input"
                     placeholder="Short title of the issue"
-                    value={formData.heading} onChange={handleChange} required
-                  />
-                </div>
-                <div className="create-scope__group">
-                  <label htmlFor="college">College & Year<RequiredStar value={formData.college} /></label>
-                  <select id="college" name="college" value={formData.college} onChange={handleChange} required>
+                    value={formData.heading} onChange={handleChange} required />
+                </FieldGroup>
+
+                {/* User type — auto-detected from email */}
+                <FieldGroup label="User Type" htmlFor="userType">
+                  {isStudent ? (
+                    <div>
+                      <div className="cf-usertype-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        Student
+                      </div>
+                      <p className="cf-hint" style={{ marginTop: 6 }}>Detected from your email address</p>
+                    </div>
+                  ) : (
+                    <select id="userType" name="userType" className="cf-select"
+                      value={formData.userType} onChange={handleChange} required>
+                      <option value="">Select type</option>
+                      <option value="Student">Student</option>
+                      <option value="Staff/Faculty">Staff / Faculty</option>
+                    </select>
+                  )}
+                </FieldGroup>
+              </div>
+
+              <div style={{ marginTop: 14 }} />
+
+              {/* College & Year — separate selects, stored together */}
+              <div className="cf-grid-2">
+                <FieldGroup label={<>College <RequiredStar value={formData.college} /></>} htmlFor="college">
+                  <select id="college" name="college" className="cf-select"
+                    value={formData.college} onChange={handleChange} required>
                     <option value="">Select college</option>
-                    {COLLEGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                    {COLLEGE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <select id="college" name="college" value={formData.college} onChange={handleChange} required>
-                    <option value="">Select Year</option>
-                    {YEAR_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </FieldGroup>
+
+                <FieldGroup label={<>Year Level <RequiredStar value={formData.year} /></>} htmlFor="year">
+                  <select id="year" name="year" className="cf-select"
+                    value={formData.year} onChange={handleChange} required>
+                    <option value="">Select year</option>
+                    {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
                   </select>
-                </div>
+                </FieldGroup>
               </div>
+            </div>
 
-              {/* User Type */}
-              <div className="create-scope__group">
-                <label htmlFor="userType">User Type <RequiredStar value={formData.userType} /></label>
-//Change this if Email is xxx0000@dlsud.edu.ph format Student automatically, no need for drop down. Hide this
-//if other Dropdown Staff / Faculty
-              </div>
+            {/* ── Section: Description ── */}
+            <div className="cf-section">
+              <div className="cf-section-title">Issue Description</div>
+              <FieldGroup
+                label={<>Description <RequiredStar value={formData.description} /></>}
+                htmlFor="description"
+                hint="Tip: Include time observed, how long the issue has persisted, and any safety risks."
+              >
+                <textarea id="description" name="description" className="cf-textarea"
+                  placeholder="Describe the problem in detail. Include what happened, where exactly, and any safety concerns."
+                  value={formData.description} onChange={handleChange} rows={5} required />
+              </FieldGroup>
+            </div>
 
-              {/* Description */}
-              <div className="create-scope__group">
-                <label htmlFor="description">Description <RequiredStar value={formData.description} /></label>
-                <textarea
-                  id="description" name="description"
-                  placeholder="Describe the issue with details. Include location markers and safety risks."
-                  value={formData.description} onChange={handleChange} rows={5} required
-                />
-                <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
-              </div>
-
-              {/* Concern & SubConcern */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <div className="concern-label-wrapper">
-                    <label htmlFor="concern">Concern Type<RequiredStar value={formData.concern} /></label>
+            {/* ── Section: Concern ── */}
+            <div className="cf-section">
+              <div className="cf-section-title">Concern Type</div>
+              <div className="cf-grid-2">
+                <FieldGroup label={<>Category <RequiredStar value={formData.concern} /></>} htmlFor="concern">
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <select id="concern" name="concern" className="cf-select"
+                      value={formData.concern} onChange={handleChange}
+                      required disabled={metaLoading} style={{ flex: 1 }}>
+                      <option value="">{metaLoading ? "Loading…" : "Select concern"}</option>
+                      {concernOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
                     {formData.concern && CONCERN_INFO[formData.concern] && (
-                      <InfoTooltip text={CONCERN_INFO[formData.concern]} />
+                      <ConcernInfoButton text={CONCERN_INFO[formData.concern]} />
                     )}
                   </div>
-                  <select
-                    id="concern" name="concern"
-                    value={formData.concern} onChange={handleChange}
-                    required disabled={metaLoading}
-                  >
-                    <option value="">{metaLoading ? "Loading concerns..." : "Select concern"}</option>
-                    {concernOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                </FieldGroup>
 
                 {showSubConcern && (
-                  <div className="create-scope__group">
-                    <label htmlFor="subConcern">Concern Category<RequiredStar value={formData.subConcern} /></label>
+                  <FieldGroup label={<>Subcategory <RequiredStar value={formData.subConcern} /></>} htmlFor="subConcern">
                     {formData.subConcern === "Other" ? (
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <select
-                          id="subConcern" name="subConcern"
-                          value={formData.subConcern} onChange={handleChange}
-                          required style={{ flex: "0 0 120px" }}
-                        >
-                          <option value="">Select sub concern</option>
-                          {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                      <div className="cf-inline-row">
+                        <select id="subConcern" name="subConcern" className="cf-select"
+                          value={formData.subConcern} onChange={handleChange} required>
+                          <option value="">Select</option>
+                          {dynamicSubconcernOptions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
-                        <input
-                          type="text" name="otherConcern"
-                          placeholder="Specify sub concern"
-                          value={formData.otherConcern}
-                          onChange={handleChange} required style={{ flex: "1" }}
-                        />
+                        <input type="text" name="otherConcern" className="cf-input"
+                          placeholder="Specify…" value={formData.otherConcern}
+                          onChange={handleChange} required />
                       </div>
                     ) : (
-                      <select
-                        id="subConcern" name="subConcern"
-                        value={formData.subConcern} onChange={handleChange} required
-                      >
-                        <option value="">Select concern</option>
-                        {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                      <select id="subConcern" name="subConcern" className="cf-select"
+                        value={formData.subConcern} onChange={handleChange} required>
+                        <option value="">Select subcategory</option>
+                        {dynamicSubconcernOptions.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     )}
-                  </div>
+                  </FieldGroup>
                 )}
               </div>
 
-              {/* Other Concern */}
               {needsOtherConcern && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherConcern">Specify concern <RequiredStar value={formData.otherConcern} /></label>
-                  <input
-                    id="otherConcern" type="text" name="otherConcern"
-                    placeholder="Describe your concern"
-                    value={formData.otherConcern} onChange={handleChange} required
-                  />
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup label={<>Specify Concern <RequiredStar value={formData.otherConcern} /></>} htmlFor="otherConcern">
+                    <input id="otherConcern" type="text" name="otherConcern" className="cf-input"
+                      placeholder="Describe your concern" value={formData.otherConcern}
+                      onChange={handleChange} required />
+                  </FieldGroup>
                 </div>
               )}
+            </div>
 
-              {/* Building & Specific Room Toggle */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="building">Building & Facilities <RequiredStar value={formData.building} /></label>
-                  <select
-                    id="building" name="building"
+            {/* ── Section: Location ── */}
+            <div className="cf-section">
+              <div className="cf-section-title">Location</div>
+
+              <div className="cf-grid-2">
+                <FieldGroup label={<>Building <RequiredStar value={formData.building} /></>} htmlFor="building">
+                  <select id="building" name="building" className="cf-select"
                     value={formData.building} onChange={handleChange}
-                    required disabled={metaLoading}
-                  >
-                    <option value="">{metaLoading ? "Loading buildings..." : "Select building"}</option>
-                    {buildingOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                    required disabled={metaLoading}>
+                    <option value="">{metaLoading ? "Loading…" : "Select building"}</option>
+                    {buildingOptions.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
-                </div>
+                </FieldGroup>
 
-                <div className="create-scope__group">
-                  <label className="create-scope__switch">
-                    <input
-                      type="checkbox"
-                      checked={specificRoom}
+                <FieldGroup label="Specific Location?">
+                  <label className="cf-switch">
+                    <input type="checkbox" checked={specificRoom}
                       onChange={() => {
-                        setSpecificRoom((v) => {
-                          const nv = !v;
-                          if (!nv) setFormData((f) => ({ ...f, floor: "", room: "", otherRoom: "" }));
-                          return nv;
+                        setSpecificRoom(v => {
+                          if (v) setFormData(f => ({ ...f, floor: "", room: "", otherRoom: "" }));
+                          return !v;
                         });
-                      }}
-                    />
-                    <span className="create-scope__slider" />
-                    <span className="create-scope__switch-label">
-                      Is there a specific location / spot / room?
-                    </span>
+                      }} />
+                    <span className="cf-switch-pill"><span className="cf-switch-knob" /></span>
+                    <span className="cf-switch-text">Specify room or spot</span>
                   </label>
-                </div>
+                </FieldGroup>
               </div>
 
-              {/* Other Building */}
               {needsOtherBuilding && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherBuilding">Specify building <RequiredStar value={formData.otherBuilding} /></label>
-                  <input
-                    id="otherBuilding" type="text" name="otherBuilding"
-                    placeholder="Specify the building name"
-                    value={formData.otherBuilding} onChange={handleChange} required
-                  />
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup label={<>Specify Building <RequiredStar value={formData.otherBuilding} /></>} htmlFor="otherBuilding">
+                    <input id="otherBuilding" type="text" name="otherBuilding" className="cf-input"
+                      placeholder="Enter building name" value={formData.otherBuilding}
+                      onChange={handleChange} required />
+                  </FieldGroup>
                 </div>
               )}
 
-              {/* Floor dropdown */}
               {showFloorDropdown && (
-                <div className="create-scope__group">
-                  <label htmlFor="floor">Floor <RequiredStar value={formData.floor} /></label>
-                  <select id="floor" name="floor" value={formData.floor} onChange={handleChange} required>
-                    <option value="">Select floor</option>
-                    {visibleFloorOptions.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup label={<>Floor <RequiredStar value={formData.floor} /></>} htmlFor="floor">
+                    <select id="floor" name="floor" className="cf-select"
+                      value={formData.floor} onChange={handleChange} required>
+                      <option value="">Select floor</option>
+                      {visibleFloorOptions.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                  </FieldGroup>
                 </div>
               )}
 
-              {/* Room dropdown */}
               {showRoomDropdown && (
-                <div className="create-scope__group">
-                  <label htmlFor="room">Room <RequiredStar value={formData.room} /></label>
-                  <select id="room" name="room" value={formData.room} onChange={handleChange} required>
-                    <option value="">Select room</option>
-                    {availableRoomsWithOther?.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup label={<>Room <RequiredStar value={formData.room} /></>} htmlFor="room">
+                    <select id="room" name="room" className="cf-select"
+                      value={formData.room} onChange={handleChange} required>
+                      <option value="">Select room</option>
+                      {availableRoomsWithOther?.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </FieldGroup>
                 </div>
               )}
 
-              {/* Other room text */}
               {needsOtherRoomText && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherRoomText">
-                    Specify room / spot <RequiredStar value={formData.otherRoom} />
-                  </label>
-                  <input
-                    id="otherRoomText" type="text" name="otherRoom"
-                    placeholder="Example: 1st floor near the exit"
-                    value={formData.otherRoom} onChange={handleChange} required
-                  />
-                  <p className="create-scope__hint">Please describe the exact room or location.</p>
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup
+                    label={<>Specify Room / Spot <RequiredStar value={formData.otherRoom} /></>}
+                    htmlFor="otherRoomText"
+                    hint="Example: 2nd floor near the restroom, end of hallway"
+                  >
+                    <input id="otherRoomText" type="text" name="otherRoom" className="cf-input"
+                      placeholder="Describe the exact location"
+                      value={formData.otherRoom} onChange={handleChange} required />
+                  </FieldGroup>
                 </div>
               )}
 
-              {/* Free-text spot (no-room buildings) */}
               {needsOtherRoom && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherRoom">
-                    Specify room / spot <RequiredStar value={formData.otherRoom} />
-                  </label>
-                  <input
-                    id="otherRoom" type="text" name="otherRoom"
-                    placeholder="Example: 1st floor near the exit, Main entrance, Hallway C"
-                    value={formData.otherRoom} onChange={handleChange} required
-                  />
-                  <p className="create-scope__hint">
-                    Describe the specific location within{" "}
-                    {formData.building === "Other" ? "the building" : formData.building}.
-                  </p>
+                <div style={{ marginTop: 14 }}>
+                  <FieldGroup
+                    label={<>Specify Location / Spot <RequiredStar value={formData.otherRoom} /></>}
+                    htmlFor="otherRoom"
+                    hint={`Describe the specific spot within ${formData.building === "Other" ? "the building" : formData.building}.`}
+                  >
+                    <input id="otherRoom" type="text" name="otherRoom" className="cf-input"
+                      placeholder="e.g. Main entrance, Hallway near Canteen, Ground floor stairwell"
+                      value={formData.otherRoom} onChange={handleChange} required />
+                  </FieldGroup>
                 </div>
               )}
+            </div>
 
-              {/* Image Upload */}
-              <div className="create-scope__group">
-                <label>Attach an image. If there's more than one image to upload, please compile them into a single image.</label>
-                <label
-                  className="create-scope__dropzone"
-                  onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
-                >
-                  <input
-                    type="file" name="ImageFile"
-                    accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
-                    onChange={handleChange}
-                    required={!formData.ImageFile}
-                  />
-                  <div className="create-scope__dropzone-inner">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <div className="create-scope__hint">PNG, JPG up to 10 MB</div>
-                  </div>
-                </label>
-                {preview && (
-                  <img className="create-scope__preview-img" src={preview} alt="Preview" />
-                )}
+            {/* ── Section: Photo ── */}
+            <div className="cf-section">
+              <div className="cf-section-title">Photo Attachment</div>
+              <label className="cf-dropzone" onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
+                <input type="file" name="ImageFile" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
+                  onChange={handleChange} required={!formData.ImageFile} />
+                <svg className="cf-dropzone-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <div className="cf-dropzone-text">{formData.ImageFile ? formData.ImageFile.name : "Click to upload or drag & drop"}</div>
+                <div className="cf-dropzone-sub">JPG, PNG, HEIC, WEBP — max 10 MB</div>
+              </label>
+              {preview && <img className="cf-preview-attached" src={preview} alt="Preview" />}
+              <p className="cf-hint" style={{ marginTop: 8 }}>If you have multiple photos, combine them into a single image before uploading.</p>
+            </div>
+
+            {/* ── Profanity warning ── */}
+            {hasProfanity && (
+              <div className="cf-message cf-message-error">
+                Inappropriate language detected. Please review your text before submitting.
               </div>
+            )}
 
-              {/* Profanity Warning */}
-              {hasProfanity && (
-                <p className="create-scope__hint create-scope__hint--error">
-                  Profanity or foul words were detected in your text. Please remove them before submitting.
-                </p>
-              )}
+            {/* ── Submit ── */}
+            <button type="submit" className="cf-btn cf-btn-primary cf-btn-full"
+              disabled={submitting || !readyToSubmit || hasProfanity}>
+              {submitting ? (
+                <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Submitting…</>
+              ) : "Submit Report"}
+            </button>
 
-              {/* Submit */}
-              <button
-                className="create-scope__btn create-scope__btn--primary create-scope__w-full"
-                type="submit"
-                disabled={submitting || !readyToSubmit || hasProfanity}
-              >
-                {submitting ? "Submitting..." : "Submit report"}
-              </button>
-            </form>
-          </Panel>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </form>
         </main>
       </div>
 
-      {/* ── Confirmation Modal ─────────────────────────────────── */}
+      {/* ════ CONFIRM MODAL ════ */}
       {isConfirming && similarReportsCount > 0 && (
-        <div className="confirm-overlay">
-          <div className="card">
-            <p className="cookieHeading">Similar report exists</p>
-            <p className="cookieDescription">
-              There {similarReportsCount === 1 ? "is" : "are"}{" "}
-              <strong>{similarReportsCount}</strong> similar report
-              {similarReportsCount === 1 ? "" : "s"} about the same
-              building, room, and concern.
-
+        <div className="cf-confirm-overlay">
+          <div className="cf-confirm-card">
+            <div className="cf-confirm-title">⚠️ Similar Report Exists</div>
+            <div className="cf-confirm-body">
+              There {similarReportsCount === 1 ? "is" : "are"} <strong>{similarReportsCount}</strong> similar {similarReportsCount === 1 ? "report" : "reports"} for the same building, room, and concern.
               {similarStatus && similarStatus !== "Pending" && (
                 <>
                   <br /><br />
-                  The existing report is currently{" "}
-                  <strong style={{ color: STATUS_COLOR[similarStatus] ?? "inherit" }}>
-                    {similarStatus}
-                  </strong>
-                  {similarStatus === "Resolved"
-                    ? " — this issue may already be fixed."
-                    : similarStatus === "In Progress"
-                    ? " — staff are already working on it."
-                    : similarStatus === "Waiting for Materials"
-                    ? " — staff are awaiting materials."
-                    : "."}
-                  {" "}Submitting a duplicate may be unnecessary.
+                  The existing report is currently <strong style={{ color: STATUS_COLOR[similarStatus] ?? "inherit" }}>{similarStatus}</strong>
+                  {similarStatus === "Resolved" ? " — this issue may already be resolved." : similarStatus === "In Progress" ? " — staff are already working on it." : similarStatus === "Waiting for Materials" ? " — staff are awaiting materials." : "."}
+                  {" "}Submitting a duplicate may not be necessary.
                 </>
               )}
-
               <br /><br />
-              Are you sure you want to submit this report?
-            </p>
-            <div className="buttonContainer">
-              <button
-                type="button"
-                className="acceptButton"
-                onClick={() => void performSubmit()}
-              >
-                Submit
-              </button>
-              <button
-                type="button"
-                className="declineButton"
-                onClick={() => {
-                  setIsConfirming(false);
-                  showMsg("info", "Submission cancelled. You can adjust your report and try again.");
-                }}
-              >
+              Are you sure you want to proceed?
+            </div>
+            <div className="cf-confirm-btns">
+              <button type="button" className="cf-btn cf-btn-ghost"
+                onClick={() => { setIsConfirming(false); showMsg("info","Submission cancelled."); }}>
                 Cancel
+              </button>
+              <button type="button" className="cf-btn cf-btn-primary" onClick={() => void performSubmit()}>
+                Submit Anyway
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Concern info popup (inline component) ── */
+function ConcernInfoButton({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <button type="button" className="cf-tooltip-btn"
+        onClick={() => setOpen(v => !v)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}>
+        Info
+      </button>
+      {open && <div className="cf-tooltip-popup">{text}</div>}
     </div>
   );
 }
