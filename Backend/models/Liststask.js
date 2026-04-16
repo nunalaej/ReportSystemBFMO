@@ -6,6 +6,12 @@ const ChecklistItemSchema = new mongoose.Schema({
   done: { type: Boolean, default: false },
 });
 
+const CommentSchema = new mongoose.Schema({
+  text: { type: String, required: true },
+  by:   { type: String, default: "Staff" },
+  at:   { type: Date,   default: Date.now },
+});
+
 const ListsTaskSchema = new mongoose.Schema(
   {
     userId:        { type: String, default: "admin" },
@@ -19,8 +25,12 @@ const ListsTaskSchema = new mongoose.Schema(
     priority:      { type: String, default: "" },
     notes:         { type: String, default: "" },
     createdBy:     { type: String, default: "Admin" },
+    // Add to ListsTaskSchema:
+comments: { type: [CommentSchema], default: [] },
   },
   { timestamps: true }
 );
+
+
 
 module.exports = mongoose.models.ListsTask || mongoose.model("ListsTask", ListsTaskSchema);
