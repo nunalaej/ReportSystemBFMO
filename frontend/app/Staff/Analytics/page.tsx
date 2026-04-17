@@ -1,4 +1,4 @@
-// Frontend/app/Admin/Analytics.tsx - FULLY MERGED
+export const dynamic = "force-dynamic";
 "use client";
 
 import "@/app/Admin/style/analytics.css";
