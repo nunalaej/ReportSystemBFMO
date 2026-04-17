@@ -6,6 +6,8 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { createPortal } from "react-dom";
+import { useNotifications } from "@/app/context/notification";
+
 
 const defaultImg = "/default.jpg";
 
@@ -120,6 +122,7 @@ const DEFAULT_STATUSES_FALLBACK = [
   { id: "3", name: "In Progress",     color: "#4169E1" },
   { id: "4", name: "Resolved",        color: "#28A745" },
 ];
+
 
 const REPORTS_PER_PAGE = 12;
 
@@ -249,7 +252,12 @@ export default function ReportPage() {
   const [taskCheckInput, setTaskCheckInput]  = useState("");
   const [taskNotes,      setTaskNotes]       = useState("");
   const [taskSaving,     setTaskSaving]      = useState(false);
-  const [metaStaff,      setMetaStaff]       = useState<string[]>([]);
+const [metaStaff, setMetaStaff] = useState<{ name: string; disciplines: string[] }[]>([]);
+
+
+
+const { addNotification } = useNotifications();
+const prevReportCountRef = React.useRef<number>(0);
 
   /* ── Confirm dialog ── */
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -299,25 +307,30 @@ export default function ReportPage() {
   useEffect(() => { if (!canView) return; fetchReports(); }, [canView]);
 
   /* ── Fetch meta ── */
-  useEffect(() => {
-    fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
-      .then(r => r.json())
-      .then(data => {
-        if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
-        if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
-      }).catch(() => {});
+  // BROKEN — missing closing },[]);
+useEffect(() => {
+  fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
+    .then(r => r.json())
+    .then(data => {
+      if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
+      if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
+    }).catch(() => {});
 
-    fetch(`${API_BASE}/api/staff`, { cache: "no-store" })
-      .then(r => r.json())
-      .then(data => {
-        const list: string[] = Array.isArray(data)
-          ? data.map((s: any) => String(s?.name || s?.email || s || "")).filter(Boolean)
-          : Array.isArray(data?.staff)
-          ? data.staff.map((s: any) => String(s?.name || s?.email || s || "")).filter(Boolean)
-          : [];
-        if (list.length > 0) setMetaStaff(list);
-      }).catch(() => {});
-  }, []);
+  fetch(`${API_BASE}/api/staff`, { cache: "no-store" })
+    .then(r => r.json())
+    .then(data => {
+      const raw = Array.isArray(data) ? data : Array.isArray(data?.staff) ? data.staff : [];
+      const list = raw
+        .map((s: any) => ({
+          name:        String(s?.name || s?.email || "").trim(),
+          disciplines: Array.isArray(s?.disciplines) ? s.disciplines : [],
+        }))
+        .filter((s: { name: string; disciplines: string[] }) => s.name);
+      if (list.length > 0) setMetaStaff(list);
+    }).catch(() => {});
+
+// ✅ ADD THIS CLOSING — was missing
+}, []);
 
   /* ── Dynamic status helpers ── */
   const getStatusColor = useCallback((name?: string): string => {
@@ -369,7 +382,18 @@ const statusMatchesFilter = useCallback((reportStatus: string | undefined, filte
       else if (Array.isArray(data.data))     list = data.data;
       else { setLoadError("Could not load reports. Check the server response."); setReports([]); return; }
       setReports(list); setCurrentPage(1);
+      if (prevReportCountRef.current > 0 && list.length > prevReportCountRef.current) {
+  const newCount = list.length - prevReportCountRef.current;
+  addNotification(
+    `${newCount} new report${newCount > 1 ? "s" : ""} submitted.`,
+    "followup"
+  );
+}
+prevReportCountRef.current = list.length;
+
     } catch { setLoadError("Network error while loading reports."); setReports([]); }
+
+    
     finally { setIsLoading(false); }
   };
 
@@ -1011,11 +1035,20 @@ const statusMatchesFilter = useCallback((reportStatus: string | undefined, filte
               )}
               <div className="task-staff-input-row">
                 {metaStaff.length > 0 ? (
-                  <select className="task-input" value={taskStaffInput} onChange={e => setTaskStaffInput(e.target.value)}>
-                    <option value="">-- Select staff --</option>
-                    {metaStaff.filter(s => !taskStaff.includes(s)).map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                ) : (
+  <select className="task-input" value={taskStaffInput} onChange={e => setTaskStaffInput(e.target.value)}>
+    <option value="">-- Select staff --</option>
+    {metaStaff
+      .filter(s =>
+        !taskStaff.includes(s.name) &&
+        (s.disciplines.length === 0 ||
+         s.disciplines.some(d =>
+           d.toLowerCase() === (taskReport?.concern || "").toLowerCase()
+         ))
+      )
+      .map(s => <option key={s.name} value={s.name}>{s.name}</option>)
+    }
+  </select>
+) : (
                   <input type="text" className="task-input" value={taskStaffInput} placeholder="Staff name or email…"
                     onChange={e => setTaskStaffInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTaskStaff(); } }} />
