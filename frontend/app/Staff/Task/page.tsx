@@ -121,15 +121,16 @@ export default function StaffTasksPage() {
   const [metaStatuses,   setMetaStatuses]   = useState<MetaStatus[]>(FALLBACK_STATUSES);
   const [metaPriorities, setMetaPriorities] = useState<MetaPriority[]>(FALLBACK_PRIORITIES);
 
+  /* ── Filters ── */
   const [searchQuery,    setSearchQuery]    = useState("");
   const [statusFilter,   setStatusFilter]   = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
   const [discFilter,     setDiscFilter]     = useState("All");
   const [viewMode,       setViewMode]       = useState<"board" | "list" | "analytics">("board");
 
   /* ── Task detail modal ── */
   const [selectedTask,   setSelectedTask]   = useState<Task | null>(null);
   const [saving,         setSaving]         = useState(false);
-  const [newStatus,      setNewStatus]      = useState("");
   const [newNote,        setNewNote]        = useState("");
   const [newComment,     setNewComment]     = useState("");
   const [showNoteEdit,   setShowNoteEdit]   = useState(false);
@@ -157,7 +158,7 @@ export default function StaffTasksPage() {
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
-  /* ── Fetch staff record to get disciplines ── */
+  /* ── Fetch staff record ── */
   const fetchStaffRecord = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -205,51 +206,48 @@ export default function StaffTasksPage() {
   const getStatusColor = useCallback((name?: string) =>
     metaStatuses.find(s => s.name === name)?.color || "#6C757D", [metaStatuses]);
 
-  /* ── Filter: only tasks assigned to this staff member + matching disciplines ── */
+  /* ── Tasks assigned to this staff member ── */
   const staffName        = staffRecord?.name || "";
   const staffDisciplines = staffRecord?.disciplines || [];
 
   const myTasks = useMemo(() => tasks.filter(t => {
-    // Must be assigned to this staff member
     const isAssigned = (t.assignedStaff || []).some(
       s => s.toLowerCase() === staffName.toLowerCase()
     );
     if (!isAssigned) return false;
-
-    // Must match staff's disciplines (concernType)
     if (staffDisciplines.length > 0 && t.concernType) {
       const matches = staffDisciplines.some(
         d => d.toLowerCase() === t.concernType!.toLowerCase()
       );
       if (!matches) return false;
     }
-
     return true;
   }), [tasks, staffName, staffDisciplines]);
 
-  /* ── Further filtering by search/status/discipline ── */
+  /* ── Filtered tasks (search + status + priority + discipline) ── */
   const filteredTasks = useMemo(() => myTasks.filter(t => {
-    const matchSearch = !searchQuery.trim() ||
+    const matchSearch   = !searchQuery.trim() ||
       (t.name        || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.reportId    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       (t.concernType || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchStatus = statusFilter === "All" || (t.status || "Pending") === statusFilter;
-    const matchDisc   = discFilter   === "All" || (t.concernType || "") === discFilter;
-    return matchSearch && matchStatus && matchDisc;
-  }), [myTasks, searchQuery, statusFilter, discFilter]);
+    const matchStatus   = statusFilter   === "All" || (t.status   || "Pending") === statusFilter;
+    const matchPriority = priorityFilter === "All" || (t.priority || "")        === priorityFilter;
+    const matchDisc     = discFilter     === "All" || (t.concernType || "")     === discFilter;
+    return matchSearch && matchStatus && matchPriority && matchDisc;
+  }), [myTasks, searchQuery, statusFilter, priorityFilter, discFilter]);
+
+  const hasActiveFilters = statusFilter !== "All" || priorityFilter !== "All" || discFilter !== "All" || !!searchQuery.trim();
 
   /* ── Board columns ── */
   const boardColumns = metaStatuses
     .filter(s => s.name.toLowerCase() !== "archived")
     .map(s => ({ ...s, tasks: filteredTasks.filter(t => (t.status || "Pending") === s.name) }));
 
-  /* ── Available discipline filters (from staff's own disciplines) ── */
   const disciplineOptions = staffDisciplines;
 
-  /* ── Open task ── */
+  /* ── Open / close task ── */
   const openTask = (task: Task) => {
     setSelectedTask(task);
-    setNewStatus(task.status || "Pending");
     setNewNote(task.notes || "");
     setNewComment("");
     setShowNoteEdit(false);
@@ -269,7 +267,6 @@ export default function StaffTasksPage() {
       const updated = data.task as Task;
       setTasks(p => p.map(t => t._id === updated._id ? updated : t));
       setSelectedTask(updated);
-      setNewStatus(updated.status || "Pending");
       showToast(`Status updated to "${status}".`, "success");
     } catch (err: any) { showToast(err.message || "Failed.", "error"); }
     finally { setSaving(false); }
@@ -340,23 +337,23 @@ export default function StaffTasksPage() {
 
   /* ── Analytics ── */
   const analytics = useMemo(() => {
-    const total     = myTasks.length;
-    const resolved  = myTasks.filter(t => (t.status || "").toLowerCase() === "resolved").length;
-    const pending   = myTasks.filter(t => (t.status || "Pending").toLowerCase() === "pending").length;
+    const total      = myTasks.length;
+    const resolved   = myTasks.filter(t => (t.status || "").toLowerCase() === "resolved").length;
+    const pending    = myTasks.filter(t => (t.status || "Pending").toLowerCase() === "pending").length;
     const inProgress = myTasks.filter(t => (t.status || "").toLowerCase() === "in progress").length;
-    const rate      = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    const rate       = total > 0 ? Math.round((resolved / total) * 100) : 0;
 
     const byDisc: Record<string, number> = {};
-    myTasks.forEach(t => {
-      const d = t.concernType || "Other";
-      byDisc[d] = (byDisc[d] || 0) + 1;
-    });
+    myTasks.forEach(t => { const d = t.concernType || "Other"; byDisc[d] = (byDisc[d] || 0) + 1; });
+
+    const byPriority: Record<string, number> = {};
+    myTasks.forEach(t => { const p = t.priority || "None"; byPriority[p] = (byPriority[p] || 0) + 1; });
 
     const avgProgress = myTasks.length > 0
       ? Math.round(myTasks.reduce((sum, t) => sum + (calcProgress(t.checklist) ?? 0), 0) / myTasks.length)
       : 0;
 
-    return { total, resolved, pending, inProgress, rate, byDisc, avgProgress };
+    return { total, resolved, pending, inProgress, rate, byDisc, byPriority, avgProgress };
   }, [myTasks]);
 
   /* ── Guards ── */
@@ -390,7 +387,6 @@ export default function StaffTasksPage() {
             </p>
           </div>
           <div className="tasks-header-actions">
-            {/* Board */}
             <button type="button"
               className={`tasks-view-btn${viewMode === "board" ? " tasks-view-btn--active" : ""}`}
               onClick={() => setViewMode("board")} title="Board view">
@@ -398,7 +394,6 @@ export default function StaffTasksPage() {
                 <rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/>
               </svg>
             </button>
-            {/* List */}
             <button type="button"
               className={`tasks-view-btn${viewMode === "list" ? " tasks-view-btn--active" : ""}`}
               onClick={() => setViewMode("list")} title="List view">
@@ -411,7 +406,6 @@ export default function StaffTasksPage() {
                 <line x1="3" y1="18" x2="3.01" y2="18"/>
               </svg>
             </button>
-            {/* Analytics */}
             <button type="button"
               className={`tasks-view-btn${viewMode === "analytics" ? " tasks-view-btn--active" : ""}`}
               onClick={() => setViewMode("analytics")} title="Analytics">
@@ -448,20 +442,33 @@ export default function StaffTasksPage() {
 
         {/* ── Filters ── */}
         <div className="tasks-filters">
+          {/* Search */}
           <div className="tasks-search-wrap">
             <svg viewBox="0 0 24 24" className="tasks-search-icon" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             <input type="text" className="tasks-search" placeholder="Search tasks…"
               value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-            {searchQuery && <button type="button" className="tasks-search-clear" onClick={() => setSearchQuery("")}>✕</button>}
+            {searchQuery && (
+              <button type="button" className="tasks-search-clear" onClick={() => setSearchQuery("")}>✕</button>
+            )}
           </div>
 
+          {/* Status */}
           <select className="tasks-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="All">All Statuses</option>
             {metaStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
           </select>
 
+          {/* Priority ← NEW */}
+          <select className="tasks-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
+            <option value="All">All Priorities</option>
+            {metaPriorities.map(p => (
+              <option key={p.id} value={p.name}>{p.name}</option>
+            ))}
+          </select>
+
+          {/* Discipline (only shown when staff has multiple) */}
           {disciplineOptions.length > 1 && (
             <select className="tasks-filter-select" value={discFilter} onChange={e => setDiscFilter(e.target.value)}>
               <option value="All">All Disciplines</option>
@@ -469,13 +476,41 @@ export default function StaffTasksPage() {
             </select>
           )}
 
-          {(statusFilter !== "All" || discFilter !== "All" || searchQuery) && (
+          {/* Clear all */}
+          {hasActiveFilters && (
             <button type="button" className="tasks-clear-filters"
-              onClick={() => { setStatusFilter("All"); setDiscFilter("All"); setSearchQuery(""); }}>
+              onClick={() => { setStatusFilter("All"); setPriorityFilter("All"); setDiscFilter("All"); setSearchQuery(""); }}>
               Clear filters
             </button>
           )}
         </div>
+
+        {/* Active priority badge — quick visual confirmation */}
+        {priorityFilter !== "All" && (() => {
+          const pColor = getPriorityColor(priorityFilter);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 12, fontWeight: 600,
+                color: pColor,
+                background: pColor + "15",
+                border: `1px solid ${pColor}40`,
+                borderRadius: 999,
+                padding: "3px 10px",
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: pColor, display: "inline-block" }} />
+                Priority: {priorityFilter}
+                <button
+                  type="button"
+                  onClick={() => setPriorityFilter("All")}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: pColor, fontSize: 11, padding: 0, lineHeight: 1 }}
+                  title="Clear priority filter"
+                >✕</button>
+              </span>
+            </div>
+          );
+        })()}
 
         {loadError && (
           <div className="tasks-error-banner">
@@ -496,8 +531,12 @@ export default function StaffTasksPage() {
               <rect x="8" y="8" width="48" height="48" rx="8" stroke="currentColor" strokeWidth="2" opacity="0.15"/>
               <path d="M22 32h20M32 22v20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.3"/>
             </svg>
-            <p>No tasks assigned to you.</p>
-            <span>Tasks assigned to you matching your disciplines will appear here.</span>
+            <p>{hasActiveFilters ? "No tasks match your filters." : "No tasks assigned to you."}</p>
+            <span>
+              {hasActiveFilters
+                ? "Try adjusting your filters above."
+                : "Tasks assigned to you matching your disciplines will appear here."}
+            </span>
           </div>
         )}
 
@@ -507,11 +546,11 @@ export default function StaffTasksPage() {
             {/* Summary cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 16, marginBottom: 24 }}>
               {[
-                { label: "Total Tasks",     value: analytics.total,       color: "#4169E1" },
-                { label: "Resolved",        value: analytics.resolved,    color: "#28A745" },
-                { label: "In Progress",     value: analytics.inProgress,  color: "#4169E1" },
-                { label: "Pending",         value: analytics.pending,     color: "#FFA500" },
-                { label: "Completion Rate", value: `${analytics.rate}%`,  color: "#22c55e" },
+                { label: "Total Tasks",     value: analytics.total,            color: "#4169E1" },
+                { label: "Resolved",        value: analytics.resolved,         color: "#28A745" },
+                { label: "In Progress",     value: analytics.inProgress,       color: "#4169E1" },
+                { label: "Pending",         value: analytics.pending,          color: "#FFA500" },
+                { label: "Completion Rate", value: `${analytics.rate}%`,       color: "#22c55e" },
                 { label: "Avg. Progress",   value: `${analytics.avgProgress}%`, color: "#8b5cf6" },
               ].map(card => (
                 <div key={card.label} style={{
@@ -523,6 +562,29 @@ export default function StaffTasksPage() {
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{card.label}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Priority breakdown ← NEW */}
+            <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 6px rgba(0,0,0,0.07)", marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Tasks by Priority</div>
+              {Object.keys(analytics.byPriority).length === 0 && (
+                <p style={{ color: "#9ca3af", fontSize: 13 }}>No data yet.</p>
+              )}
+              {metaPriorities.map(p => {
+                const count = analytics.byPriority[p.name] || 0;
+                const pct   = analytics.total > 0 ? Math.round((count / analytics.total) * 100) : 0;
+                return (
+                  <div key={p.id} style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 4 }}>
+                      <span style={{ color: p.color, fontWeight: 500 }}>{p.name}</span>
+                      <span style={{ fontWeight: 600 }}>{count} ({pct}%)</span>
+                    </div>
+                    <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: p.color, borderRadius: 999, transition: "width 0.4s" }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Completion rate bar */}
@@ -549,11 +611,7 @@ export default function StaffTasksPage() {
                     <span style={{ fontWeight: 600 }}>{count}</span>
                   </div>
                   <div style={{ height: 8, background: "#f3f4f6", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%",
-                      width: `${analytics.total > 0 ? Math.round((count / analytics.total) * 100) : 0}%`,
-                      background: "#4169E1", borderRadius: 999
-                    }} />
+                    <div style={{ height: "100%", width: `${analytics.total > 0 ? Math.round((count / analytics.total) * 100) : 0}%`, background: "#4169E1", borderRadius: 999 }} />
                   </div>
                 </div>
               ))}
@@ -668,11 +726,11 @@ export default function StaffTasksPage() {
                     </span>
                   </span>
                   <span>
-                    {task.priority && (
+                    {task.priority ? (
                       <span className="tasks-status-pill" style={{ backgroundColor: pColor + "20", color: pColor, border: `1px solid ${pColor}40` }}>
                         {task.priority}
                       </span>
-                    )}
+                    ) : <span className="tasks-list-na">—</span>}
                   </span>
                   <span>
                     {prog !== null ? (
@@ -715,7 +773,7 @@ export default function StaffTasksPage() {
               {/* LEFT */}
               <div className="tasks-modal-left">
 
-                {/* Status pills */}
+                {/* Status / priority pills */}
                 <div className="tasks-modal-meta-row" style={{ marginBottom: 12 }}>
                   <span className="tasks-meta-pill" style={{ backgroundColor: statusColor + "20", color: statusColor, border: `1px solid ${statusColor}40` }}>
                     {selectedTask.status || "Pending"}
@@ -734,15 +792,17 @@ export default function StaffTasksPage() {
                 <div className="tasks-modal-section">
                   <span className="tasks-modal-label">Update Status</span>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    {metaStatuses.filter(s => s.name.toLowerCase() !== "archived" && s.name !== (selectedTask.status || "Pending")).map(s => (
-                      <button key={s.id} type="button"
-                        className="tasks-modal-status-btn"
-                        style={{ borderColor: s.color + "60", color: s.color, backgroundColor: s.color + "10" }}
-                        disabled={saving}
-                        onClick={() => updateStatus(selectedTask, s.name)}>
-                        → {s.name}
-                      </button>
-                    ))}
+                    {metaStatuses
+                      .filter(s => s.name.toLowerCase() !== "archived" && s.name !== (selectedTask.status || "Pending"))
+                      .map(s => (
+                        <button key={s.id} type="button"
+                          className="tasks-modal-status-btn"
+                          style={{ borderColor: s.color + "60", color: s.color, backgroundColor: s.color + "10" }}
+                          disabled={saving}
+                          onClick={() => updateStatus(selectedTask, s.name)}>
+                          → {s.name}
+                        </button>
+                      ))}
                   </div>
                 </div>
 
@@ -836,7 +896,7 @@ export default function StaffTasksPage() {
                   <span className="tasks-modal-label">Task Info</span>
                   <div className="tasks-modal-info-grid">
                     <span className="tasks-info-key">Created by</span>
-<span className="tasks-info-val">{selectedTask.createdBy || "Admin"}</span>
+                    <span className="tasks-info-val">{selectedTask.createdBy || "Admin"}</span>
                     <span className="tasks-info-key">Created</span>
                     <span className="tasks-info-val">{selectedTask.createdAt ? new Date(selectedTask.createdAt).toLocaleString() : "—"}</span>
                     <span className="tasks-info-key">Updated</span>
@@ -866,7 +926,7 @@ export default function StaffTasksPage() {
                     {(selectedTask.comments || []).map((c, idx) => (
                       <div key={idx} style={{
                         background: "#f8fafc", borderRadius: 8, padding: "10px 12px",
-                        marginBottom: 8, fontSize: 13
+                        marginBottom: 8, fontSize: 13,
                       }}>
                         <p style={{ margin: "0 0 4px", color: "#111827" }}>{c.text}</p>
                         <div style={{ color: "#9ca3af", fontSize: 11 }}>
@@ -877,15 +937,12 @@ export default function StaffTasksPage() {
                   </div>
 
                   <div style={{ marginTop: 10 }}>
-                    <textarea
-                      className="tasks-modal-input tasks-modal-textarea"
-                      rows={2}
+                    <textarea className="tasks-modal-input tasks-modal-textarea" rows={2}
                       value={newComment}
                       placeholder="Add a comment…"
                       onChange={e => setNewComment(e.target.value)}
                     />
-                    <button type="button"
-                      className="tasks-modal-save-btn"
+                    <button type="button" className="tasks-modal-save-btn"
                       style={{ backgroundColor: priorityColor, marginTop: 6 }}
                       onClick={addComment}
                       disabled={saving || !newComment.trim()}>
