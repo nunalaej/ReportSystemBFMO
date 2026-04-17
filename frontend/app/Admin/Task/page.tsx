@@ -98,7 +98,6 @@ function calcProgress(checklist?: ChecklistItem[]) {
   return Math.round((checklist.filter(i => i.done).length / checklist.length) * 100);
 }
 
-/** Stable unique ID that won't collide on fast successive calls */
 let _uidCounter = 0;
 function uid() {
   return `${Date.now()}-${++_uidCounter}-${Math.random().toString(36).slice(2, 6)}`;
@@ -122,7 +121,7 @@ export default function TasksPage() {
   /* ── Filters ── */
   const [searchQuery,    setSearchQuery]    = useState("");
   const [statusFilter,   setStatusFilter]   = useState("All");
-  const [priorityFilter, setPriorityFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");  // ✅ consistent name
   const [viewMode,       setViewMode]       = useState<"board" | "list">("board");
 
   /* ── Selected task (detail modal) ── */
@@ -136,11 +135,8 @@ export default function TasksPage() {
   const { addNotification } = useNotifications();
 
   /* ── Confirm dialog ── */
-  // Store the confirm callback in a ref so it is never stale inside the handler
   const confirmCallbackRef = React.useRef<(() => void | Promise<void>) | null>(null);
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean; message: string;
-  }>({ open: false, message: "" });
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; message: string; }>({ open: false, message: "" });
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -153,12 +149,11 @@ export default function TasksPage() {
     return () => { document.body.style.overflow = ""; };
   }, [selectedTask]);
 
-  /* ── Escape key: stable handler so useEscapeKey deps don't thrash ── */
+  /* ── Escape key ── */
   const escapeHandler = useCallback(() => {
     if (isEditing) { setIsEditing(false); setEditDraft(null); return; }
     setSelectedTask(null);
   }, [isEditing]);
-
   useEscapeKey(escapeHandler, !!selectedTask);
 
   /* ── Auth ── */
@@ -173,7 +168,7 @@ export default function TasksPage() {
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
-  /* ── Fetch tasks — wrapped in useCallback so it can be listed as dep ── */
+  /* ── Fetch tasks ── */
   const fetchTasks = useCallback(async () => {
     try {
       setIsLoading(true); setLoadError("");
@@ -199,7 +194,6 @@ export default function TasksPage() {
       if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
       if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
     } catch {}
-
     try {
       const res  = await fetch(`${API_BASE}/api/staff`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
@@ -241,13 +235,22 @@ export default function TasksPage() {
     return matchSearch && matchStatus && matchPriority;
   });
 
-  /* ── Board columns ── */
-  const boardColumns = metaStatuses.filter(s => s.name.toLowerCase() !== "archived").map(s => ({
-    ...s,
-    tasks: filteredTasks.filter(t => (t.status || "Pending") === s.name),
-  }));
+  /* ── Priority counts (from all tasks, not filtered) ── */
+  const priorityCounts = tasks.reduce<Record<string, number>>((acc, t) => {
+    const key = t.priority || "";
+    if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
 
-  /* ── Task detail open ── */
+  /* ── Board columns ── */
+  const boardColumns = metaStatuses
+    .filter(s => s.name.toLowerCase() !== "archived")
+    .map(s => ({
+      ...s,
+      tasks: filteredTasks.filter(t => (t.status || "Pending") === s.name),
+    }));
+
+  /* ── Task detail ── */
   const openTask = (task: Task) => {
     setSelectedTask(task);
     setIsEditing(false);
@@ -255,7 +258,6 @@ export default function TasksPage() {
     setCheckInput("");
     setStaffInput("");
   };
-
   const closeTask = () => { setSelectedTask(null); setIsEditing(false); setEditDraft(null); };
 
   /* ── Edit ── */
@@ -289,30 +291,22 @@ export default function TasksPage() {
     finally { setSaving(false); }
   };
 
-  // In page.tsx — import addNotification from context
-
-/* ── Status update from board ── */
-const updateTaskStatus = async (task: Task, newStatus: string) => {
-  try {
-    const res = await fetch(`${API_BASE}/api/tasks/${task._id}`, {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus, updatedBy: user?.fullName || "Admin" }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update status");
-    const updated = data.task as Task;
-    setTasks(p => p.map(t => t._id === updated._id ? updated : t));
-    if (selectedTask?._id === updated._id) setSelectedTask(updated);
-
-    // ✅ ADD THIS — triggers the bell and notification page
-    addNotification(
-      `Status of "${task.name}" changed to "${newStatus}".`,
-      "status"
-    );
-
-    showToast(`Status moved to "${newStatus}".`, "success");
-  } catch (err: any) { showToast(err.message || "Failed.", "error"); }
-};
+  /* ── Status update from board ── */
+  const updateTaskStatus = async (task: Task, newStatus: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/tasks/${task._id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus, updatedBy: user?.fullName || "Admin" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update status");
+      const updated = data.task as Task;
+      setTasks(p => p.map(t => t._id === updated._id ? updated : t));
+      if (selectedTask?._id === updated._id) setSelectedTask(updated);
+      addNotification(`Status of "${task.name}" changed to "${newStatus}".`, "status");
+      showToast(`Status moved to "${newStatus}".`, "success");
+    } catch (err: any) { showToast(err.message || "Failed.", "error"); }
+  };
 
   /* ── Toggle checklist item ── */
   const toggleChecklist = async (task: Task, itemId: string) => {
@@ -350,7 +344,6 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
   };
 
   const closeConfirm = () => setConfirmDialog(d => ({ ...d, open: false }));
-
   const runConfirm = async () => {
     closeConfirm();
     const action = confirmCallbackRef.current;
@@ -388,8 +381,10 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
   if (!isLoaded || !canView) {
     return (
       <div className="tasks-wrapper">
-        <div className="tasks-shimmer-grid">
-          {[...Array(6)].map((_, i) => <div key={i} className="tasks-shimmer-card" />)}
+        <div className="tasks-inner">
+          <div className="tasks-shimmer-grid">
+            {[...Array(6)].map((_, i) => <div key={i} className="tasks-shimmer-card" />)}
+          </div>
         </div>
       </div>
     );
@@ -404,293 +399,368 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
   return (
     <>
       <div className="tasks-wrapper">
+        {/* ✅ Centered inner container */}
+        <div className="tasks-inner">
 
-        {/* ── Page header ── */}
-        <div className="tasks-page-header">
-          <div>
-            <h1 className="tasks-page-title">Tasks &amp; Lists</h1>
-            <p className="tasks-page-subtitle">
-              Track all maintenance tasks created from facility reports.
-            </p>
-          </div>
-          <div className="tasks-header-actions">
-            <button
-              type="button"
-              className={`tasks-view-btn${viewMode === "board" ? " tasks-view-btn--active" : ""}`}
-              onClick={() => setViewMode("board")}
-              title="Board view"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              className={`tasks-view-btn${viewMode === "list" ? " tasks-view-btn--active" : ""}`}
-              onClick={() => setViewMode("list")}
-              title="List view"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="8" y1="6"  x2="21" y2="6"/>
-                <line x1="8" y1="12" x2="21" y2="12"/>
-                <line x1="8" y1="18" x2="21" y2="18"/>
-                <line x1="3" y1="6"  x2="3.01" y2="6"/>
-                <line x1="3" y1="12" x2="3.01" y2="12"/>
-                <line x1="3" y1="18" x2="3.01" y2="18"/>
-              </svg>
-            </button>
-            <button type="button" className="tasks-refresh-btn" onClick={fetchTasks} disabled={isLoading} title="Refresh">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
-                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* ── Stats bar ── */}
-        <div className="tasks-stats-bar">
-          <div className="tasks-stat">
-            <span className="tasks-stat-num">{tasks.length}</span>
-            <span className="tasks-stat-lbl">Total</span>
-          </div>
-          {metaStatuses.filter(s => s.name.toLowerCase() !== "archived").map(s => (
-            <div key={s.id} className="tasks-stat">
-              <span className="tasks-stat-num" style={{ color: s.color }}>
-                {tasks.filter(t => (t.status || "Pending") === s.name).length}
-              </span>
-              <span className="tasks-stat-lbl">{s.name}</span>
+          {/* ── Page header ── */}
+          <div className="tasks-page-header">
+            <div>
+              <h1 className="tasks-page-title">Tasks &amp; Lists</h1>
+              <p className="tasks-page-subtitle">
+                Track all maintenance tasks created from facility reports.
+              </p>
             </div>
-          ))}
-        </div>
-
-        {/* ── Filters ── */}
-        <div className="tasks-filters">
-          <div className="tasks-search-wrap">
-            <svg viewBox="0 0 24 24" className="tasks-search-icon" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              type="text"
-              className="tasks-search"
-              placeholder="Search tasks, report ID, concern…"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button type="button" className="tasks-search-clear" onClick={() => setSearchQuery("")}>✕</button>
-            )}
+            <div className="tasks-header-actions">
+              <button
+                type="button"
+                className={`tasks-view-btn${viewMode === "board" ? " tasks-view-btn--active" : ""}`}
+                onClick={() => setViewMode("board")}
+                title="Board view"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/>
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`tasks-view-btn${viewMode === "list" ? " tasks-view-btn--active" : ""}`}
+                onClick={() => setViewMode("list")}
+                title="List view"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6"  x2="21" y2="6"/>
+                  <line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6"  x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/>
+                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </button>
+              <button type="button" className="tasks-refresh-btn" onClick={fetchTasks} disabled={isLoading} title="Refresh">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
-          <select className="tasks-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="All">All Statuses</option>
-            {metaStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-
-          <select className="tasks-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
-            <option value="All">All Priorities</option>
-            {metaPriorities.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-          </select>
-
-          {(statusFilter !== "All" || priorityFilter !== "All" || searchQuery) && (
-            <button type="button" className="tasks-clear-filters"
-              onClick={() => { setStatusFilter("All"); setPriorityFilter("All"); setSearchQuery(""); }}>
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {loadError && (
-          <div className="tasks-error-banner">
-            {loadError} <button type="button" onClick={fetchTasks}>Retry</button>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="tasks-shimmer-grid">
-            {[...Array(6)].map((_, i) => <div key={i} className="tasks-shimmer-card" />)}
-          </div>
-        )}
-
-        {!isLoading && filteredTasks.length === 0 && !loadError && (
-          <div className="tasks-empty">
-            <svg viewBox="0 0 64 64" fill="none" width="56" height="56">
-              <rect x="8" y="8" width="48" height="48" rx="8" stroke="currentColor" strokeWidth="2" opacity="0.15"/>
-              <path d="M22 32h20M32 22v20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.3"/>
-            </svg>
-            <p>No tasks found.</p>
-            <span>Tasks created from reports will appear here.</span>
-          </div>
-        )}
-
-        {/* ── BOARD VIEW ── */}
-        {!isLoading && filteredTasks.length > 0 && viewMode === "board" && (
-          <div className="tasks-board">
-            {boardColumns.map(col => (
-              <div key={col.id} className="tasks-board-col">
-                <div className="tasks-board-col-header">
-                  <span className="tasks-board-col-dot" style={{ backgroundColor: col.color }} />
-                  <span className="tasks-board-col-name">{col.name}</span>
-                  <span className="tasks-board-col-count">{col.tasks.length}</span>
+          {/* ── Stats bar ── */}
+          <div className="tasks-stats-bar">
+            <div className="tasks-stat">
+              <div className="tasks-stat-icon" style={{ background: "rgba(37,99,235,0.1)", color: "#2563eb" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/>
+                </svg>
+              </div>
+              <div className="tasks-stat-info">
+                <span className="tasks-stat-num">{tasks.length}</span>
+                <span className="tasks-stat-lbl">Total</span>
+              </div>
+            </div>
+            {metaStatuses.filter(s => s.name.toLowerCase() !== "archived").map(s => (
+              <div key={s.id} className="tasks-stat">
+                <div className="tasks-stat-icon" style={{ background: s.color + "18", color: s.color }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                  </svg>
                 </div>
-                <div className="tasks-board-col-body">
-                  {col.tasks.length === 0 && (
-                    <div className="tasks-board-empty">No tasks here</div>
-                  )}
-                  {col.tasks.map(task => {
-                    const prog     = calcProgress(task.checklist);
-                    const pColor   = getPriorityColor(task.priority);
-                    return (
-                      <div key={task._id} className="tasks-card" onClick={() => openTask(task)}>
-                        {/* Priority stripe */}
-                        <div className="tasks-card-stripe" style={{ backgroundColor: pColor }} />
-
-                        <div className="tasks-card-body">
-                          <div className="tasks-card-top">
-                            <h4 className="tasks-card-name">{task.name}</h4>
-                            {task.priority && (
-                              <span className="tasks-card-priority" style={{ color: pColor, backgroundColor: pColor + "18", border: `1px solid ${pColor}40` }}>
-                                {task.priority}
-                              </span>
-                            )}
-                          </div>
-
-                          {task.reportId && (
-                            <p className="tasks-card-report-id">
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                              </svg>
-                              #{task.reportId}
-                            </p>
-                          )}
-
-                          {task.concernType && (
-                            <p className="tasks-card-concern">{task.concernType}</p>
-                          )}
-
-                          {/* Staff avatars */}
-                          {task.assignedStaff && task.assignedStaff.length > 0 && (
-                            <div className="tasks-card-staff">
-                              {task.assignedStaff.slice(0, 3).map(s => (
-                                <span key={s} className="tasks-card-avatar" title={s}>
-                                  {s.charAt(0).toUpperCase()}
-                                </span>
-                              ))}
-                              {task.assignedStaff.length > 3 && (
-                                <span className="tasks-card-avatar tasks-card-avatar--more">
-                                  +{task.assignedStaff.length - 3}
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Progress bar */}
-                          {prog !== null && (
-                            <div className="tasks-card-progress">
-                              <div className="tasks-card-progress-bar">
-                                <div className="tasks-card-progress-fill" style={{ width: `${prog}%`, backgroundColor: prog === 100 ? "#22c55e" : pColor }} />
-                              </div>
-                              <span className="tasks-card-progress-pct">{prog}%</span>
-                            </div>
-                          )}
-
-                          <div className="tasks-card-footer">
-                            <span className="tasks-card-time">{getRelativeTime(task.createdAt)}</span>
-                            {/* Quick move status buttons */}
-                            <div className="tasks-card-actions" onClick={e => e.stopPropagation()}>
-                              {metaStatuses.filter(s => s.name !== col.name && s.name.toLowerCase() !== "archived").slice(0, 2).map(s => (
-                                <button key={s.id} type="button" className="tasks-card-move-btn"
-                                  style={{ color: s.color, borderColor: s.color + "40" }}
-                                  title={`Move to ${s.name}`}
-                                  onClick={() => updateTaskStatus(task, s.name)}>
-                                  → {s.name.split(" ")[0]}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="tasks-stat-info">
+                  <span className="tasks-stat-num" style={{ color: s.color }}>
+                    {tasks.filter(t => (t.status || "Pending") === s.name).length}
+                  </span>
+                  <span className="tasks-stat-lbl">{s.name}</span>
                 </div>
               </div>
             ))}
           </div>
-        )}
 
-        {/* ── LIST VIEW ── */}
-        {!isLoading && filteredTasks.length > 0 && viewMode === "list" && (
-          <div className="tasks-list-view">
-            <div className="tasks-list-header-row">
-              <span>Task</span>
-              <span>Status</span>
-              <span>Priority</span>
-              <span>Progress</span>
-              <span>Staff</span>
-              <span>Created</span>
-              <span></span>
-            </div>
-            {filteredTasks.map(task => {
-              const prog   = calcProgress(task.checklist);
-              const pColor = getPriorityColor(task.priority);
-              const sColor = getStatusColor(task.status);
+          {/* ── Priority filter chips ── */}
+          <div className="tasks-priority-bar">
+            {/* All chip */}
+            <button
+              type="button"
+              className={`tasks-priority-chip${priorityFilter === "All" ? " tasks-priority-chip--all-active" : ""}`}
+              style={{ "--chip-color": "#2563eb" } as React.CSSProperties}
+              onClick={() => setPriorityFilter("All")}
+            >
+              All Tasks
+              <span className="tasks-priority-chip-count">{tasks.length}</span>
+            </button>
+
+            {/* Per-priority chips */}
+            {metaPriorities.map(p => {
+              const count = priorityCounts[p.name] || 0;
+              const isActive = priorityFilter === p.name;
               return (
-                <div key={task._id} className="tasks-list-row" onClick={() => openTask(task)}>
-                  <div className="tasks-list-name-cell">
-                    <span className="tasks-list-stripe" style={{ backgroundColor: pColor }} />
-                    <div>
-                      <p className="tasks-list-name">{task.name}</p>
-                      {task.reportId && <p className="tasks-list-sub">#{task.reportId} · {task.concernType || ""}</p>}
-                    </div>
-                  </div>
-                  <span>
-                    <span className="tasks-status-pill" style={{ backgroundColor: sColor + "20", color: sColor, border: `1px solid ${sColor}40` }}>
-                      {task.status || "Pending"}
-                    </span>
-                  </span>
-                  <span>
-                    {task.priority && (
-                      <span className="tasks-status-pill" style={{ backgroundColor: pColor + "20", color: pColor, border: `1px solid ${pColor}40` }}>
-                        {task.priority}
-                      </span>
-                    )}
-                  </span>
-                  <span>
-                    {prog !== null ? (
-                      <div className="tasks-list-progress">
-                        <div className="tasks-list-progress-bar">
-                          <div className="tasks-list-progress-fill" style={{ width: `${prog}%`, backgroundColor: prog === 100 ? "#22c55e" : pColor }} />
-                        </div>
-                        <span className="tasks-list-progress-pct">{prog}%</span>
-                      </div>
-                    ) : <span className="tasks-list-na">—</span>}
-                  </span>
-                  <span>
-                    {task.assignedStaff && task.assignedStaff.length > 0 ? (
-                      <div className="tasks-card-staff">
-                        {task.assignedStaff.slice(0,3).map(s=>(
-                          <span key={s} className="tasks-card-avatar" title={s}>{s.charAt(0).toUpperCase()}</span>
-                        ))}
-                        {task.assignedStaff.length > 3 && <span className="tasks-card-avatar tasks-card-avatar--more">+{task.assignedStaff.length-3}</span>}
-                      </div>
-                    ) : <span className="tasks-list-na">—</span>}
-                  </span>
-                  <span className="tasks-list-time">{getRelativeTime(task.createdAt)}</span>
-                  <span onClick={e => e.stopPropagation()}>
-                    <button type="button" className="tasks-list-delete-btn" onClick={() => deleteTask(task)} title="Delete task">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                        <path d="M10 11v6"/><path d="M14 11v6"/>
-                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                      </svg>
-                    </button>
-                  </span>
-                </div>
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`tasks-priority-chip${isActive ? " tasks-priority-chip--active" : ""}`}
+                  style={{ "--chip-color": p.color } as React.CSSProperties}
+                  onClick={() => setPriorityFilter(isActive ? "All" : p.name)}
+                >
+                  <span className="tasks-priority-chip-dot" style={{ backgroundColor: p.color }} />
+                  {p.name}
+                  <span className="tasks-priority-chip-count">{count}</span>
+                </button>
               );
             })}
+
+            {/* "No priority" chip */}
+            {(() => {
+              const noneCount = tasks.filter(t => !t.priority).length;
+              const isActive  = priorityFilter === "__none__";
+              return noneCount > 0 ? (
+                <button
+                  type="button"
+                  className={`tasks-priority-chip${isActive ? " tasks-priority-chip--active" : ""}`}
+                  style={{ "--chip-color": "#6b7280" } as React.CSSProperties}
+                  onClick={() => setPriorityFilter(isActive ? "All" : "__none__")}
+                >
+                  <span className="tasks-priority-chip-dot" style={{ backgroundColor: "#6b7280" }} />
+                  No Priority
+                  <span className="tasks-priority-chip-count">{noneCount}</span>
+                </button>
+              ) : null;
+            })()}
           </div>
-        )}
+
+          {/* ── Filters row ── */}
+          <div className="tasks-filters">
+            <div className="tasks-search-wrap">
+              <svg viewBox="0 0 24 24" className="tasks-search-icon" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                type="text"
+                className="tasks-search"
+                placeholder="Search tasks, report ID, concern…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button type="button" className="tasks-search-clear" onClick={() => setSearchQuery("")}>✕</button>
+              )}
+            </div>
+
+            <div className="tasks-filters-divider" />
+
+            <select className="tasks-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="All">All Statuses</option>
+              {metaStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </select>
+
+            <select
+              className="tasks-filter-select"
+              value={priorityFilter === "__none__" ? "__none__" : priorityFilter}
+              onChange={e => setPriorityFilter(e.target.value)}
+            >
+              <option value="All">All Priorities</option>
+              {metaPriorities.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+              <option value="__none__">No Priority</option>
+            </select>
+
+            {(statusFilter !== "All" || priorityFilter !== "All" || searchQuery) && (
+              <button type="button" className="tasks-clear-filters"
+                onClick={() => { setStatusFilter("All"); setPriorityFilter("All"); setSearchQuery(""); }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                Clear
+              </button>
+            )}
+          </div>
+
+          {loadError && (
+            <div className="tasks-error-banner">
+              {loadError} <button type="button" onClick={fetchTasks}>Retry</button>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="tasks-shimmer-grid">
+              {[...Array(6)].map((_, i) => <div key={i} className="tasks-shimmer-card" />)}
+            </div>
+          )}
+
+          {!isLoading && filteredTasks.length === 0 && !loadError && (
+            <div className="tasks-empty">
+              <div className="tasks-empty-icon">
+                <svg viewBox="0 0 64 64" fill="none" width="28" height="28">
+                  <rect x="8" y="8" width="48" height="48" rx="8" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M22 32h20M32 22v20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <p>No tasks found.</p>
+              <span>{priorityFilter !== "All" || statusFilter !== "All" || searchQuery ? "Try adjusting your filters." : "Tasks created from reports will appear here."}</span>
+            </div>
+          )}
+
+          {/* ── BOARD VIEW ── */}
+          {!isLoading && filteredTasks.length > 0 && viewMode === "board" && (
+            <div className="tasks-board">
+              {boardColumns.map(col => (
+                <div key={col.id} className="tasks-board-col">
+                  <div className="tasks-board-col-header">
+                    <span className="tasks-board-col-dot" style={{ backgroundColor: col.color }} />
+                    <span className="tasks-board-col-name">{col.name}</span>
+                    <span className="tasks-board-col-count">{col.tasks.length}</span>
+                  </div>
+                  <div className="tasks-board-col-body">
+                    {col.tasks.length === 0 && (
+                      <div className="tasks-board-empty">No tasks here</div>
+                    )}
+                    {col.tasks.map(task => {
+                      const prog   = calcProgress(task.checklist);
+                      const pColor = getPriorityColor(task.priority);
+                      return (
+                        <div key={task._id} className="tasks-card" onClick={() => openTask(task)}>
+                          <div className="tasks-card-stripe" style={{ backgroundColor: pColor }} />
+                          <div className="tasks-card-body">
+                            <div className="tasks-card-top">
+                              <h4 className="tasks-card-name">{task.name}</h4>
+                              {task.priority && (
+                                <span className="tasks-card-priority" style={{ color: pColor, backgroundColor: pColor + "18", border: `1px solid ${pColor}40` }}>
+                                  {task.priority}
+                                </span>
+                              )}
+                            </div>
+                            {task.reportId && (
+                              <p className="tasks-card-report-id">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                #{task.reportId}
+                              </p>
+                            )}
+                            {task.concernType && (
+                              <p className="tasks-card-concern">{task.concernType}</p>
+                            )}
+                            {task.assignedStaff && task.assignedStaff.length > 0 && (
+                              <div className="tasks-card-staff">
+                                {task.assignedStaff.slice(0, 3).map(s => (
+                                  <span key={s} className="tasks-card-avatar" title={s}>
+                                    {s.charAt(0).toUpperCase()}
+                                  </span>
+                                ))}
+                                {task.assignedStaff.length > 3 && (
+                                  <span className="tasks-card-avatar tasks-card-avatar--more">
+                                    +{task.assignedStaff.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {prog !== null && (
+                              <div className="tasks-card-progress">
+                                <div className="tasks-card-progress-bar">
+                                  <div className="tasks-card-progress-fill" style={{ width: `${prog}%`, backgroundColor: prog === 100 ? "#22c55e" : pColor }} />
+                                </div>
+                                <span className="tasks-card-progress-pct">{prog}%</span>
+                              </div>
+                            )}
+                            <div className="tasks-card-footer">
+                              <span className="tasks-card-time">{getRelativeTime(task.createdAt)}</span>
+                              <div className="tasks-card-actions" onClick={e => e.stopPropagation()}>
+                                {metaStatuses
+                                  .filter(s => s.name !== col.name && s.name.toLowerCase() !== "archived")
+                                  .slice(0, 2)
+                                  .map(s => (
+                                    <button key={s.id} type="button" className="tasks-card-move-btn"
+                                      style={{ color: s.color, borderColor: s.color + "40" }}
+                                      title={`Move to ${s.name}`}
+                                      onClick={() => updateTaskStatus(task, s.name)}>
+                                      → {s.name.split(" ")[0]}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── LIST VIEW ── */}
+          {!isLoading && filteredTasks.length > 0 && viewMode === "list" && (
+            <div className="tasks-list-view">
+              <div className="tasks-list-header-row">
+                <span>Task</span>
+                <span>Status</span>
+                <span>Priority</span>
+                <span>Progress</span>
+                <span>Staff</span>
+                <span>Created</span>
+                <span></span>
+              </div>
+              {filteredTasks.map(task => {
+                const prog   = calcProgress(task.checklist);
+                const pColor = getPriorityColor(task.priority);
+                const sColor = getStatusColor(task.status);
+                return (
+                  <div key={task._id} className="tasks-list-row" onClick={() => openTask(task)}>
+                    <div className="tasks-list-name-cell">
+                      <span className="tasks-list-stripe" style={{ backgroundColor: pColor }} />
+                      <div>
+                        <p className="tasks-list-name">{task.name}</p>
+                        {task.reportId && <p className="tasks-list-sub">#{task.reportId} · {task.concernType || ""}</p>}
+                      </div>
+                    </div>
+                    <span>
+                      <span className="tasks-status-pill" style={{ backgroundColor: sColor + "20", color: sColor, border: `1px solid ${sColor}40` }}>
+                        {task.status || "Pending"}
+                      </span>
+                    </span>
+                    <span>
+                      {task.priority
+                        ? <span className="tasks-status-pill" style={{ backgroundColor: pColor + "20", color: pColor, border: `1px solid ${pColor}40` }}>{task.priority}</span>
+                        : <span className="tasks-list-na">—</span>
+                      }
+                    </span>
+                    <span>
+                      {prog !== null ? (
+                        <div className="tasks-list-progress">
+                          <div className="tasks-list-progress-bar">
+                            <div className="tasks-list-progress-fill" style={{ width: `${prog}%`, backgroundColor: prog === 100 ? "#22c55e" : pColor }} />
+                          </div>
+                          <span className="tasks-list-progress-pct">{prog}%</span>
+                        </div>
+                      ) : <span className="tasks-list-na">—</span>}
+                    </span>
+                    <span>
+                      {task.assignedStaff && task.assignedStaff.length > 0 ? (
+                        <div className="tasks-card-staff">
+                          {task.assignedStaff.slice(0, 3).map(s => (
+                            <span key={s} className="tasks-card-avatar" title={s}>{s.charAt(0).toUpperCase()}</span>
+                          ))}
+                          {task.assignedStaff.length > 3 && (
+                            <span className="tasks-card-avatar tasks-card-avatar--more">+{task.assignedStaff.length - 3}</span>
+                          )}
+                        </div>
+                      ) : <span className="tasks-list-na">—</span>}
+                    </span>
+                    <span className="tasks-list-time">{getRelativeTime(task.createdAt)}</span>
+                    <span onClick={e => e.stopPropagation()}>
+                      <button type="button" className="tasks-list-delete-btn" onClick={() => deleteTask(task)} title="Delete task">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                          <path d="M10 11v6"/><path d="M14 11v6"/>
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+        </div>{/* end .tasks-inner */}
       </div>
 
       {/* ══════════════ TASK DETAIL MODAL ══════════════ */}
@@ -742,10 +812,10 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
             {/* Modal body */}
             <div className="tasks-modal-body">
 
-              {/* Left */}
+              {/* Left panel */}
               <div className="tasks-modal-left">
 
-                {/* Status + Priority pills */}
+                {/* Status + Priority */}
                 <div className="tasks-modal-meta-row">
                   {isEditing ? (
                     <>
@@ -786,7 +856,7 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                   )}
                 </div>
 
-                {/* Concern type (edit) */}
+                {/* Concern type (edit only) */}
                 {isEditing && (
                   <div className="tasks-modal-field">
                     <label className="tasks-modal-label">Concern Type</label>
@@ -803,8 +873,7 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                   <div className="tasks-modal-progress-section">
                     <div className="tasks-modal-progress-header">
                       <span className="tasks-modal-label">Progress</span>
-                      <span className="tasks-modal-progress-pct"
-                        style={{ color: progress === 100 ? "#22c55e" : priorityColor }}>
+                      <span className="tasks-modal-progress-pct" style={{ color: progress === 100 ? "#22c55e" : priorityColor }}>
                         {progress}%
                       </span>
                     </div>
@@ -827,7 +896,6 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                       )}
                     </span>
                   </div>
-
                   <div className="tasks-modal-checklist">
                     {(activeTask?.checklist || []).length === 0 && (
                       <p className="tasks-modal-empty-hint">No checklist items yet.</p>
@@ -856,7 +924,6 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                       );
                     })}
                   </div>
-
                   {isEditing && (
                     <div className="tasks-modal-input-row">
                       <input type="text" className="tasks-modal-input" value={checkInput}
@@ -882,13 +949,12 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                 </div>
               </div>
 
-              {/* Right */}
+              {/* Right panel */}
               <div className="tasks-modal-right">
 
-                {/* Assigned staff */}
+                {/* Staff */}
                 <div className="tasks-modal-section">
                   <span className="tasks-modal-label">Assigned Staff</span>
-
                   <div className="tasks-modal-staff-list">
                     {(activeTask?.assignedStaff || []).length === 0 && (
                       <p className="tasks-modal-empty-hint">No staff assigned.</p>
@@ -905,12 +971,10 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                       </div>
                     ))}
                   </div>
-
                   {isEditing && (
                     <div className="tasks-modal-input-row">
                       {metaStaff.length > 0 ? (
-                        <select className="tasks-modal-input" value={staffInput}
-                          onChange={e => setStaffInput(e.target.value)}>
+                        <select className="tasks-modal-input" value={staffInput} onChange={e => setStaffInput(e.target.value)}>
                           <option value="">-- Select staff --</option>
                           {metaStaff.filter(s => !(editDraft?.assignedStaff || []).includes(s)).map(s => (
                             <option key={s} value={s}>{s}</option>
@@ -944,18 +1008,20 @@ const updateTaskStatus = async (task: Task, newStatus: string) => {
                   </div>
                 </div>
 
-                {/* Move to status (view mode) */}
+                {/* Move to status */}
                 {!isEditing && (
                   <div className="tasks-modal-section">
                     <span className="tasks-modal-label">Move to</span>
                     <div className="tasks-modal-status-grid">
-                      {metaStatuses.filter(s => s.name !== (selectedTask.status || "Pending") && s.name.toLowerCase() !== "archived").map(s => (
-                        <button key={s.id} type="button" className="tasks-modal-status-btn"
-                          style={{ borderColor: s.color + "60", color: s.color, backgroundColor: s.color + "10" }}
-                          onClick={() => updateTaskStatus(selectedTask, s.name)}>
-                          {s.name}
-                        </button>
-                      ))}
+                      {metaStatuses
+                        .filter(s => s.name !== (selectedTask.status || "Pending") && s.name.toLowerCase() !== "archived")
+                        .map(s => (
+                          <button key={s.id} type="button" className="tasks-modal-status-btn"
+                            style={{ borderColor: s.color + "60", color: s.color, backgroundColor: s.color + "10" }}
+                            onClick={() => updateTaskStatus(selectedTask, s.name)}>
+                            {s.name}
+                          </button>
+                        ))}
                     </div>
                   </div>
                 )}
