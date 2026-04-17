@@ -48,7 +48,7 @@ export default function AdminDashboard() {
 
         <button
           className="admin-card"
-          onClick={() => router.push("/Notification")}
+          onClick={() => router.push("/Admin/Notification")}
         >
           <h2>Notification</h2>
           <p>Manage notifications and their statuses.</p>

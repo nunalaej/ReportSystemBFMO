@@ -27,6 +27,13 @@ export default function StaffDashboard() {
           <h2>My Tasks</h2>
           <p>View and update maintenance tasks assigned to you.</p>
         </button>
+                <button
+          className="admin-card"
+          onClick={() => router.push("/Staff/Notification")}
+        >
+          <h2>Notification</h2>
+          <p>Manage notifications and their statuses.</p>
+        </button>
       </section>
     </main>
   );
