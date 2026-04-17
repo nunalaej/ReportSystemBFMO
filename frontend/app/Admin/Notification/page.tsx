@@ -1,7 +1,7 @@
 // app/Admin/Notification/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React from "react";
 import { useNotifications } from "@/app/context/notification";
 
 const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
@@ -26,7 +26,8 @@ function getRelativeTime(d: Date) {
 }
 
 export default function NotificationPage() {
-  const { notifications, unreadCount, markRead, markAllRead, clearAll } = useNotifications();
+  // ← renamed: markRead→markAsRead, markAllRead→markAllAsRead
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "28px 20px" }}>
@@ -46,12 +47,18 @@ export default function NotificationPage() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {unreadCount > 0 && (
-            <button onClick={markAllRead} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "#374151" }}>
+            <button
+              onClick={markAllAsRead}   // ← renamed
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "#374151" }}
+            >
               Mark all read
             </button>
           )}
           {notifications.length > 0 && (
-            <button onClick={clearAll} style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #fecaca", background: "#fef2f2", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "#dc2626" }}>
+            <button
+              onClick={clearAll}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #fecaca", background: "#fef2f2", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "#dc2626" }}
+            >
               Clear all
             </button>
           )}
@@ -73,7 +80,9 @@ export default function NotificationPage() {
         {notifications.map(n => {
           const style = TYPE_COLORS[n.type] || TYPE_COLORS.general;
           return (
-            <div key={n.id} onClick={() => markRead(n.id)}
+            <div
+              key={n.id}
+              onClick={() => markAsRead(n.id)}   // ← renamed
               style={{
                 display: "flex", alignItems: "flex-start", gap: 12,
                 padding: "14px 16px",
@@ -82,7 +91,8 @@ export default function NotificationPage() {
                 borderRadius: 12, cursor: "pointer",
                 transition: "background 0.15s, border-color 0.15s",
                 boxShadow: n.read ? "none" : "0 2px 8px rgba(14,165,233,0.08)",
-              }}>
+              }}
+            >
               <span style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 999, fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", backgroundColor: style.bg, color: style.color, marginTop: 2 }}>
                 {style.label}
               </span>

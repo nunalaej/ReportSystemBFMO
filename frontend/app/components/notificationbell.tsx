@@ -49,8 +49,17 @@ function formatTime(date: Date) {
 
 /* ══════════════════════════════════════════════════════════ */
 export function NotificationBell() {
-  const ctx = useNotificationsSafe();  // safe — never throws
-  const [isOpen, setIsOpen] = useState(false);
+// Already in NotificationBell.tsx — this handles the null case safely
+const ctx = useNotificationsSafe();
+if (!ctx) {
+  return (
+    <div className="nb-root">
+      <button className="nb-bell-btn" disabled aria-label="Notifications" type="button">
+        <span className="nb-bell-icon nb-bell-icon--outline"/>
+      </button>
+    </div>
+  );
+}  const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   /* Close on outside click */

@@ -825,3 +825,194 @@
   .tasks-modal-body     { grid-template-columns: 1fr; }
   .tasks-modal-left     { border-right: none; border-bottom: 1px solid #f1f5f9; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   DARK MODE OVERRIDES — tasks.css
+═══════════════════════════════════════════════════════ */
+html.dark .tasks-wrapper        { background: #020617; }
+html.dark .tasks-page-title     { color: #f1f5f9; }
+html.dark .tasks-page-subtitle  { color: #64748b; }
+
+/* View/refresh buttons */
+html.dark .tasks-view-btn {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #64748b;
+}
+html.dark .tasks-view-btn:hover       { background: #1a2744; color: #94a3b8; }
+html.dark .tasks-view-btn--active     { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+html.dark .tasks-refresh-btn {
+  background: #0f172a; border-color: #1e293b; color: #64748b;
+}
+html.dark .tasks-refresh-btn:hover    { background: #1a2744; color: #94a3b8; }
+
+/* Stats bar */
+html.dark .tasks-stat {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+html.dark .tasks-stat-num  { color: #e2e8f0; }
+html.dark .tasks-stat-lbl  { color: #475569; }
+
+/* Filters */
+html.dark .tasks-search {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #e2e8f0;
+}
+html.dark .tasks-search:focus { border-color: #3b82f6; }
+html.dark .tasks-search-clear { color: #475569; }
+html.dark .tasks-search-clear:hover { color: #94a3b8; }
+html.dark .tasks-filter-select {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #94a3b8;
+}
+html.dark .tasks-clear-filters {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #64748b;
+}
+html.dark .tasks-clear-filters:hover { background: #1a2744; color: #94a3b8; }
+
+/* Board */
+html.dark .tasks-board-col       { background: #0b1322; }
+html.dark .tasks-board-col-header {
+  background: #0b1322;
+  border-bottom-color: #1e293b;
+}
+html.dark .tasks-board-col-name  { color: #94a3b8; }
+html.dark .tasks-board-col-count { background: #1e293b; color: #64748b; }
+html.dark .tasks-board-col-body  { background: #0b1322; }
+html.dark .tasks-board-empty     { color: #334155; }
+
+/* Task card */
+html.dark .tasks-card {
+  background: #0f172a;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+html.dark .tasks-card:hover       { box-shadow: 0 4px 12px rgba(0,0,0,0.35); }
+html.dark .tasks-card-name        { color: #e2e8f0; }
+html.dark .tasks-card-report-id   { color: #475569; }
+html.dark .tasks-card-concern     { color: #475569; }
+html.dark .tasks-card-time        { color: #334155; }
+html.dark .tasks-card-progress-bar { background: #1e293b; }
+html.dark .tasks-card-avatar      { border-color: #0f172a; }
+html.dark .tasks-card-avatar--more { background: #1e293b; color: #64748b; }
+
+/* List view */
+html.dark .tasks-list-view {
+  background: #0f172a;
+  border-color: #1e293b;
+}
+html.dark .tasks-list-header-row {
+  background: #0b1322;
+  border-bottom-color: #1e293b;
+}
+html.dark .tasks-list-row { border-bottom-color: #1a2336; }
+html.dark .tasks-list-row:hover   { background: #0d1830; }
+html.dark .tasks-list-name        { color: #e2e8f0; }
+html.dark .tasks-list-sub         { color: #475569; }
+html.dark .tasks-list-time        { color: #475569; }
+html.dark .tasks-list-na          { color: #1e293b; }
+html.dark .tasks-list-progress-bar { background: #1e293b; }
+html.dark .tasks-list-delete-btn  { color: #334155; }
+html.dark .tasks-list-delete-btn:hover { background: rgba(239,68,68,0.12); color: #ef4444; }
+
+/* Modal */
+html.dark .tasks-modal {
+  background: #0f172a;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+html.dark .tasks-modal-header      { border-bottom-color: #1e293b; }
+html.dark .tasks-modal-title       { color: #f1f5f9; }
+html.dark .tasks-modal-title-input {
+  background: #0b1322;
+  border-color: #334155;
+  color: #f1f5f9;
+}
+html.dark .tasks-modal-report-badge { background: #1e293b; color: #64748b; }
+html.dark .tasks-modal-edit-btn {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #94a3b8;
+}
+html.dark .tasks-modal-edit-btn:hover { background: #1a2744; }
+html.dark .tasks-modal-delete-btn {
+  background: #0f172a;
+  border-color: rgba(239,68,68,0.25);
+  color: #ef4444;
+}
+html.dark .tasks-modal-delete-btn:hover { background: rgba(239,68,68,0.1); }
+html.dark .tasks-modal-close {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #475569;
+}
+html.dark .tasks-modal-close:hover { background: #1a2744; color: #94a3b8; }
+
+html.dark .tasks-modal-body   { background: #0f172a; }
+html.dark .tasks-modal-left   { border-right-color: #1e293b; }
+html.dark .tasks-modal-label  { color: #475569; }
+html.dark .tasks-modal-progress-bar  { background: #1e293b; }
+html.dark .tasks-modal-checklist-count { background: #1e293b; color: #475569; }
+
+html.dark .tasks-modal-check-item:hover { background: #0d1830; }
+html.dark .tasks-check-btn { background: #0b1322; border-color: #334155; }
+html.dark .tasks-check-text { color: #94a3b8; }
+html.dark .tasks-check-text--done { color: #334155; }
+html.dark .tasks-modal-empty-hint { color: #334155; }
+
+html.dark .tasks-modal-input {
+  background: #0b1322;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+html.dark .tasks-modal-input:focus { border-color: #3b82f6; }
+html.dark .tasks-modal-add-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+html.dark .tasks-modal-add-btn:hover:not(:disabled) { background: #253347; }
+
+html.dark .tasks-modal-notes  { color: #94a3b8; }
+html.dark .tasks-modal-select {
+  background: #0b1322;
+  border-color: #334155;
+  color: #94a3b8;
+}
+
+html.dark .tasks-modal-staff-row {
+  background: #0b1322;
+  border-color: #1e293b;
+}
+html.dark .tasks-modal-staff-name { color: #94a3b8; }
+
+html.dark .tasks-modal-info-box { background: #0b1322; border-color: #1e293b; }
+html.dark .tasks-info-key { color: #475569; }
+html.dark .tasks-info-val { color: #94a3b8; }
+
+html.dark .tasks-modal-footer {
+  background: #0b1322;
+  border-top-color: #1e293b;
+}
+html.dark .tasks-modal-cancel-btn {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #94a3b8;
+}
+html.dark .tasks-modal-cancel-btn:hover { background: #1a2744; }
+
+/* Toasts */
+html.dark .toast-success { background: #052e16; color: #86efac; border-color: #166534; }
+html.dark .toast-error   { background: #450a0a; color: #fca5a5; border-color: #991b1b; }
+html.dark .toast-info    { background: #172554; color: #93c5fd; border-color: #1d4ed8; }
+
+/* Confirm dialog */
+html.dark .confirm-dialog { background: #0f172a; box-shadow: 0 16px 48px rgba(0,0,0,0.5); }
+html.dark .confirm-dialog p { color: #94a3b8; }
+html.dark .confirm-cancel-btn {
+  background: #0f172a; border-color: #1e293b; color: #94a3b8;
+}
+html.dark .confirm-cancel-btn:hover { background: #1a2744; }

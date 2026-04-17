@@ -294,8 +294,19 @@ function normConcerns(raw: unknown[]): ConcernMeta[] {
 function normStatuses(raw: unknown[]): StatusMeta[] {
   return raw.map((s, idx) => { const o = s as any; return { id: String(o?.id || idx + 1), name: String(o?.name || "").trim() || "Unnamed", color: String(o?.color || "#6C757D").trim() }; });
 }
+// REPLACE normPriorities helper:
 function normPriorities(raw: unknown[]): PriorityMeta[] {
-  return raw.map((p, idx) => { const o = p as any; return { id: String(o?.id || idx + 1), name: String(o?.name || "").trim() || "Unnamed", color: String(o?.color || "#6C757D").trim(), notifyInterval: String(o?.notifyInterval || "1month") }; });
+  return raw.map((p, idx) => {
+    const o = p as any;
+    const ni = String(o?.notifyInterval ?? "").trim();
+    const validIntervals = ["daily", "1week", "1month", "3months"];
+    return {
+      id:             String(o?.id || idx + 1).trim(),
+      name:           String(o?.name || "").trim() || "Unnamed",
+      color:          String(o?.color || "#6C757D").trim(),
+      notifyInterval: validIntervals.includes(ni) ? ni : "1month",
+    };
+  });
 }
 
 /* ─────────────────────────── Panel ─────────────────────────── */
@@ -372,10 +383,15 @@ const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
   const [newClerkPw,    setNewClerkPw]    = useState("");
   const [showClerkForm, setShowClerkForm] = useState<string | null>(null);
 
-  const disciplineOptions = useMemo(
-    () => concerns.map(c => c.label).filter(l => l.toLowerCase() !== "other"),
-    [concerns]
-  );
+const disciplineOptions = useMemo(() => {
+  const fromConcerns = concerns
+    .map(c => c.label)
+    .filter(l => l.toLowerCase() !== "other");
+  const fromStaff = staffList.flatMap(s => s.disciplines);
+  const merged = Array.from(new Set([...fromConcerns, ...fromStaff]))
+    .filter(l => l.toLowerCase() !== "other");
+  return merged;
+}, [concerns, staffList]);
 
   /* ── Auth ── */
   const role = useMemo(() => {
@@ -554,8 +570,18 @@ body: JSON.stringify({
   
 
   /* ── Priority handlers ── */
-  const startEditPri  = (p: PriorityMeta) => { setEditPriId(p.id); setEditPriDraft({ ...p }); setShowAddPri(false); };
-  const cancelEditPri = ()                => { setEditPriId(null);  setEditPriDraft(null); };
+// The button onClick already sets the correct value, but verify the initial draft copy:
+// In startEditPri, change { ...p } to explicitly copy notifyInterval:
+const startEditPri = (p: PriorityMeta) => {
+  setEditPriId(p.id);
+  setEditPriDraft({
+    id:             p.id,
+    name:           p.name,
+    color:          p.color,
+    notifyInterval: p.notifyInterval || "1month",
+  });
+  setShowAddPri(false);
+};  const cancelEditPri = ()                => { setEditPriId(null);  setEditPriDraft(null); };
   const saveEditPri   = () => {
     if (!editPriDraft) return;
     const prev = priorities.find(p => p.id === editPriDraft.id);
