@@ -34,10 +34,10 @@ const DEFAULT_STATUSES = [
 ];
 
 const DEFAULT_PRIORITIES = [
-  { id: "1", name: "Low",    color: "#28A745" },
-  { id: "2", name: "Medium", color: "#FFC107" },
-  { id: "3", name: "High",   color: "#ce4f01" },
-  { id: "4", name: "Urgent", color: "#a40010" },
+  { id: "1", name: "Low",    color: "#28A745", notifyInterval: "3months" },
+  { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "1month"  },
+  { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
+  { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
 ];
 
 // ✅ NEW defaults
@@ -105,10 +105,13 @@ function sanitiseStatus(s, idx) {
 function sanitisePriority(p, idx) {
   const name = String(p?.name || "").trim();
   if (!name) return null;
+  const validIntervals = ["daily", "1week", "1month", "3months"];
+  const ni = String(p?.notifyInterval || "").trim();
   return {
-    id:    String(p?.id || String(idx + 1)).trim(),
+    id:             String(p?.id || String(idx + 1)).trim(),
     name,
-    color: String(p?.color || "#6C757D").trim(),
+    color:          String(p?.color || "#6C757D").trim(),
+    notifyInterval: validIntervals.includes(ni) ? ni : "1month",  // ✅ ADDED
   };
 }
 
