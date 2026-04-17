@@ -1,4 +1,6 @@
 // app/Notification/page.tsx
+export const dynamic = "force-dynamic";
+
 import NotificationPageInner from "./NotificationPageInner";
 
 export const metadata = {
