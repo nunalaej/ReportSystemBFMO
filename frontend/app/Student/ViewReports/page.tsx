@@ -176,8 +176,13 @@ export default function StudentReportPage() {
     const role = user.publicMetadata?.role;
     if (role === "admin") { router.push("/Admin/"); return; }
     if (role === "staff") { router.push("/Staff/"); return; }
-    const email = user.primaryEmailAddress?.emailAddress || user.emailAddresses[0]?.emailAddress || "";
-    setUserEmail(email);
+    // ✅ Fall back to username if no email
+const email = 
+  user.primaryEmailAddress?.emailAddress ||
+  user.emailAddresses[0]?.emailAddress ||
+  user.username ||
+  "";
+setUserEmail(email);
   }, [user, isLoaded, router]);
 
   /* ── Fetch meta ── */

@@ -362,23 +362,30 @@ export default function Create() {
 
   /* ── Auto-fill email + detect user type ── */
   useEffect(() => {
-    if (!isLoaded || !user) return;
-    const emailFromClerk =
-      user.primaryEmailAddress?.emailAddress ||
-      user.emailAddresses[0]?.emailAddress || "";
-    if (emailFromClerk) {
-      setCurrentUserEmail(emailFromClerk);
-      const student = isStudentEmail(emailFromClerk);
-      setFormData((f) => ({
-        ...f,
-        email:    emailFromClerk,
-        userType: student ? "Student" : "",
-        // ✅ Clear college/year if not a student
-        college:  student ? f.college : "",
-        year:     student ? f.year    : "",
-      }));
-    }
-  }, [isLoaded, user]);
+  if (!isLoaded || !user) return;
+
+  // ✅ Try email first, fall back to username@dlsud.edu.ph, then just username
+  const emailFromClerk =
+    user.primaryEmailAddress?.emailAddress ||
+    user.emailAddresses[0]?.emailAddress || "";
+
+  const username = user.username || "";
+
+  // Use email if available, otherwise construct from username or use username as identifier
+  const identifier = emailFromClerk || (username ? `${username}` : "");
+
+  if (identifier) {
+    setCurrentUserEmail(identifier);
+    const student = isStudentEmail(identifier);
+    setFormData((f) => ({
+      ...f,
+      email:    identifier,
+      userType: student ? "Student" : "",
+      college:  student ? f.college : "",
+      year:     student ? f.year    : "",
+    }));
+  }
+}, [isLoaded, user]);
 
   /* ── Load meta (buildings, concerns, colleges, yearLevels) ── */
   useEffect(() => {
@@ -639,17 +646,17 @@ export default function Create() {
 
   /* ── Empty state for resets ── */
   const getEmptyState = useCallback((): FormDataState => {
-    const student = isStudentEmail(currentUserEmail);
-    return {
-      email:         currentUserEmail || "",
-      heading:       "", description:   "",
-      concern:       "", subConcern:    "", building: "",
-      college:       "", year:          "",
-      userType:      student ? "Student" : "",
-      floor:         "", room:          "", ImageFile: null,
-      otherConcern:  "", otherBuilding: "", otherRoom: "",
-    };
-  }, [currentUserEmail]);
+  const student = isStudentEmail(currentUserEmail);
+  return {
+    email:         currentUserEmail || "",
+    heading:       "", description:   "",
+    concern:       "", subConcern:    "", building: "",
+    college:       "", year:          "",
+    userType:      student ? "Student" : "",
+    floor:         "", room:          "", ImageFile: null,
+    otherConcern:  "", otherBuilding: "", otherRoom: "",
+  };
+}, [currentUserEmail]);
 
   const performSubmit = useCallback(async () => {
     setSubmitting(true); setIsConfirming(false); showMsg("info","Submitting report...");
