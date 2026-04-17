@@ -1,8 +1,7 @@
-export const dynamic = "force-dynamic";
 "use client";
+export const dynamic = "force-dynamic";
 
 import "@/app/Admin/style/analytics.css";
-
 import React, { FC, useState, useEffect, useMemo, useCallback } from "react";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
