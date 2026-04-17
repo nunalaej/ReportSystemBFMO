@@ -107,6 +107,9 @@ const DEFAULT_PRIORITIES: PriorityMeta[] = [
   { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
   { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
 ];
+// ✅ NEW defaults for student report settings
+const DEFAULT_COLLEGES:    string[] = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
+const DEFAULT_YEAR_LEVELS: string[] = ["1st Year","2nd Year","3rd Year","4th Year"];
 
 const NOTIFY_INTERVAL_OPTIONS = [
   { value: "daily",   label: "Every Day"      },
@@ -271,6 +274,14 @@ export default function AdminEditPage() {
   const [error,      setError]      = useState("");
   const [saveMsg,    setSaveMsg]    = useState("");
 
+  // ✅ NEW: Student Report Settings state
+  const [colleges,      setColleges]      = useState<string[]>(DEFAULT_COLLEGES);
+  const [yearLevels,    setYearLevels]    = useState<string[]>(DEFAULT_YEAR_LEVELS);
+  const [newCollege,    setNewCollege]    = useState("");
+  const [newYearLevel,  setNewYearLevel]  = useState("");
+  const [editCollegeIdx,    setEditCollegeIdx]    = useState<number | null>(null);
+  const [editYearLevelIdx,  setEditYearLevelIdx]  = useState<number | null>(null);
+
   /* ── Selectors ── */
   const [selBuildingId,  setSelBuildingId]  = useState("");
   const [selConcernId,   setSelConcernId]   = useState("");
@@ -297,7 +308,6 @@ export default function AdminEditPage() {
   const [newClerkPw,    setNewClerkPw]    = useState("");
   const [showClerkForm, setShowClerkForm] = useState<string | null>(null);
 
-  /* Discipline options = concern labels (excluding "Other") */
   const disciplineOptions = useMemo(
     () => concerns.map(c => c.label).filter(l => l.toLowerCase() !== "other"),
     [concerns]
@@ -339,9 +349,17 @@ export default function AdminEditPage() {
       if (iB.length > 0 && !selBuildingId) setSelBuildingId(iB[0].id);
       if (iC.length > 0 && !selConcernId)  setSelConcernId(iC[0].id);
       if (iS.length > 0 && !selStatusId)   setSelStatusId(iS[0].id);
+
+      // ✅ Load colleges and yearLevels
+      if (Array.isArray(data.colleges)   && data.colleges.length)   setColleges(data.colleges);
+      if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
     } catch (err: any) {
       setError(err?.message || "Could not load. Using defaults.");
-      if (mode === "preferDefaults") { setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS); setStatuses(DEFAULT_STATUSES); setPriorities(DEFAULT_PRIORITIES); }
+      if (mode === "preferDefaults") {
+        setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS);
+        setStatuses(DEFAULT_STATUSES);   setPriorities(DEFAULT_PRIORITIES);
+        setColleges(DEFAULT_COLLEGES);   setYearLevels(DEFAULT_YEAR_LEVELS);
+      }
     } finally { setLoading(false); }
   }, [selBuildingId, selConcernId, selStatusId]);
 
@@ -384,14 +402,31 @@ export default function AdminEditPage() {
     const cleanS = statuses.map((s, idx)   => { const name = String(s.name || "").trim(); if (!name) return null; return { id: String(s.id || idx + 1).trim(), name, color: String(s.color || "#6C757D").trim() }; }).filter(Boolean) as StatusMeta[];
     const cleanP = priorities.map((p, idx) => { const name = String(p.name || "").trim(); if (!name) return null; return { id: String(p.id || idx + 1).trim(), name, color: String(p.color || "#6C757D").trim(), notifyInterval: String(p.notifyInterval || "1month") }; }).filter(Boolean) as PriorityMeta[];
 
+    // ✅ Clean colleges and yearLevels before saving
+    const cleanColleges   = colleges.map(c => String(c).trim()).filter(Boolean);
+    const cleanYearLevels = yearLevels.map(y => String(y).trim()).filter(Boolean);
+
     try {
-      const res  = await fetch(META_URL, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ buildings: cleanB, concerns: cleanC, statuses: cleanS, priorities: cleanP }) });
+      const res = await fetch(META_URL, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          buildings:  cleanB,
+          concerns:   cleanC,
+          statuses:   cleanS,
+          priorities: cleanP,
+          colleges:   cleanColleges,    // ✅ included
+          yearLevels: cleanYearLevels,  // ✅ included
+        }),
+      });
       if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Failed to save.");
       const data = await res.json().catch(() => null);
       if (data?.buildings)  setBuildings(normBuildings(data.buildings));
       if (data?.concerns)   setConcerns(normConcerns(data.concerns));
       if (data?.statuses)   setStatuses(normStatuses(data.statuses));
       if (data?.priorities) setPriorities(normPriorities(data.priorities));
+      if (Array.isArray(data?.colleges)   && data.colleges.length)   setColleges(data.colleges);
+      if (Array.isArray(data?.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
       setSaveMsg("All changes saved successfully.");
     } catch (err: any) { setError(err?.message || "Failed to save."); }
     finally { setSaving(false); }
@@ -530,33 +565,21 @@ export default function AdminEditPage() {
   /* ── Clerk account creation ── */
   const createClerkAccount = async (member: StaffMember) => {
     if (!member.clerkUsername?.trim() || !newClerkPw.trim()) {
-      setClerkResult({ success: false, message: "Username and password are required." });
-      return;
+      setClerkResult({ success: false, message: "Username and password are required." }); return;
     }
     try {
-      setClerkCreating(true);
-      setClerkResult(null);
+      setClerkCreating(true); setClerkResult(null);
       const res  = await fetch(`${API_BASE}/api/staff/create-clerk`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          staffId:  member._id,
-          username: member.clerkUsername.trim(),
-          password: newClerkPw.trim(),
-          name:     member.name,
-        }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body:   JSON.stringify({ staffId: member._id, username: member.clerkUsername.trim(), password: newClerkPw.trim(), name: member.name }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to create account.");
       setClerkResult({ success: true, message: `Account "${member.clerkUsername}" created successfully!` });
-      setNewClerkPw("");
-      setShowClerkForm(null);
+      setNewClerkPw(""); setShowClerkForm(null);
       loadStaff();
-    } catch (err: any) {
-      setClerkResult({ success: false, message: err.message || "Failed." });
-    } finally {
-      setClerkCreating(false);
-    }
+    } catch (err: any) { setClerkResult({ success: false, message: err.message || "Failed." }); }
+    finally { setClerkCreating(false); }
   };
 
   const filteredStaff = staffList.filter(s => discFilter === "All" || s.disciplines.includes(discFilter));
@@ -583,6 +606,7 @@ export default function AdminEditPage() {
             <button type="button" className="btn btn-secondary" disabled={saving || loading}
               onClick={() => {
                 setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS); setStatuses(DEFAULT_STATUSES); setPriorities(DEFAULT_PRIORITIES);
+                setColleges(DEFAULT_COLLEGES);   setYearLevels(DEFAULT_YEAR_LEVELS);
                 setSaveMsg(""); setError("");
                 setSelBuildingId(DEFAULT_BUILDINGS[0].id); setSelConcernId(DEFAULT_CONCERNS[0].id); setSelStatusId(DEFAULT_STATUSES[0].id);
                 cancelEditPri(); setShowAddPri(false);
@@ -817,12 +841,154 @@ export default function AdminEditPage() {
               </div>
             </Panel>
 
+            {/* ══ STUDENT REPORT SETTINGS ══ */}
+            <Panel
+              title="Student Report Settings"
+              subtitle="Configure college options and year levels shown on the student report form"
+              badge={colleges.length + yearLevels.length}
+            >
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28 }}>
+
+                {/* ── Colleges ── */}
+                <div>
+                  <div className="admin-edit__subconcerns-head" style={{ marginBottom: 10 }}>
+                    <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Colleges / Departments</h4>
+                    <span className="admin-edit__panel-badge">{colleges.length}</span>
+                  </div>
+
+                  {colleges.length === 0 && <p className="admin-edit__empty">No colleges yet.</p>}
+
+                  {colleges.map((c, idx) => (
+                    <div key={idx} className="admin-edit__subconcern-row">
+                      {editCollegeIdx === idx ? (
+                        <input
+                          type="text"
+                          className="admin-edit__input"
+                          value={c}
+                          autoFocus
+                          onChange={e => setColleges(p => p.map((x, i) => i === idx ? e.target.value : x))}
+                          onBlur={() => setEditCollegeIdx(null)}
+                          onKeyDown={e => { if (e.key === "Enter") setEditCollegeIdx(null); }}
+                        />
+                      ) : (
+                        <span
+                          style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
+                          onClick={() => setEditCollegeIdx(idx)}
+                        >
+                          {c}
+                        </span>
+                      )}
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
+                        onClick={() => setEditCollegeIdx(idx)} title="Edit"><IconPencil/></button>
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                        onClick={() => { setColleges(p => p.filter((_, i) => i !== idx)); addNotification(`College "${c}" removed.`, "concern"); }}
+                        title="Remove"><IconTrash/></button>
+                    </div>
+                  ))}
+
+                  {/* Add new college */}
+                  <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
+                    <input
+                      type="text"
+                      className="admin-edit__input"
+                      value={newCollege}
+                      placeholder="e.g. CLAW"
+                      onChange={e => setNewCollege(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newCollege.trim()) {
+                          setColleges(p => [...p, newCollege.trim()]);
+                          addNotification(`College "${newCollege.trim()}" added.`, "concern");
+                          setNewCollege("");
+                        }
+                      }}
+                    />
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        if (!newCollege.trim()) return;
+                        setColleges(p => [...p, newCollege.trim()]);
+                        addNotification(`College "${newCollege.trim()}" added.`, "concern");
+                        setNewCollege("");
+                      }}>
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Year Levels ── */}
+                <div>
+                  <div className="admin-edit__subconcerns-head" style={{ marginBottom: 10 }}>
+                    <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Year Levels</h4>
+                    <span className="admin-edit__panel-badge">{yearLevels.length}</span>
+                  </div>
+
+                  {yearLevels.length === 0 && <p className="admin-edit__empty">No year levels yet.</p>}
+
+                  {yearLevels.map((y, idx) => (
+                    <div key={idx} className="admin-edit__subconcern-row">
+                      {editYearLevelIdx === idx ? (
+                        <input
+                          type="text"
+                          className="admin-edit__input"
+                          value={y}
+                          autoFocus
+                          onChange={e => setYearLevels(p => p.map((x, i) => i === idx ? e.target.value : x))}
+                          onBlur={() => setEditYearLevelIdx(null)}
+                          onKeyDown={e => { if (e.key === "Enter") setEditYearLevelIdx(null); }}
+                        />
+                      ) : (
+                        <span
+                          style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
+                          onClick={() => setEditYearLevelIdx(idx)}
+                        >
+                          {y}
+                        </span>
+                      )}
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
+                        onClick={() => setEditYearLevelIdx(idx)} title="Edit"><IconPencil/></button>
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                        onClick={() => { setYearLevels(p => p.filter((_, i) => i !== idx)); addNotification(`Year level "${y}" removed.`, "concern"); }}
+                        title="Remove"><IconTrash/></button>
+                    </div>
+                  ))}
+
+                  {/* Add new year level */}
+                  <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
+                    <input
+                      type="text"
+                      className="admin-edit__input"
+                      value={newYearLevel}
+                      placeholder="e.g. 5th Year"
+                      onChange={e => setNewYearLevel(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newYearLevel.trim()) {
+                          setYearLevels(p => [...p, newYearLevel.trim()]);
+                          addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern");
+                          setNewYearLevel("");
+                        }
+                      }}
+                    />
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        if (!newYearLevel.trim()) return;
+                        setYearLevels(p => [...p, newYearLevel.trim()]);
+                        addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern");
+                        setNewYearLevel("");
+                      }}>
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              <p className="admin-edit__panel-subtitle" style={{ marginTop: 16, fontSize: 12 }}>
+                💡 These options appear in the college and year level dropdowns on the student report form. Changes take effect after saving.
+              </p>
+            </Panel>
+
             {/* ══ STAFF MANAGEMENT ══ */}
             <Panel title="Staff Management" subtitle="Configure engineers and technicians — assign disciplines and positions" badge={staffList.length}>
-
               {staffError && <div className="admin-edit__alert admin-edit__alert--error" style={{ marginBottom: 12 }}>{staffError}</div>}
-
-              {/* Top bar */}
               <div className="staff-topbar">
                 <div className="staff-disc-tabs">
                   {["All", ...disciplineOptions].map(d => (
@@ -837,7 +1003,6 @@ export default function AdminEditPage() {
                 </button>
               </div>
 
-              {/* Add form */}
               {showAddStaff && (
                 <div className="staff-form-card">
                   <p className="staff-form-card-title">New Staff Member</p>
@@ -852,14 +1017,13 @@ export default function AdminEditPage() {
                       <input type="email" className="admin-edit__input" value={newStaff.email} placeholder="john@bfmo.edu"
                         onChange={e => setNewStaff(d => ({ ...d, email: e.target.value }))}/>
                     </div>
-<div className="admin-edit__field-group">
-  <label className="admin-edit__label">Username</label>
-  <input type="text" className="admin-edit__input"
-    value={newStaff.clerkUsername || ""}
-    placeholder="e.g. ejn2032 (for login)"
-    onChange={e => setNewStaff(d => ({ ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") }))}/>
-  <span className="admin-edit__label-hint">Staff will use this to log in. No spaces or @ symbols.</span>
-</div>
+                    <div className="admin-edit__field-group">
+                      <label className="admin-edit__label">Username</label>
+                      <input type="text" className="admin-edit__input" value={newStaff.clerkUsername || ""}
+                        placeholder="e.g. ejn2032 (for login)"
+                        onChange={e => setNewStaff(d => ({ ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") }))}/>
+                      <span className="admin-edit__label-hint">Staff will use this to log in. No spaces or @ symbols.</span>
+                    </div>
                     <div className="admin-edit__field-group">
                       <label className="admin-edit__label">Position</label>
                       <select className="admin-edit__input" value={newStaff.position} onChange={e => setNewStaff(d => ({ ...d, position: e.target.value }))}>
@@ -874,8 +1038,7 @@ export default function AdminEditPage() {
                   </div>
                   <div className="admin-edit__field-group" style={{ marginTop: 12 }}>
                     <label className="admin-edit__label">
-                      Disciplines
-                      <span className="admin-edit__label-hint"> — staff only appear in tasks for their assigned disciplines</span>
+                      Disciplines <span className="admin-edit__label-hint"> — staff only appear in tasks for their assigned disciplines</span>
                     </label>
                     <div className="staff-chips">
                       {disciplineOptions.map(d => {
@@ -903,7 +1066,6 @@ export default function AdminEditPage() {
                 </div>
               )}
 
-              {/* Staff list */}
               {staffLoading ? <p className="admin-edit__loading">Loading staff…</p> : (
                 <div className="staff-list">
                   {filteredStaff.length === 0 && (
@@ -922,11 +1084,8 @@ export default function AdminEditPage() {
                     const initials  = member.name.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("");
                     return (
                       <div key={member._id}>
-
-                        {/* ── Staff card ── */}
                         <div className={`staff-card${isEditing ? " staff-card--editing" : ""}${!member.active ? " staff-card--inactive" : ""}`}>
                           {isEditing && editStaffDraft ? (
-                            /* Edit form */
                             <div className="staff-edit-body">
                               <div className="staff-form-grid">
                                 <div className="admin-edit__field-group">
@@ -987,7 +1146,6 @@ export default function AdminEditPage() {
                               </div>
                             </div>
                           ) : (
-                            /* Display row */
                             <div className="staff-row">
                               <div className="staff-avatar">{initials}</div>
                               <div className="staff-info">
@@ -1013,35 +1171,23 @@ export default function AdminEditPage() {
                                 {member.notes && <span className="staff-notes">{member.notes}</span>}
                               </div>
                               <div className="staff-row-btns">
-                                {/* Create Clerk Account button */}
-                                <button
-                                  type="button"
-                                  className="admin-edit__icon-btn admin-edit__icon-btn--clerk"
+                                <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--clerk"
                                   title={member.clerkId ? "Clerk account linked" : "Create Clerk account"}
-                                 onClick={() => {
-  setShowClerkForm(showClerkForm === member._id ? null : (member._id || null));
-  setClerkResult(null);
-  setNewClerkPw("");
-  // ✅ Auto-generate username from email prefix (ejn-2032@dlsud.edu.ph → ejn2032)
-  const emailPrefix = (member.email || "").split("@")[0].replace(/[^a-zA-Z0-9_]/g, "");
-  setEditStaffDraft({
-    ...member,
-    clerkUsername: member.clerkUsername || emailPrefix,
-  });
-}}
-                                >
+                                  onClick={() => {
+                                    setShowClerkForm(showClerkForm === member._id ? null : (member._id || null));
+                                    setClerkResult(null); setNewClerkPw("");
+                                    const emailPrefix = (member.email || "").split("@")[0].replace(/[^a-zA-Z0-9_]/g, "");
+                                    setEditStaffDraft({ ...member, clerkUsername: member.clerkUsername || emailPrefix });
+                                  }}>
                                   {member.clerkId ? (
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                      <circle cx="12" cy="7" r="4"/>
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                                       <polyline points="16 11 18 13 22 9"/>
                                     </svg>
                                   ) : (
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                      <circle cx="12" cy="7" r="4"/>
-                                      <line x1="12" y1="11" x2="12" y2="17"/>
-                                      <line x1="9" y1="14" x2="15" y2="14"/>
+                                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                                      <line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>
                                     </svg>
                                   )}
                                 </button>
@@ -1055,143 +1201,79 @@ export default function AdminEditPage() {
                           )}
                         </div>
 
-                        {/* ── Clerk Account Creation Form — inside map, has access to `member` ── */}
                         {showClerkForm === member._id && (
-  <div className="staff-clerk-form">
-    <p className="staff-clerk-form-title">
-      {member.clerkId ? "✓ Clerk account already linked" : "Create Login Account"}
-    </p>
-
-    {!member.clerkId ? (
-      <>
-        <div className="staff-clerk-fields">
-
-          {/* Email — pre-filled from staff record, read-only display */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Email</label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              value={member.email || ""}
-              readOnly
-              style={{ background: "#f3f4f6", color: "#6b7280" }}
-            />
-            <span className="admin-edit__label-hint">Pulled from staff record</span>
-          </div>
-
-          {/* Username — auto-generated from email prefix, editable */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Username <span className="staff-required">*</span></label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              placeholder="e.g. ejn2032"
-              value={editStaffDraft?.clerkUsername || ""}
-              onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") } : d)}
-            />
-            <span className="admin-edit__label-hint">
-              No spaces or special characters. Staff uses this to log in.
-            </span>
-          </div>
-
-          {/* Temporary password */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Temporary Password <span className="staff-required">*</span></label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              placeholder="Min 8 characters"
-              value={newClerkPw}
-              onChange={e => setNewClerkPw(e.target.value)}
-            />
-            <span className="admin-edit__label-hint">
-              Share this with the staff member. They can change it after logging in.
-            </span>
-          </div>
-
-          {/* Name — read-only */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Name</label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              value={member.name}
-              readOnly
-              style={{ background: "#f3f4f6", color: "#6b7280" }}
-            />
-          </div>
-
-          {/* Position — read-only */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Position</label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              value={member.position}
-              readOnly
-              style={{ background: "#f3f4f6", color: "#6b7280" }}
-            />
-          </div>
-
-          {/* Disciplines — read-only */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Disciplines</label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-              {member.disciplines.length === 0
-                ? <span className="staff-no-disc">None assigned</span>
-                : member.disciplines.map(d => (
-                    <span key={d} className="staff-disc-pill">{d}</span>
-                  ))
-              }
-            </div>
-          </div>
-
-          {/* Role/Accessibility */}
-          <div className="admin-edit__field-group">
-            <label className="admin-edit__label">Accessibility (Role)</label>
-            <input
-              type="text"
-              className="admin-edit__input"
-              value="Staff — can view reports and tasks"
-              readOnly
-              style={{ background: "#f3f4f6", color: "#6b7280" }}
-            />
-            <span className="admin-edit__label-hint">
-              Role is automatically set to "staff" in Clerk.
-            </span>
-          </div>
-
-        </div>
-
-        {clerkResult && (
-          <div className={`staff-clerk-result${clerkResult.success ? " staff-clerk-result--ok" : " staff-clerk-result--err"}`}>
-            {clerkResult.message}
-          </div>
-        )}
-
-        <div className="staff-form-actions" style={{ marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary btn-sm"
-            onClick={() => { setShowClerkForm(null); setClerkResult(null); setNewClerkPw(""); }}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn-primary btn-sm"
-            onClick={() => createClerkAccount({ ...member, clerkUsername: editStaffDraft?.clerkUsername || "" })}
-            disabled={clerkCreating || !newClerkPw.trim() || !editStaffDraft?.clerkUsername?.trim()}>
-            {clerkCreating ? "Creating…" : "Create Account"}
-          </button>
-        </div>
-      </>
-    ) : (
-      <div style={{ marginTop: 8 }}>
-        <p style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ This staff member has a Clerk account.</p>
-        <p className="admin-edit__label-hint">Username: <code>{member.clerkUsername || "—"}</code></p>
-        <p className="admin-edit__label-hint">Clerk ID: <code style={{ fontSize: 11 }}>{member.clerkId}</code></p>
-      </div>
-    )}
-  </div>
-)}
-
-                      </div> // closes key={member._id} wrapper
+                          <div className="staff-clerk-form">
+                            <p className="staff-clerk-form-title">
+                              {member.clerkId ? "✓ Clerk account already linked" : "Create Login Account"}
+                            </p>
+                            {!member.clerkId ? (
+                              <>
+                                <div className="staff-clerk-fields">
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Email</label>
+                                    <input type="text" className="admin-edit__input" value={member.email || ""} readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
+                                    <span className="admin-edit__label-hint">Pulled from staff record</span>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Username <span className="staff-required">*</span></label>
+                                    <input type="text" className="admin-edit__input" placeholder="e.g. ejn2032"
+                                      value={editStaffDraft?.clerkUsername || ""}
+                                      onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") } : d)}/>
+                                    <span className="admin-edit__label-hint">No spaces or special characters. Staff uses this to log in.</span>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Temporary Password <span className="staff-required">*</span></label>
+                                    <input type="text" className="admin-edit__input" placeholder="Min 8 characters"
+                                      value={newClerkPw} onChange={e => setNewClerkPw(e.target.value)}/>
+                                    <span className="admin-edit__label-hint">Share this with the staff member. They can change it after logging in.</span>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Name</label>
+                                    <input type="text" className="admin-edit__input" value={member.name} readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Position</label>
+                                    <input type="text" className="admin-edit__input" value={member.position} readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Disciplines</label>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                                      {member.disciplines.length === 0
+                                        ? <span className="staff-no-disc">None assigned</span>
+                                        : member.disciplines.map(d => <span key={d} className="staff-disc-pill">{d}</span>)}
+                                    </div>
+                                  </div>
+                                  <div className="admin-edit__field-group">
+                                    <label className="admin-edit__label">Accessibility (Role)</label>
+                                    <input type="text" className="admin-edit__input" value="Staff — can view reports and tasks" readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
+                                    <span className="admin-edit__label-hint">Role is automatically set to "staff" in Clerk.</span>
+                                  </div>
+                                </div>
+                                {clerkResult && (
+                                  <div className={`staff-clerk-result${clerkResult.success ? " staff-clerk-result--ok" : " staff-clerk-result--err"}`}>
+                                    {clerkResult.message}
+                                  </div>
+                                )}
+                                <div className="staff-form-actions" style={{ marginTop: 16 }}>
+                                  <button type="button" className="btn btn-secondary btn-sm"
+                                    onClick={() => { setShowClerkForm(null); setClerkResult(null); setNewClerkPw(""); }}>Cancel</button>
+                                  <button type="button" className="btn btn-primary btn-sm"
+                                    onClick={() => createClerkAccount({ ...member, clerkUsername: editStaffDraft?.clerkUsername || "" })}
+                                    disabled={clerkCreating || !newClerkPw.trim() || !editStaffDraft?.clerkUsername?.trim()}>
+                                    {clerkCreating ? "Creating…" : "Create Account"}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <div style={{ marginTop: 8 }}>
+                                <p style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>✓ This staff member has a Clerk account.</p>
+                                <p className="admin-edit__label-hint">Username: <code>{member.clerkUsername || "—"}</code></p>
+                                <p className="admin-edit__label-hint">Clerk ID: <code style={{ fontSize: 11 }}>{member.clerkId}</code></p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

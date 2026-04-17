@@ -40,6 +40,10 @@ const DEFAULT_PRIORITIES = [
   { id: "4", name: "Urgent", color: "#a40010" },
 ];
 
+// ✅ NEW defaults
+const DEFAULT_COLLEGES    = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
+const DEFAULT_YEAR_LEVELS = ["1st Year","2nd Year","3rd Year","4th Year"];
+
 /* ── Helpers ──────────────────────────────────────────────── */
 const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
 
@@ -62,53 +66,50 @@ function normaliseRoomsPerFloor(raw, floors) {
 function sanitiseBuilding(b, idx) {
   const name = String(b?.name || "").trim();
   if (!name) return null;
-
   const id =
     String(b?.id || "").trim() ||
     norm(name).replace(/\s+/g, "-") ||
     `b-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
   const hasRooms            = b?.hasRooms === false ? false : true;
   const floors              = Math.max(1, parseInt(b?.floors, 10) || 1);
   const roomsPerFloor       = normaliseRoomsPerFloor(b?.roomsPerFloor, floors);
   const singleLocationLabel = String(b?.singleLocationLabel || "").trim();
-
   return { id, name, floors, roomsPerFloor, hasRooms, singleLocationLabel };
 }
 
 function sanitiseConcern(c, idx) {
   const label = String(c?.label || "").trim();
   if (!label) return null;
-
   const id =
     String(c?.id || "").trim() ||
     norm(label).replace(/\s+/g, "-") ||
     `concern-${idx}-${Math.random().toString(36).slice(2, 6)}`;
-
   let subs = Array.isArray(c?.subconcerns)
     ? c.subconcerns.map((s) => String(s || "").trim()).filter(Boolean)
     : [];
-
   subs = subs.filter((s) => norm(s) !== "other");
   subs.push("Other");
-
   return { id, label, subconcerns: subs };
 }
 
 function sanitiseStatus(s, idx) {
   const name = String(s?.name || "").trim();
   if (!name) return null;
-  const id    = String(s?.id || String(idx + 1)).trim();
-  const color = String(s?.color || "#6C757D").trim();
-  return { id, name, color };
+  return {
+    id:    String(s?.id || String(idx + 1)).trim(),
+    name,
+    color: String(s?.color || "#6C757D").trim(),
+  };
 }
 
 function sanitisePriority(p, idx) {
   const name = String(p?.name || "").trim();
   if (!name) return null;
-  const id    = String(p?.id || String(idx + 1)).trim();
-  const color = String(p?.color || "#6C757D").trim();
-  return { id, name, color };
+  return {
+    id:    String(p?.id || String(idx + 1)).trim(),
+    name,
+    color: String(p?.color || "#6C757D").trim(),
+  };
 }
 
 /* ── GET /api/meta ────────────────────────────────────────── */
@@ -125,6 +126,8 @@ router.get("/", async (req, res) => {
             concerns:   DEFAULT_CONCERNS,
             statuses:   DEFAULT_STATUSES,
             priorities: DEFAULT_PRIORITIES,
+            colleges:   DEFAULT_COLLEGES,      // ✅
+            yearLevels: DEFAULT_YEAR_LEVELS,   // ✅
           },
         },
         { upsert: true, returnDocument: "after" }
@@ -137,6 +140,9 @@ router.get("/", async (req, res) => {
       concerns:   doc.concerns   || DEFAULT_CONCERNS,
       statuses:   doc.statuses   || DEFAULT_STATUSES,
       priorities: doc.priorities || DEFAULT_PRIORITIES,
+      // ✅ Always return with fallback to defaults
+      colleges:   doc.colleges   && doc.colleges.length   ? doc.colleges   : DEFAULT_COLLEGES,
+      yearLevels: doc.yearLevels && doc.yearLevels.length ? doc.yearLevels : DEFAULT_YEAR_LEVELS,
     });
   } catch (err) {
     console.error("GET /meta error:", err);
@@ -151,6 +157,9 @@ router.put("/", async (req, res) => {
     const rawConcerns   = Array.isArray(req.body?.concerns)   ? req.body.concerns   : [];
     const rawStatuses   = Array.isArray(req.body?.statuses)   ? req.body.statuses   : [];
     const rawPriorities = Array.isArray(req.body?.priorities) ? req.body.priorities : [];
+    // ✅ NEW: read colleges and yearLevels from body
+    const rawColleges   = Array.isArray(req.body?.colleges)   ? req.body.colleges   : [];
+    const rawYearLevels = Array.isArray(req.body?.yearLevels) ? req.body.yearLevels : [];
 
     /* Sanitise buildings */
     let buildings = rawBuildings.map((b, i) => sanitiseBuilding(b, i)).filter(Boolean);
@@ -173,18 +182,28 @@ router.put("/", async (req, res) => {
     }
     concerns = [...normalConcerns, ...otherConcerns.slice(0, 1)];
 
-    /* Sanitise statuses — keep at least the defaults if none provided */
+    /* Sanitise statuses */
     let statuses = rawStatuses.map((s, i) => sanitiseStatus(s, i)).filter(Boolean);
     if (statuses.length === 0) statuses = DEFAULT_STATUSES;
 
-    /* Sanitise priorities — keep at least the defaults if none provided */
+    /* Sanitise priorities */
     let priorities = rawPriorities.map((p, i) => sanitisePriority(p, i)).filter(Boolean);
     if (priorities.length === 0) priorities = DEFAULT_PRIORITIES;
+
+    // ✅ Sanitise colleges — clean strings, fallback to defaults if empty
+    const colleges = rawColleges.map(c => String(c || "").trim()).filter(Boolean);
+    // ✅ Sanitise yearLevels — clean strings, fallback to defaults if empty
+    const yearLevels = rawYearLevels.map(y => String(y || "").trim()).filter(Boolean);
+
+    /* Build update object */
+    const setFields = { buildings, concerns, statuses, priorities };
+    if (colleges.length)   setFields.colleges   = colleges;
+    if (yearLevels.length) setFields.yearLevels = yearLevels;
 
     /* Upsert */
     const updated = await Meta.findOneAndUpdate(
       { key: "main" },
-      { $set: { buildings, concerns, statuses, priorities } },
+      { $set: setFields },
       { upsert: true, returnDocument: "after" }
     ).lean();
 
@@ -194,6 +213,8 @@ router.put("/", async (req, res) => {
       concerns:   updated.concerns,
       statuses:   updated.statuses,
       priorities: updated.priorities,
+      colleges:   updated.colleges   && updated.colleges.length   ? updated.colleges   : DEFAULT_COLLEGES,
+      yearLevels: updated.yearLevels && updated.yearLevels.length ? updated.yearLevels : DEFAULT_YEAR_LEVELS,
     });
   } catch (err) {
     console.error("PUT /meta error:", err);

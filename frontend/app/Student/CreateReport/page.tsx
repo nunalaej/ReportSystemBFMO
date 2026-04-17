@@ -1007,18 +1007,7 @@ export default function Create() {
                   required autoComplete="email"
                   readOnly={Boolean(currentUserEmail)}
                 />
-              </div>
 
-              {/* Subject & College/Year */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
-                  <input
-                    id="heading" type="text" name="heading"
-                    placeholder="Short title of the issue"
-                    value={formData.heading} onChange={handleChange} required
-                  />
-                </div>
 
                 {/* ✅ FIXED: Two separate selects with correct names */}
                 <div className="create-scope__group">
@@ -1031,6 +1020,19 @@ export default function Create() {
                     <option value="">Select year</option>
                     {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
                   </select>
+                </div>
+                
+              </div>
+
+              {/* Subject & College/Year */}
+              <div className="create-scope__row-two">
+                <div className="create-scope__group">
+                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
+                  <input
+                    id="heading" type="text" name="heading"
+                    placeholder="Short title of the issue"
+                    value={formData.heading} onChange={handleChange} required
+                  />
                 </div>
               </div>
 

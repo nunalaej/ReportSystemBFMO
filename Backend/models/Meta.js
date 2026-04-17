@@ -48,10 +48,10 @@ const PrioritySchema = new mongoose.Schema(
 /* ── Root meta document ───────────────────────────────────── */
 const MetaSchema = new mongoose.Schema(
   {
-    key:        { type: String, default: "main", unique: true, index: true },
-    buildings:  { type: [BuildingSchema],  default: [] },
-    concerns:   { type: [ConcernSchema],   default: [] },
-    statuses:   {
+    key:       { type: String, default: "main", unique: true, index: true },
+    buildings: { type: [BuildingSchema], default: [] },
+    concerns:  { type: [ConcernSchema],  default: [] },
+    statuses:  {
       type: [StatusSchema],
       default: [
         { id: "1", name: "Pending",         color: "#FFA500" },
@@ -69,6 +69,16 @@ const MetaSchema = new mongoose.Schema(
         { id: "3", name: "High",   color: "#ce4f01" },
         { id: "4", name: "Urgent", color: "#a40010" },
       ],
+    },
+
+    // ✅ NEW: Student Report Settings
+    colleges: {
+      type:    [String],
+      default: ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"],
+    },
+    yearLevels: {
+      type:    [String],
+      default: ["1st Year","2nd Year","3rd Year","4th Year"],
     },
   },
   {
