@@ -52,6 +52,20 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+
+router.get("/", async (req, res) => {
+  try {
+    console.log("DB name:", mongoose.connection.db.databaseName);
+    console.log("Collections:", await mongoose.connection.db.listCollections().toArray());
+    const reports = await Report.find({}).sort({ createdAt: -1 }).lean();
+    console.log("Found:", reports.length);
+    return res.json({ success: true, reports });
+  } catch (err) {
+    console.error("GET /reports error:", err);
+    return res.status(500).json({ success: false, message: "Failed to load reports." });
+  }
+});
+
 /* ============================================================
    CREATE REPORT
 ============================================================ */

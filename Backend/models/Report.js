@@ -1,12 +1,5 @@
 const mongoose = require("mongoose");
 
-if (mongoose.connection.models["Report"]) {
-  delete mongoose.connection.models["Report"];
-}
-if (mongoose.models["Report"]) {
-  delete mongoose.models["Report"];
-}
-
 const CommentSchema = new mongoose.Schema({
   text:     { type: String },
   comment:  { type: String },
