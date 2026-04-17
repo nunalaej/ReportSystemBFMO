@@ -6,6 +6,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { createPortal } from "react-dom";
+import { useNotifications } from "@/app/context/notification";
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
@@ -131,6 +132,8 @@ export default function TasksPage() {
   const [saving,         setSaving]         = useState(false);
   const [checkInput,     setCheckInput]     = useState("");
   const [staffInput,     setStaffInput]     = useState("");
+
+  const { addNotification } = useNotifications();
 
   /* ── Confirm dialog ── */
   // Store the confirm callback in a ref so it is never stale inside the handler
@@ -286,21 +289,30 @@ export default function TasksPage() {
     finally { setSaving(false); }
   };
 
-  /* ── Status update from board ── */
-  const updateTaskStatus = async (task: Task, newStatus: string) => {
-    try {
-      const res  = await fetch(`${API_BASE}/api/tasks/${task._id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus, updatedBy: user?.fullName || "Admin" }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update status");
-      const updated = data.task as Task;
-      setTasks(p => p.map(t => t._id === updated._id ? updated : t));
-      if (selectedTask?._id === updated._id) setSelectedTask(updated);
-      showToast(`Status moved to "${newStatus}".`, "success");
-    } catch (err: any) { showToast(err.message || "Failed.", "error"); }
-  };
+  // In page.tsx — import addNotification from context
+
+/* ── Status update from board ── */
+const updateTaskStatus = async (task: Task, newStatus: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/api/tasks/${task._id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus, updatedBy: user?.fullName || "Admin" }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to update status");
+    const updated = data.task as Task;
+    setTasks(p => p.map(t => t._id === updated._id ? updated : t));
+    if (selectedTask?._id === updated._id) setSelectedTask(updated);
+
+    // ✅ ADD THIS — triggers the bell and notification page
+    addNotification(
+      `Status of "${task.name}" changed to "${newStatus}".`,
+      "status"
+    );
+
+    showToast(`Status moved to "${newStatus}".`, "success");
+  } catch (err: any) { showToast(err.message || "Failed.", "error"); }
+};
 
   /* ── Toggle checklist item ── */
   const toggleChecklist = async (task: Task, itemId: string) => {
