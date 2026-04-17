@@ -38,9 +38,10 @@ const StatusSchema = new mongoose.Schema(
 /* ── Priority subdocument ─────────────────────────────────── */
 const PrioritySchema = new mongoose.Schema(
   {
-    id:    { type: String, required: true },
-    name:  { type: String, required: true },
-    color: { type: String, default: "#6C757D" },
+    id:             { type: String, required: true },
+    name:           { type: String, required: true },
+    color:          { type: String, default: "#6C757D" },
+    notifyInterval: { type: String, default: "1month" },   // ✅ FIXED: was missing, causing interval to reset
   },
   { _id: false }
 );
@@ -64,10 +65,10 @@ const MetaSchema = new mongoose.Schema(
     priorities: {
       type: [PrioritySchema],
       default: [
-        { id: "1", name: "Low",    color: "#28A745" },
-        { id: "2", name: "Medium", color: "#FFC107" },
-        { id: "3", name: "High",   color: "#ce4f01" },
-        { id: "4", name: "Urgent", color: "#a40010" },
+        { id: "1", name: "Low",    color: "#28A745", notifyInterval: "3months" },
+        { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "1month"  },
+        { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
+        { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
       ],
     },
 

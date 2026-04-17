@@ -1666,3 +1666,129 @@ html.dark .staff-disc-pill { background: #1e293b; color: #94a3b8; border-color: 
 
 .admin-edit__notif-rules-callout strong { color: #374151; }
 .admin-edit__notif-rules-callout code  { font-size: 0.7rem; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; color: #374151; }
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE — Priority, Notify Timeline, Accordion, Rule Cards
+   Fix: notify-option--active invisible in dark = "stuck" bug
+═══════════════════════════════════════════════════════════ */
+
+/* Priority item wrapper */
+html.dark .admin-edit__priority-item-wrap {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Priority display row */
+html.dark .admin-edit__priority-row {
+  background: #0f172a;
+}
+
+html.dark .admin-edit__priority-name {
+  color: #e5e7eb;
+}
+
+html.dark .admin-edit__priority-interval {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+/* Icon buttons in dark */
+html.dark .admin-edit__icon-btn--edit:hover   { background: rgba(59,130,246,0.15); }
+html.dark .admin-edit__icon-btn--delete:hover { background: rgba(239,68,68,0.15); }
+
+/* Priority add/edit form */
+html.dark .admin-edit__priority-form {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Notify interval timeline container */
+html.dark .admin-edit__notify-timeline {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Each interval button — default state */
+html.dark .admin-edit__notify-option {
+  background: #0f172a;
+  border-right-color: rgba(148, 163, 184, 0.2);
+  color: #9ca3af;
+}
+
+html.dark .admin-edit__notify-option:hover {
+  background: #1e293b;
+  color: #e5e7eb;
+}
+
+/* ✅ KEY FIX: Active/selected interval button visible in dark mode */
+html.dark .admin-edit__notify-option--active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+/* Collapsible accordion panels */
+html.dark .admin-edit__panel--collapsible {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+html.dark .admin-edit__panel-toggle:hover {
+  background: #1e293b;
+}
+
+html.dark .admin-edit__panel--open .admin-edit__panel-toggle {
+  background: #1e293b;
+  border-bottom-color: rgba(148, 163, 184, 0.15);
+}
+
+html.dark .admin-edit__panel--collapsible .admin-edit__panel-title {
+  color: #e5e7eb;
+}
+
+html.dark .admin-edit__panel--collapsible .admin-edit__panel-subtitle {
+  color: #9ca3af;
+}
+
+html.dark .admin-edit__panel-badge {
+  background: #1e293b;
+  color: #9ca3af;
+}
+
+html.dark .admin-edit__panel--open .admin-edit__panel-badge {
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+/* Notification rule cards */
+html.dark .admin-edit__notif-rule-card {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+html.dark .admin-edit__notif-rule-name { color: #e5e7eb; }
+html.dark .admin-edit__notif-rule-max  { background: #1e293b; color: #9ca3af; }
+
+html.dark .admin-edit__notif-rule-step-phase    { color: #cbd5e1; }
+html.dark .admin-edit__notif-rule-step-interval { color: #9ca3af; }
+
+html.dark .admin-edit__notif-rule-footer {
+  background: #1e293b;
+  border-color: rgba(148, 163, 184, 0.15);
+  color: #9ca3af;
+}
+
+html.dark .admin-edit__notif-rules-callout {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.15);
+  color: #9ca3af;
+}
+
+html.dark .admin-edit__notif-rules-callout strong { color: #cbd5e1; }
+html.dark .admin-edit__notif-rules-callout code   { background: #1e293b; color: #93c5fd; }
+
+html.dark .admin-edit__notif-rules-intro {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: rgba(14, 165, 233, 0.25);
+}
+
+html.dark .admin-edit__notif-rules-intro-title { color: #7dd3fc; }
+html.dark .admin-edit__notif-rules-intro-body  { color: #93c5fd; }
+html.dark .admin-edit__notif-rules-intro-body strong { color: #bae6fd; }
