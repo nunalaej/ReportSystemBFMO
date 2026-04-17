@@ -1,12 +1,14 @@
-// app/Notification/page.tsx
+// app/Admin/Notification/page.tsx
+"use client";
+
+import NextDynamic from "next/dynamic";
+
 export const dynamic = "force-dynamic";
 
-import NotificationPageInner from "./NotificationPageInner";
-
-export const metadata = {
-  title: "Activity Log | BFMO",
-  description: "Task activity log and notification history",
-};
+const NotificationPageInner = NextDynamic(
+  () => import("./NotificationPageInner"),
+  { ssr: false }
+);
 
 export default function NotificationPage() {
   return <NotificationPageInner />;
