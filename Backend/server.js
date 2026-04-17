@@ -3,6 +3,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
+// After DB connection is established:
+require("./jobs/notificationJob");
 
 const listsRouter     = require("./routes/lists");
 const liststaskRouter = require("./api/liststask.js");

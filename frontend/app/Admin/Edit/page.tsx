@@ -37,6 +37,22 @@ const IconCheck = () => (
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
+const IconBell = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+);
+const IconClock = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+const IconZap = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
 
 /* ─────────────────────────── Types ─────────────────────────── */
 type BuildingMeta  = { id: string; name: string; floors: number; roomsPerFloor: number | number[]; hasRooms?: boolean; singleLocationLabel?: string; };
@@ -44,16 +60,9 @@ type ConcernMeta   = { id: string; label: string; subconcerns: string[]; };
 type StatusMeta    = { id: string; name: string; color: string; };
 type PriorityMeta  = { id: string; name: string; color: string; notifyInterval?: string; };
 type StaffMember   = {
-  _id?: string;
-  name: string;
-  email: string;
-  phone?: string;
-  position: string;
-  disciplines: string[];
-  active: boolean;
-  notes?: string;
-  clerkUsername?: string;
-  clerkId?: string;
+  _id?: string; name: string; email: string; phone?: string;
+  position: string; disciplines: string[]; active: boolean;
+  notes?: string; clerkUsername?: string; clerkId?: string;
 };
 
 /* ─────────────────────────── Constants ──────────────────────── */
@@ -107,7 +116,6 @@ const DEFAULT_PRIORITIES: PriorityMeta[] = [
   { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
   { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
 ];
-// ✅ NEW defaults for student report settings
 const DEFAULT_COLLEGES:    string[] = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
 const DEFAULT_YEAR_LEVELS: string[] = ["1st Year","2nd Year","3rd Year","4th Year"];
 
@@ -120,6 +128,58 @@ const NOTIFY_INTERVAL_OPTIONS = [
 const NOTIFY_INTERVAL_LABELS: Record<string, string> = {
   daily: "Every Day", "1week": "Every Week", "1month": "Every Month", "3months": "Every 3 Months",
 };
+
+/**
+ * Fixed notification behaviour per priority level.
+ * These reflect the actual notificationJob.js logic and are
+ * displayed in the Priority Notification Rules panel (read-only).
+ */
+const PRIORITY_NOTIFICATION_RULES = [
+  {
+    name:        "Urgent",
+    color:       "#a40010",
+    maxDuration: "1 Day",
+    schedule: [
+      { phase: "Immediately",              interval: "Every 1 hour" },
+      { phase: "After deadline",           interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name:        "High",
+    color:       "#ce4f01",
+    maxDuration: "1 Week (7 days)",
+    schedule: [
+      { phase: "Days 1–6",                interval: "Every 1 day"  },
+      { phase: "Last 12 hours",           interval: "Every 4 hours" },
+      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name:        "Medium",
+    color:       "#FFC107",
+    maxDuration: "1 Month (30 days)",
+    schedule: [
+      { phase: "Days 1–29",               interval: "Every 3 days"  },
+      { phase: "Last 24 hours",           interval: "Every 8 hours" },
+      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name:        "Low",
+    color:       "#28A745",
+    maxDuration: "3 Months (90 days)",
+    schedule: [
+      { phase: "Days 1–87",               interval: "Every 7 days"  },
+      { phase: "Last 3 days",             interval: "Every 1 day"  },
+      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+];
+
 const FLOOR_ORDINALS = ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"].map(n => `${n} Floor`);
 
 /* ─────────────────────────── Color palette ──────────────────── */
@@ -135,9 +195,9 @@ const STANDARD_COLORS = ["#C00000","#FF0000","#FFC000","#FFFF00","#92D050","#00B
 
 /* ─────────────────────────── ColorPicker ────────────────────── */
 function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-  const [open, setOpen]   = useState(false);
-  const [hex,  setHex]    = useState(value);
-  const ref               = React.useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [hex,  setHex]  = useState(value);
+  const ref             = React.useRef<HTMLDivElement>(null);
   useEffect(() => { setHex(value); }, [value]);
   useEffect(() => {
     if (!open) return;
@@ -274,22 +334,22 @@ export default function AdminEditPage() {
   const [error,      setError]      = useState("");
   const [saveMsg,    setSaveMsg]    = useState("");
 
-  // ✅ NEW: Student Report Settings state
-  const [colleges,      setColleges]      = useState<string[]>(DEFAULT_COLLEGES);
-  const [yearLevels,    setYearLevels]    = useState<string[]>(DEFAULT_YEAR_LEVELS);
-  const [newCollege,    setNewCollege]    = useState("");
-  const [newYearLevel,  setNewYearLevel]  = useState("");
-  const [editCollegeIdx,    setEditCollegeIdx]    = useState<number | null>(null);
-  const [editYearLevelIdx,  setEditYearLevelIdx]  = useState<number | null>(null);
+  /* ── Student Report Settings ── */
+  const [colleges,         setColleges]         = useState<string[]>(DEFAULT_COLLEGES);
+  const [yearLevels,       setYearLevels]       = useState<string[]>(DEFAULT_YEAR_LEVELS);
+  const [newCollege,       setNewCollege]       = useState("");
+  const [newYearLevel,     setNewYearLevel]     = useState("");
+  const [editCollegeIdx,   setEditCollegeIdx]   = useState<number | null>(null);
+  const [editYearLevelIdx, setEditYearLevelIdx] = useState<number | null>(null);
 
   /* ── Selectors ── */
-  const [selBuildingId,  setSelBuildingId]  = useState("");
-  const [selConcernId,   setSelConcernId]   = useState("");
-  const [selStatusId,    setSelStatusId]    = useState("");
-  const [editPriId,      setEditPriId]      = useState<string | null>(null);
-  const [editPriDraft,   setEditPriDraft]   = useState<PriorityMeta | null>(null);
-  const [showAddPri,     setShowAddPri]     = useState(false);
-  const [newPriDraft,    setNewPriDraft]    = useState<PriorityMeta>({ id: "", name: "", color: "#6C757D", notifyInterval: "1month" });
+  const [selBuildingId, setSelBuildingId] = useState("");
+  const [selConcernId,  setSelConcernId]  = useState("");
+  const [selStatusId,   setSelStatusId]   = useState("");
+  const [editPriId,     setEditPriId]     = useState<string | null>(null);
+  const [editPriDraft,  setEditPriDraft]  = useState<PriorityMeta | null>(null);
+  const [showAddPri,    setShowAddPri]    = useState(false);
+  const [newPriDraft,   setNewPriDraft]   = useState<PriorityMeta>({ id: "", name: "", color: "#6C757D", notifyInterval: "1month" });
 
   /* ── Staff state ── */
   const [staffList,      setStaffList]      = useState<StaffMember[]>([]);
@@ -302,7 +362,7 @@ export default function AdminEditPage() {
   const [editStaffId,    setEditStaffId]    = useState<string | null>(null);
   const [editStaffDraft, setEditStaffDraft] = useState<StaffMember | null>(null);
 
-  /* ── Clerk account creation state ── */
+  /* ── Clerk account creation ── */
   const [clerkCreating, setClerkCreating] = useState(false);
   const [clerkResult,   setClerkResult]   = useState<{ success: boolean; message: string } | null>(null);
   const [newClerkPw,    setNewClerkPw]    = useState("");
@@ -349,8 +409,6 @@ export default function AdminEditPage() {
       if (iB.length > 0 && !selBuildingId) setSelBuildingId(iB[0].id);
       if (iC.length > 0 && !selConcernId)  setSelConcernId(iC[0].id);
       if (iS.length > 0 && !selStatusId)   setSelStatusId(iS[0].id);
-
-      // ✅ Load colleges and yearLevels
       if (Array.isArray(data.colleges)   && data.colleges.length)   setColleges(data.colleges);
       if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
     } catch (err: any) {
@@ -380,6 +438,7 @@ export default function AdminEditPage() {
   /* ── Save meta ── */
   const handleSave = async () => {
     setSaving(true); setError(""); setSaveMsg("");
+
     let cleanB = buildings.map((b, idx) => {
       const name = String(b.name || "").trim(); if (!name) return null;
       const id   = String(b.id || "").trim() || norm(name).replace(/\s+/g, "-") || `b-${idx}`;
@@ -401,8 +460,6 @@ export default function AdminEditPage() {
 
     const cleanS = statuses.map((s, idx)   => { const name = String(s.name || "").trim(); if (!name) return null; return { id: String(s.id || idx + 1).trim(), name, color: String(s.color || "#6C757D").trim() }; }).filter(Boolean) as StatusMeta[];
     const cleanP = priorities.map((p, idx) => { const name = String(p.name || "").trim(); if (!name) return null; return { id: String(p.id || idx + 1).trim(), name, color: String(p.color || "#6C757D").trim(), notifyInterval: String(p.notifyInterval || "1month") }; }).filter(Boolean) as PriorityMeta[];
-
-    // ✅ Clean colleges and yearLevels before saving
     const cleanColleges   = colleges.map(c => String(c).trim()).filter(Boolean);
     const cleanYearLevels = yearLevels.map(y => String(y).trim()).filter(Boolean);
 
@@ -410,14 +467,7 @@ export default function AdminEditPage() {
       const res = await fetch(META_URL, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          buildings:  cleanB,
-          concerns:   cleanC,
-          statuses:   cleanS,
-          priorities: cleanP,
-          colleges:   cleanColleges,    // ✅ included
-          yearLevels: cleanYearLevels,  // ✅ included
-        }),
+        body:    JSON.stringify({ buildings: cleanB, concerns: cleanC, statuses: cleanS, priorities: cleanP, colleges: cleanColleges, yearLevels: cleanYearLevels }),
       });
       if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Failed to save.");
       const data = await res.json().catch(() => null);
@@ -500,7 +550,7 @@ export default function AdminEditPage() {
     setPriorities(p => p.map(x => x.id === editPriDraft.id ? { ...editPriDraft } : x));
     if (prev?.name           !== editPriDraft.name)           addNotification(`Priority renamed to "${editPriDraft.name}".`, "priority");
     if (prev?.color          !== editPriDraft.color)          addNotification(`Priority "${editPriDraft.name}" color changed.`, "priority");
-    if (prev?.notifyInterval !== editPriDraft.notifyInterval) addNotification(`Priority "${editPriDraft.name}" interval updated.`, "priority");
+    if (prev?.notifyInterval !== editPriDraft.notifyInterval) addNotification(`Priority "${editPriDraft.name}" notification interval updated.`, "priority");
     cancelEditPri();
   };
   const deletePriority = (p: PriorityMeta) => {
@@ -593,7 +643,7 @@ export default function AdminEditPage() {
     <div className="admin-edit admin-edit__wrapper">
       <main className="admin-edit__layout">
 
-        {/* Header */}
+        {/* ── Header ── */}
         <header className="admin-edit__page-head">
           <div className="admin-edit__heading">
             <h1 className="admin-edit__page-title">System Configuration</h1>
@@ -605,10 +655,13 @@ export default function AdminEditPage() {
           <div className="admin-edit__actions">
             <button type="button" className="btn btn-secondary" disabled={saving || loading}
               onClick={() => {
-                setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS); setStatuses(DEFAULT_STATUSES); setPriorities(DEFAULT_PRIORITIES);
+                setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS);
+                setStatuses(DEFAULT_STATUSES);   setPriorities(DEFAULT_PRIORITIES);
                 setColleges(DEFAULT_COLLEGES);   setYearLevels(DEFAULT_YEAR_LEVELS);
                 setSaveMsg(""); setError("");
-                setSelBuildingId(DEFAULT_BUILDINGS[0].id); setSelConcernId(DEFAULT_CONCERNS[0].id); setSelStatusId(DEFAULT_STATUSES[0].id);
+                setSelBuildingId(DEFAULT_BUILDINGS[0].id);
+                setSelConcernId(DEFAULT_CONCERNS[0].id);
+                setSelStatusId(DEFAULT_STATUSES[0].id);
                 cancelEditPri(); setShowAddPri(false);
               }}>Load Defaults</button>
             <button type="button" className="btn btn-secondary" onClick={() => loadMeta("dbOnly")} disabled={saving || loading}>Load Database</button>
@@ -841,6 +894,69 @@ export default function AdminEditPage() {
               </div>
             </Panel>
 
+            {/* ══ PRIORITY NOTIFICATION RULES ══ */}
+            <Panel
+              title="Priority Notification Rules"
+              subtitle="How the system automatically escalates tasks and notifies staff based on priority"
+            >
+              <div className="admin-edit__notif-rules-intro">
+                <div className="admin-edit__notif-rules-intro-icon"><IconBell/></div>
+                <div>
+                  <p className="admin-edit__notif-rules-intro-title">Automated notification behaviour</p>
+                  <p className="admin-edit__notif-rules-intro-body">
+                    The background job runs every hour. Each open task is checked against its priority's
+                    maximum duration. Notifications are sent to all assigned staff via email. As a task
+                    approaches its deadline, the frequency automatically increases. If a task is still
+                    open after its maximum duration, it is escalated to <strong>Unfinished</strong> status
+                    and staff continue to be notified every 3 days until it is resolved or archived.
+                  </p>
+                </div>
+              </div>
+
+              <div className="admin-edit__notif-rules-grid">
+                {PRIORITY_NOTIFICATION_RULES.map(rule => (
+                  <div key={rule.name} className="admin-edit__notif-rule-card" style={{ "--rule-color": rule.color } as React.CSSProperties}>
+                    <div className="admin-edit__notif-rule-header">
+                      <span className="admin-edit__notif-rule-dot" style={{ backgroundColor: rule.color }}/>
+                      <span className="admin-edit__notif-rule-name" style={{ color: rule.color }}>{rule.name}</span>
+                      <span className="admin-edit__notif-rule-max">
+                        <IconClock/> Max {rule.maxDuration}
+                      </span>
+                    </div>
+
+                    <div className="admin-edit__notif-rule-timeline">
+                      {rule.schedule.map((step, idx) => (
+                        <div key={idx} className="admin-edit__notif-rule-step">
+                          <div className="admin-edit__notif-rule-step-line">
+                            <span className="admin-edit__notif-rule-step-node" style={{ borderColor: rule.color, backgroundColor: rule.color + "20" }}/>
+                            {idx < rule.schedule.length - 1 && (
+                              <span className="admin-edit__notif-rule-step-connector" style={{ backgroundColor: rule.color + "30" }}/>
+                            )}
+                          </div>
+                          <div className="admin-edit__notif-rule-step-body">
+                            <span className="admin-edit__notif-rule-step-phase">{step.phase}</span>
+                            <span className="admin-edit__notif-rule-step-interval">{step.interval}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="admin-edit__notif-rule-footer">
+                      <IconZap/>
+                      <span>{rule.unfinishedNote}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="admin-edit__notif-rules-callout">
+                <strong>Note:</strong> These rules are enforced by the server-side notification job
+                (<code>notificationJob.js</code>) and cannot be changed from this UI. The
+                &quot;Notification Interval&quot; field in the Priority Levels panel above is a
+                display label only — it does not change the actual schedule described here.
+              </div>
+            </Panel>
+
             {/* ══ STUDENT REPORT SETTINGS ══ */}
             <Panel
               title="Student Report Settings"
@@ -855,28 +971,17 @@ export default function AdminEditPage() {
                     <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Colleges / Departments</h4>
                     <span className="admin-edit__panel-badge">{colleges.length}</span>
                   </div>
-
                   {colleges.length === 0 && <p className="admin-edit__empty">No colleges yet.</p>}
-
                   {colleges.map((c, idx) => (
                     <div key={idx} className="admin-edit__subconcern-row">
                       {editCollegeIdx === idx ? (
-                        <input
-                          type="text"
-                          className="admin-edit__input"
-                          value={c}
-                          autoFocus
+                        <input type="text" className="admin-edit__input" value={c} autoFocus
                           onChange={e => setColleges(p => p.map((x, i) => i === idx ? e.target.value : x))}
                           onBlur={() => setEditCollegeIdx(null)}
-                          onKeyDown={e => { if (e.key === "Enter") setEditCollegeIdx(null); }}
-                        />
+                          onKeyDown={e => { if (e.key === "Enter") setEditCollegeIdx(null); }}/>
                       ) : (
-                        <span
-                          style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
-                          onClick={() => setEditCollegeIdx(idx)}
-                        >
-                          {c}
-                        </span>
+                        <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
+                          onClick={() => setEditCollegeIdx(idx)}>{c}</span>
                       )}
                       <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
                         onClick={() => setEditCollegeIdx(idx)} title="Edit"><IconPencil/></button>
@@ -885,30 +990,12 @@ export default function AdminEditPage() {
                         title="Remove"><IconTrash/></button>
                     </div>
                   ))}
-
-                  {/* Add new college */}
                   <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
-                    <input
-                      type="text"
-                      className="admin-edit__input"
-                      value={newCollege}
-                      placeholder="e.g. CLAW"
+                    <input type="text" className="admin-edit__input" value={newCollege} placeholder="e.g. CLAW"
                       onChange={e => setNewCollege(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter" && newCollege.trim()) {
-                          setColleges(p => [...p, newCollege.trim()]);
-                          addNotification(`College "${newCollege.trim()}" added.`, "concern");
-                          setNewCollege("");
-                        }
-                      }}
-                    />
+                      onKeyDown={e => { if (e.key === "Enter" && newCollege.trim()) { setColleges(p => [...p, newCollege.trim()]); addNotification(`College "${newCollege.trim()}" added.`, "concern"); setNewCollege(""); }}}/>
                     <button type="button" className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        if (!newCollege.trim()) return;
-                        setColleges(p => [...p, newCollege.trim()]);
-                        addNotification(`College "${newCollege.trim()}" added.`, "concern");
-                        setNewCollege("");
-                      }}>
+                      onClick={() => { if (!newCollege.trim()) return; setColleges(p => [...p, newCollege.trim()]); addNotification(`College "${newCollege.trim()}" added.`, "concern"); setNewCollege(""); }}>
                       + Add
                     </button>
                   </div>
@@ -920,28 +1007,17 @@ export default function AdminEditPage() {
                     <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Year Levels</h4>
                     <span className="admin-edit__panel-badge">{yearLevels.length}</span>
                   </div>
-
                   {yearLevels.length === 0 && <p className="admin-edit__empty">No year levels yet.</p>}
-
                   {yearLevels.map((y, idx) => (
                     <div key={idx} className="admin-edit__subconcern-row">
                       {editYearLevelIdx === idx ? (
-                        <input
-                          type="text"
-                          className="admin-edit__input"
-                          value={y}
-                          autoFocus
+                        <input type="text" className="admin-edit__input" value={y} autoFocus
                           onChange={e => setYearLevels(p => p.map((x, i) => i === idx ? e.target.value : x))}
                           onBlur={() => setEditYearLevelIdx(null)}
-                          onKeyDown={e => { if (e.key === "Enter") setEditYearLevelIdx(null); }}
-                        />
+                          onKeyDown={e => { if (e.key === "Enter") setEditYearLevelIdx(null); }}/>
                       ) : (
-                        <span
-                          style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
-                          onClick={() => setEditYearLevelIdx(idx)}
-                        >
-                          {y}
-                        </span>
+                        <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
+                          onClick={() => setEditYearLevelIdx(idx)}>{y}</span>
                       )}
                       <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
                         onClick={() => setEditYearLevelIdx(idx)} title="Edit"><IconPencil/></button>
@@ -950,37 +1026,17 @@ export default function AdminEditPage() {
                         title="Remove"><IconTrash/></button>
                     </div>
                   ))}
-
-                  {/* Add new year level */}
                   <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
-                    <input
-                      type="text"
-                      className="admin-edit__input"
-                      value={newYearLevel}
-                      placeholder="e.g. 5th Year"
+                    <input type="text" className="admin-edit__input" value={newYearLevel} placeholder="e.g. 5th Year"
                       onChange={e => setNewYearLevel(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter" && newYearLevel.trim()) {
-                          setYearLevels(p => [...p, newYearLevel.trim()]);
-                          addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern");
-                          setNewYearLevel("");
-                        }
-                      }}
-                    />
+                      onKeyDown={e => { if (e.key === "Enter" && newYearLevel.trim()) { setYearLevels(p => [...p, newYearLevel.trim()]); addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern"); setNewYearLevel(""); }}}/>
                     <button type="button" className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        if (!newYearLevel.trim()) return;
-                        setYearLevels(p => [...p, newYearLevel.trim()]);
-                        addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern");
-                        setNewYearLevel("");
-                      }}>
+                      onClick={() => { if (!newYearLevel.trim()) return; setYearLevels(p => [...p, newYearLevel.trim()]); addNotification(`Year level "${newYearLevel.trim()}" added.`, "concern"); setNewYearLevel(""); }}>
                       + Add
                     </button>
                   </div>
                 </div>
-
               </div>
-
               <p className="admin-edit__panel-subtitle" style={{ marginTop: 16, fontSize: 12 }}>
                 💡 These options appear in the college and year level dropdowns on the student report form. Changes take effect after saving.
               </p>
@@ -1038,7 +1094,7 @@ export default function AdminEditPage() {
                   </div>
                   <div className="admin-edit__field-group" style={{ marginTop: 12 }}>
                     <label className="admin-edit__label">
-                      Disciplines <span className="admin-edit__label-hint"> — staff only appear in tasks for their assigned disciplines</span>
+                      Disciplines<span className="admin-edit__label-hint"> — staff only appear in tasks for their assigned disciplines</span>
                     </label>
                     <div className="staff-chips">
                       {disciplineOptions.map(d => {
@@ -1219,7 +1275,7 @@ export default function AdminEditPage() {
                                     <input type="text" className="admin-edit__input" placeholder="e.g. ejn2032"
                                       value={editStaffDraft?.clerkUsername || ""}
                                       onChange={e => setEditStaffDraft(d => d ? { ...d, clerkUsername: e.target.value.replace(/[^a-zA-Z0-9_-]/g, "") } : d)}/>
-                                    <span className="admin-edit__label-hint">No spaces or special characters. Staff uses this to log in.</span>
+                                    <span className="admin-edit__label-hint">No spaces or special characters.</span>
                                   </div>
                                   <div className="admin-edit__field-group">
                                     <label className="admin-edit__label">Temporary Password <span className="staff-required">*</span></label>
@@ -1230,18 +1286,6 @@ export default function AdminEditPage() {
                                   <div className="admin-edit__field-group">
                                     <label className="admin-edit__label">Name</label>
                                     <input type="text" className="admin-edit__input" value={member.name} readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
-                                  </div>
-                                  <div className="admin-edit__field-group">
-                                    <label className="admin-edit__label">Position</label>
-                                    <input type="text" className="admin-edit__input" value={member.position} readOnly style={{ background: "#f3f4f6", color: "#6b7280" }}/>
-                                  </div>
-                                  <div className="admin-edit__field-group">
-                                    <label className="admin-edit__label">Disciplines</label>
-                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
-                                      {member.disciplines.length === 0
-                                        ? <span className="staff-no-disc">None assigned</span>
-                                        : member.disciplines.map(d => <span key={d} className="staff-disc-pill">{d}</span>)}
-                                    </div>
                                   </div>
                                   <div className="admin-edit__field-group">
                                     <label className="admin-edit__label">Accessibility (Role)</label>
@@ -1286,3 +1330,5 @@ export default function AdminEditPage() {
     </div>
   );
 }
+
+
