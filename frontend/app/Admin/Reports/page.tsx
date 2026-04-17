@@ -1097,7 +1097,7 @@ const statusMatchesFilter = useCallback((reportStatus: string | undefined, filte
             <span className="filters-title">Filters</span>
             <div className="filters-header-right">
               <div className="user-type-toggle">
-                {["All", "Student", "Staff/Faculty"].map(type => (
+                {["All", "Student", "Staff", "Faculty"].map(type => (
                   <button key={type} type="button"
                     className={`user-type-btn ${userTypeFilter === type ? "active" : ""}`}
                     onClick={() => setUserTypeFilter(type)}>{type}</button>
