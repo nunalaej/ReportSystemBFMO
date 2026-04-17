@@ -83,6 +83,8 @@ const EMPTY_STAFF: Omit<StaffMember, "_id"> = {
   clerkUsername: "",
 };
 
+
+
 const DEFAULT_BUILDINGS: BuildingMeta[] = [
   { id: "ayuntamiento", name: "Ayuntamiento", floors: 4, roomsPerFloor: 20, hasRooms: false },
   { id: "jfh",          name: "JFH",          floors: 4, roomsPerFloor: 10, hasRooms: true  },
@@ -329,6 +331,8 @@ export default function AdminEditPage() {
   const [concerns,   setConcerns]   = useState<ConcernMeta[]>(DEFAULT_CONCERNS);
   const [statuses,   setStatuses]   = useState<StatusMeta[]>(DEFAULT_STATUSES);
   const [priorities, setPriorities] = useState<PriorityMeta[]>(DEFAULT_PRIORITIES);
+  // Replace the const with a state
+const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
   const [loading,    setLoading]    = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
@@ -397,6 +401,7 @@ export default function AdminEditPage() {
       if (!res.ok) throw new Error("Failed to load options from server.");
       const data = await res.json().catch(() => null);
       if (!data)  throw new Error("Empty meta from server.");
+      
       const rawB = Array.isArray(data.buildings)  ? data.buildings  : [];
       const rawC = Array.isArray(data.concerns)   ? data.concerns   : [];
       const rawS = Array.isArray(data.statuses)   ? data.statuses   : [];
@@ -411,6 +416,7 @@ export default function AdminEditPage() {
       if (iS.length > 0 && !selStatusId)   setSelStatusId(iS[0].id);
       if (Array.isArray(data.colleges)   && data.colleges.length)   setColleges(data.colleges);
       if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
+      if (Array.isArray(data.notifRules) && data.notifRules.length) setNotifRules(data.notifRules);
     } catch (err: any) {
       setError(err?.message || "Could not load. Using defaults.");
       if (mode === "preferDefaults") {
@@ -463,12 +469,16 @@ export default function AdminEditPage() {
     const cleanColleges   = colleges.map(c => String(c).trim()).filter(Boolean);
     const cleanYearLevels = yearLevels.map(y => String(y).trim()).filter(Boolean);
 
+    
     try {
       const res = await fetch(META_URL, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ buildings: cleanB, concerns: cleanC, statuses: cleanS, priorities: cleanP, colleges: cleanColleges, yearLevels: cleanYearLevels }),
-      });
+body: JSON.stringify({ 
+  buildings: cleanB, concerns: cleanC, statuses: cleanS, 
+  priorities: cleanP, colleges: cleanColleges, 
+  yearLevels: cleanYearLevels, notifRules: notifRules  // ← add this
+}),      });
       if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Failed to save.");
       const data = await res.json().catch(() => null);
       if (data?.buildings)  setBuildings(normBuildings(data.buildings));
@@ -540,6 +550,8 @@ export default function AdminEditPage() {
     const rem = statuses.filter(s => s.id !== selStatusId);
     setStatuses(rem); setSelStatusId(rem[0]?.id || "");
   };
+
+  
 
   /* ── Priority handlers ── */
   const startEditPri  = (p: PriorityMeta) => { setEditPriId(p.id); setEditPriDraft({ ...p }); setShowAddPri(false); };
@@ -895,67 +907,115 @@ export default function AdminEditPage() {
             </Panel>
 
             {/* ══ PRIORITY NOTIFICATION RULES ══ */}
-            <Panel
-              title="Priority Notification Rules"
-              subtitle="How the system automatically escalates tasks and notifies staff based on priority"
-            >
-              <div className="admin-edit__notif-rules-intro">
-                <div className="admin-edit__notif-rules-intro-icon"><IconBell/></div>
-                <div>
-                  <p className="admin-edit__notif-rules-intro-title">Automated notification behaviour</p>
-                  <p className="admin-edit__notif-rules-intro-body">
-                    The background job runs every hour. Each open task is checked against its priority's
-                    maximum duration. Notifications are sent to all assigned staff via email. As a task
-                    approaches its deadline, the frequency automatically increases. If a task is still
-                    open after its maximum duration, it is escalated to <strong>Unfinished</strong> status
-                    and staff continue to be notified every 3 days until it is resolved or archived.
-                  </p>
-                </div>
-              </div>
+<Panel title="Priority Notification Rules" subtitle="Configure escalation schedules per priority">
+  <div className="admin-edit__notif-rules-grid">
+    {notifRules.map((rule, rIdx) => (
+      <div key={rule.name} className="admin-edit__notif-rule-card" style={{ "--rule-color": rule.color } as React.CSSProperties}>
+        
+        {/* Header — name, color, max duration */}
+        <div className="admin-edit__notif-rule-header" style={{ gap: 8, flexWrap: "wrap" }}>
+          <input
+            type="text"
+            className="admin-edit__input"
+            style={{ width: 100, fontWeight: 700 }}
+            value={rule.name}
+            onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, name: e.target.value } : r))}
+          />
+          <ColorPicker
+            value={rule.color}
+            onChange={color => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, color } : r))}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <IconClock />
+            <span style={{ fontSize: 12, color: "#6b7280" }}>Max:</span>
+            <input
+              type="text"
+              className="admin-edit__input"
+              style={{ width: 160 }}
+              value={rule.maxDuration}
+              onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, maxDuration: e.target.value } : r))}
+            />
+          </div>
+        </div>
 
-              <div className="admin-edit__notif-rules-grid">
-                {PRIORITY_NOTIFICATION_RULES.map(rule => (
-                  <div key={rule.name} className="admin-edit__notif-rule-card" style={{ "--rule-color": rule.color } as React.CSSProperties}>
-                    <div className="admin-edit__notif-rule-header">
-                      <span className="admin-edit__notif-rule-dot" style={{ backgroundColor: rule.color }}/>
-                      <span className="admin-edit__notif-rule-name" style={{ color: rule.color }}>{rule.name}</span>
-                      <span className="admin-edit__notif-rule-max">
-                        <IconClock/> Max {rule.maxDuration}
-                      </span>
-                    </div>
+        {/* Schedule steps */}
+        <div className="admin-edit__notif-rule-timeline" style={{ marginTop: 12 }}>
+          <label className="admin-edit__label">Schedule Steps</label>
+          {rule.schedule.map((step, sIdx) => (
+            <div key={sIdx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input
+                type="text"
+                className="admin-edit__input"
+                placeholder="Phase (e.g. Days 1–6)"
+                value={step.phase}
+                onChange={e => setNotifRules(p => p.map((r, i) => {
+                  if (i !== rIdx) return r;
+                  const s = [...r.schedule];
+                  s[sIdx] = { ...s[sIdx], phase: e.target.value };
+                  return { ...r, schedule: s };
+                }))}
+              />
+              <input
+                type="text"
+                className="admin-edit__input"
+                placeholder="Interval (e.g. Every 1 day)"
+                value={step.interval}
+                onChange={e => setNotifRules(p => p.map((r, i) => {
+                  if (i !== rIdx) return r;
+                  const s = [...r.schedule];
+                  s[sIdx] = { ...s[sIdx], interval: e.target.value };
+                  return { ...r, schedule: s };
+                }))}
+              />
+              <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                onClick={() => setNotifRules(p => p.map((r, i) => {
+                  if (i !== rIdx) return r;
+                  return { ...r, schedule: r.schedule.filter((_, si) => si !== sIdx) };
+                }))}>
+                <IconTrash />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 4 }}
+            onClick={() => setNotifRules(p => p.map((r, i) => i !== rIdx ? r : {
+              ...r, schedule: [...r.schedule, { phase: "", interval: "" }]
+            }))}>
+            + Add Step
+          </button>
+        </div>
 
-                    <div className="admin-edit__notif-rule-timeline">
-                      {rule.schedule.map((step, idx) => (
-                        <div key={idx} className="admin-edit__notif-rule-step">
-                          <div className="admin-edit__notif-rule-step-line">
-                            <span className="admin-edit__notif-rule-step-node" style={{ borderColor: rule.color, backgroundColor: rule.color + "20" }}/>
-                            {idx < rule.schedule.length - 1 && (
-                              <span className="admin-edit__notif-rule-step-connector" style={{ backgroundColor: rule.color + "30" }}/>
-                            )}
-                          </div>
-                          <div className="admin-edit__notif-rule-step-body">
-                            <span className="admin-edit__notif-rule-step-phase">{step.phase}</span>
-                            <span className="admin-edit__notif-rule-step-interval">{step.interval}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+        {/* Unfinished note */}
+        <div className="admin-edit__field-group" style={{ marginTop: 12 }}>
+          <label className="admin-edit__label">Unfinished Note</label>
+          <input
+            type="text"
+            className="admin-edit__input"
+            value={rule.unfinishedNote}
+            onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, unfinishedNote: e.target.value } : r))}
+          />
+        </div>
 
-                    <div className="admin-edit__notif-rule-footer">
-                      <IconZap/>
-                      <span>{rule.unfinishedNote}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* Delete rule */}
+        <div style={{ marginTop: 10, textAlign: "right" }}>
+          <button type="button" className="btn btn-danger"
+            onClick={() => setNotifRules(p => p.filter((_, i) => i !== rIdx))}>
+            Delete Rule
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
 
-              <div className="admin-edit__notif-rules-callout">
-                <strong>Note:</strong> These rules are enforced by the server-side notification job
-                (<code>notificationJob.js</code>) and cannot be changed from this UI. The
-                &quot;Notification Interval&quot; field in the Priority Levels panel above is a
-                display label only — it does not change the actual schedule described here.
-              </div>
-            </Panel>
+  {/* Add new rule */}
+  <button type="button" className="btn btn-secondary" style={{ marginTop: 16 }}
+    onClick={() => setNotifRules(p => [...p, {
+      name: "New Priority", color: "#6C757D",
+      maxDuration: "1 Week", schedule: [{ phase: "", interval: "" }],
+      unfinishedNote: "Staff notified every 3 days."
+    }])}>
+    + Add Rule
+  </button>
+</Panel>
 
             {/* ══ STUDENT REPORT SETTINGS ══ */}
             <Panel
