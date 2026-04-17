@@ -1,7 +1,6 @@
-// app/Admin/Notification/page.tsx
+// app/Staff/Notification/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
 import { useNotifications } from "@/app/context/notification";
 
 const TYPE_COLORS: Record<string, { bg: string; color: string; label: string }> = {
@@ -25,7 +24,7 @@ function getRelativeTime(d: Date) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-export default function NotificationPage() {
+export default function StaffNotificationPage() {
   const { notifications, unreadCount, markRead, markAllRead, clearAll } = useNotifications();
 
   return (
@@ -65,7 +64,7 @@ export default function NotificationPage() {
             <path d="M26 46c0 3.31 2.69 6 6 6s6-2.69 6-6" stroke="currentColor" strokeWidth="2" opacity="0.15"/>
           </svg>
           <p style={{ fontSize: "0.9rem", fontWeight: 600, color: "#9ca3af", margin: 0 }}>No notifications yet</p>
-          <span style={{ fontSize: "0.78rem", color: "#d1d5db" }}>Actions from Admin Config will appear here</span>
+          <span style={{ fontSize: "0.78rem", color: "#d1d5db" }}>Task assignments and updates will appear here</span>
         </div>
       )}
 
