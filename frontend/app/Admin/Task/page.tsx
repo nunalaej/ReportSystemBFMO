@@ -2,7 +2,7 @@
 
 import "../style/task.css";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { createPortal } from "react-dom";
@@ -57,6 +57,16 @@ function useEscapeKey(handler: () => void, active: boolean) {
     window.addEventListener("keydown", l);
     return () => window.removeEventListener("keydown", l);
   }, [handler, active]);
+}
+
+/* ── Debounce hook — fires `value` only after `delay` ms of silence ── */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState<T>(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
 }
 
 /* ── Fallbacks ── */
@@ -118,11 +128,19 @@ export default function TasksPage() {
   const [metaPriorities, setMetaPriorities] = useState<MetaPriority[]>(FALLBACK_PRIORITIES);
   const [metaStaff,      setMetaStaff]      = useState<string[]>([]);
 
+  /* ── Raw search input (updates instantly for responsive UI) ── */
+  const [searchInput,    setSearchInput]    = useState("");
+  /* ── Debounced search query (used for actual filtering, 200 ms delay) ── */
+  const searchQuery = useDebounce(searchInput, 200);
+  /* Track whether user is actively typing (show spinner) */
+  const isTyping = searchInput !== searchQuery;
+
   /* ── Filters ── */
-  const [searchQuery,    setSearchQuery]    = useState("");
-  const [statusFilter,   setStatusFilter]   = useState("All");
-  const [priorityFilter, setPriorityFilter] = useState("All");  // ✅ consistent name
-  const [viewMode,       setViewMode]       = useState<"board" | "list">("board");
+  const [statusFilter,      setStatusFilter]      = useState("All");
+  const [priorityFilter,    setPriorityFilter]    = useState("All");
+  const [disciplineFilter,  setDisciplineFilter]  = useState("All");
+  const [staffFilter,       setStaffFilter]       = useState("All");
+  const [viewMode,          setViewMode]          = useState<"board" | "list">("board");
 
   /* ── Selected task (detail modal) ── */
   const [selectedTask,   setSelectedTask]   = useState<Task | null>(null);
@@ -143,13 +161,11 @@ export default function TasksPage() {
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
 
-  /* ── Body scroll lock ── */
   useEffect(() => {
     document.body.style.overflow = selectedTask ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [selectedTask]);
 
-  /* ── Escape key ── */
   const escapeHandler = useCallback(() => {
     if (isEditing) { setIsEditing(false); setEditDraft(null); return; }
     setSelectedTask(null);
@@ -212,7 +228,7 @@ export default function TasksPage() {
     fetchMeta();
   }, [canView, fetchTasks, fetchMeta]);
 
-  /* ── Meta helpers ── */
+  /* ── Color helpers ── */
   const getPriorityColor = useCallback((name?: string) => {
     if (!name) return "#6C757D";
     return metaPriorities.find(p => p.name === name)?.color || "#6C757D";
@@ -223,24 +239,64 @@ export default function TasksPage() {
     return metaStatuses.find(s => s.name === name)?.color || "#6C757D";
   }, [metaStatuses]);
 
-  /* ── Filtered tasks ── */
-  const filteredTasks = tasks.filter(t => {
-    const matchSearch   = !searchQuery.trim() ||
-      (t.name        || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.reportId    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.concernType || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (t.createdBy   || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const matchStatus   = statusFilter   === "All" || (t.status   || "Pending") === statusFilter;
-    const matchPriority = priorityFilter === "All" || (t.priority || "")        === priorityFilter;
-    return matchSearch && matchStatus && matchPriority;
-  });
+  /* ── Derived filter options (computed from actual task data) ── */
+  const disciplineOptions = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach(t => { if (t.concernType) set.add(t.concernType); });
+    return Array.from(set).sort();
+  }, [tasks]);
 
-  /* ── Priority counts (from all tasks, not filtered) ── */
-  const priorityCounts = tasks.reduce<Record<string, number>>((acc, t) => {
+  const staffOptions = useMemo(() => {
+    const set = new Set<string>();
+    tasks.forEach(t => (t.assignedStaff || []).forEach(s => set.add(s)));
+    // also include meta staff so even unassigned staff appear
+    metaStaff.forEach(s => set.add(s));
+    return Array.from(set).sort();
+  }, [tasks, metaStaff]);
+
+  /* ── Priority counts (from ALL tasks, not filtered) ── */
+  const priorityCounts = useMemo(() => tasks.reduce<Record<string, number>>((acc, t) => {
     const key = t.priority || "";
     if (key) acc[key] = (acc[key] || 0) + 1;
     return acc;
-  }, {});
+  }, {}), [tasks]);
+
+  /* ── Filtered tasks ── */
+  const filteredTasks = useMemo(() => tasks.filter(t => {
+    // Debounced search — checks name, reportId, concernType, createdBy, AND assigned staff names
+    const q = searchQuery.trim().toLowerCase();
+    const matchSearch = !q ||
+      (t.name        || "").toLowerCase().includes(q) ||
+      (t.reportId    || "").toLowerCase().includes(q) ||
+      (t.concernType || "").toLowerCase().includes(q) ||
+      (t.createdBy   || "").toLowerCase().includes(q) ||
+      (t.assignedStaff || []).some(s => s.toLowerCase().includes(q));
+
+    const matchStatus     = statusFilter     === "All" || (t.status   || "Pending") === statusFilter;
+    const matchPriority   = priorityFilter   === "All"
+      ? true
+      : priorityFilter === "__none__"
+      ? !(t.priority)
+      : (t.priority || "") === priorityFilter;
+    const matchDiscipline = disciplineFilter === "All" || (t.concernType || "") === disciplineFilter;
+    const matchStaff      = staffFilter      === "All" ||
+      (t.assignedStaff || []).some(s => s === staffFilter);
+
+    return matchSearch && matchStatus && matchPriority && matchDiscipline && matchStaff;
+  }), [tasks, searchQuery, statusFilter, priorityFilter, disciplineFilter, staffFilter]);
+
+  const hasActiveFilters =
+    statusFilter !== "All" || priorityFilter !== "All" ||
+    disciplineFilter !== "All" || staffFilter !== "All" ||
+    !!searchInput.trim();
+
+  const clearAllFilters = () => {
+    setSearchInput("");
+    setStatusFilter("All");
+    setPriorityFilter("All");
+    setDisciplineFilter("All");
+    setStaffFilter("All");
+  };
 
   /* ── Board columns ── */
   const boardColumns = metaStatuses
@@ -399,7 +455,6 @@ export default function TasksPage() {
   return (
     <>
       <div className="tasks-wrapper">
-        {/* ✅ Centered inner container */}
         <div className="tasks-inner">
 
           {/* ── Page header ── */}
@@ -411,22 +466,16 @@ export default function TasksPage() {
               </p>
             </div>
             <div className="tasks-header-actions">
-              <button
-                type="button"
+              <button type="button"
                 className={`tasks-view-btn${viewMode === "board" ? " tasks-view-btn--active" : ""}`}
-                onClick={() => setViewMode("board")}
-                title="Board view"
-              >
+                onClick={() => setViewMode("board")} title="Board view">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/>
                 </svg>
               </button>
-              <button
-                type="button"
+              <button type="button"
                 className={`tasks-view-btn${viewMode === "list" ? " tasks-view-btn--active" : ""}`}
-                onClick={() => setViewMode("list")}
-                title="List view"
-              >
+                onClick={() => setViewMode("list")} title="List view">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="8" y1="6"  x2="21" y2="6"/>
                   <line x1="8" y1="12" x2="21" y2="12"/>
@@ -477,7 +526,6 @@ export default function TasksPage() {
 
           {/* ── Priority filter chips ── */}
           <div className="tasks-priority-bar">
-            {/* All chip */}
             <button
               type="button"
               className={`tasks-priority-chip${priorityFilter === "All" ? " tasks-priority-chip--all-active" : ""}`}
@@ -487,15 +535,11 @@ export default function TasksPage() {
               All Tasks
               <span className="tasks-priority-chip-count">{tasks.length}</span>
             </button>
-
-            {/* Per-priority chips */}
             {metaPriorities.map(p => {
-              const count = priorityCounts[p.name] || 0;
+              const count    = priorityCounts[p.name] || 0;
               const isActive = priorityFilter === p.name;
               return (
-                <button
-                  key={p.id}
-                  type="button"
+                <button key={p.id} type="button"
                   className={`tasks-priority-chip${isActive ? " tasks-priority-chip--active" : ""}`}
                   style={{ "--chip-color": p.color } as React.CSSProperties}
                   onClick={() => setPriorityFilter(isActive ? "All" : p.name)}
@@ -506,14 +550,11 @@ export default function TasksPage() {
                 </button>
               );
             })}
-
-            {/* "No priority" chip */}
             {(() => {
               const noneCount = tasks.filter(t => !t.priority).length;
               const isActive  = priorityFilter === "__none__";
               return noneCount > 0 ? (
-                <button
-                  type="button"
+                <button type="button"
                   className={`tasks-priority-chip${isActive ? " tasks-priority-chip--active" : ""}`}
                   style={{ "--chip-color": "#6b7280" } as React.CSSProperties}
                   onClick={() => setPriorityFilter(isActive ? "All" : "__none__")}
@@ -528,29 +569,49 @@ export default function TasksPage() {
 
           {/* ── Filters row ── */}
           <div className="tasks-filters">
+
+            {/* Search with debounce indicator */}
             <div className="tasks-search-wrap">
-              <svg viewBox="0 0 24 24" className="tasks-search-icon" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
+              {isTyping ? (
+                /* Spinning dots while debounce is pending */
+                <span style={{
+                  position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                  display: "flex", gap: 2, alignItems: "center",
+                }}>
+                  {[0, 1, 2].map(i => (
+                    <span key={i} style={{
+                      width: 4, height: 4, borderRadius: "50%",
+                      backgroundColor: "var(--tasks-accent, #2563eb)",
+                      animation: `tasks-bounce 0.8s ease-in-out ${i * 0.15}s infinite`,
+                    }} />
+                  ))}
+                </span>
+              ) : (
+                <svg viewBox="0 0 24 24" className="tasks-search-icon" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              )}
               <input
                 type="text"
                 className="tasks-search"
-                placeholder="Search tasks, report ID, concern…"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search tasks, staff, report ID…"
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
               />
-              {searchQuery && (
-                <button type="button" className="tasks-search-clear" onClick={() => setSearchQuery("")}>✕</button>
+              {searchInput && (
+                <button type="button" className="tasks-search-clear" onClick={() => setSearchInput("")}>✕</button>
               )}
             </div>
 
             <div className="tasks-filters-divider" />
 
+            {/* Status filter */}
             <select className="tasks-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="All">All Statuses</option>
               {metaStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
 
+            {/* Priority filter (synced with chips) */}
             <select
               className="tasks-filter-select"
               value={priorityFilter === "__none__" ? "__none__" : priorityFilter}
@@ -561,9 +622,24 @@ export default function TasksPage() {
               <option value="__none__">No Priority</option>
             </select>
 
-            {(statusFilter !== "All" || priorityFilter !== "All" || searchQuery) && (
-              <button type="button" className="tasks-clear-filters"
-                onClick={() => { setStatusFilter("All"); setPriorityFilter("All"); setSearchQuery(""); }}>
+            {/* ✅ Discipline / concern-type filter */}
+            {disciplineOptions.length > 0 && (
+              <select className="tasks-filter-select" value={disciplineFilter} onChange={e => setDisciplineFilter(e.target.value)}>
+                <option value="All">All Disciplines</option>
+                {disciplineOptions.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+
+            {/* ✅ Staff filter */}
+            {staffOptions.length > 0 && (
+              <select className="tasks-filter-select" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
+                <option value="All">All Staff</option>
+                {staffOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            )}
+
+            {hasActiveFilters && (
+              <button type="button" className="tasks-clear-filters" onClick={clearAllFilters}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -571,6 +647,45 @@ export default function TasksPage() {
               </button>
             )}
           </div>
+
+          {/* ── Active filter badges ── */}
+          {(disciplineFilter !== "All" || staffFilter !== "All") && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+              {disciplineFilter !== "All" && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontSize: "0.73rem", fontWeight: 600,
+                  color: "#7c3aed", background: "rgba(124,58,237,0.08)",
+                  border: "1px solid rgba(124,58,237,0.25)",
+                  borderRadius: 999, padding: "3px 10px",
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                  </svg>
+                  {disciplineFilter}
+                  <button type="button" onClick={() => setDisciplineFilter("All")}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#7c3aed", fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                </span>
+              )}
+              {staffFilter !== "All" && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontSize: "0.73rem", fontWeight: 600,
+                  color: "#0369a1", background: "rgba(3,105,161,0.08)",
+                  border: "1px solid rgba(3,105,161,0.25)",
+                  borderRadius: 999, padding: "3px 10px",
+                }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                  {staffFilter}
+                  <button type="button" onClick={() => setStaffFilter("All")}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#0369a1", fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+                </span>
+              )}
+            </div>
+          )}
 
           {loadError && (
             <div className="tasks-error-banner">
@@ -593,7 +708,7 @@ export default function TasksPage() {
                 </svg>
               </div>
               <p>No tasks found.</p>
-              <span>{priorityFilter !== "All" || statusFilter !== "All" || searchQuery ? "Try adjusting your filters." : "Tasks created from reports will appear here."}</span>
+              <span>{hasActiveFilters ? "Try adjusting your filters." : "Tasks created from reports will appear here."}</span>
             </div>
           )}
 
@@ -608,9 +723,7 @@ export default function TasksPage() {
                     <span className="tasks-board-col-count">{col.tasks.length}</span>
                   </div>
                   <div className="tasks-board-col-body">
-                    {col.tasks.length === 0 && (
-                      <div className="tasks-board-empty">No tasks here</div>
-                    )}
+                    {col.tasks.length === 0 && <div className="tasks-board-empty">No tasks here</div>}
                     {col.tasks.map(task => {
                       const prog   = calcProgress(task.checklist);
                       const pColor = getPriorityColor(task.priority);
@@ -634,20 +747,14 @@ export default function TasksPage() {
                                 #{task.reportId}
                               </p>
                             )}
-                            {task.concernType && (
-                              <p className="tasks-card-concern">{task.concernType}</p>
-                            )}
+                            {task.concernType && <p className="tasks-card-concern">{task.concernType}</p>}
                             {task.assignedStaff && task.assignedStaff.length > 0 && (
                               <div className="tasks-card-staff">
                                 {task.assignedStaff.slice(0, 3).map(s => (
-                                  <span key={s} className="tasks-card-avatar" title={s}>
-                                    {s.charAt(0).toUpperCase()}
-                                  </span>
+                                  <span key={s} className="tasks-card-avatar" title={s}>{s.charAt(0).toUpperCase()}</span>
                                 ))}
                                 {task.assignedStaff.length > 3 && (
-                                  <span className="tasks-card-avatar tasks-card-avatar--more">
-                                    +{task.assignedStaff.length - 3}
-                                  </span>
+                                  <span className="tasks-card-avatar tasks-card-avatar--more">+{task.assignedStaff.length - 3}</span>
                                 )}
                               </div>
                             )}
@@ -718,8 +825,7 @@ export default function TasksPage() {
                     <span>
                       {task.priority
                         ? <span className="tasks-status-pill" style={{ backgroundColor: pColor + "20", color: pColor, border: `1px solid ${pColor}40` }}>{task.priority}</span>
-                        : <span className="tasks-list-na">—</span>
-                      }
+                        : <span className="tasks-list-na">—</span>}
                     </span>
                     <span>
                       {prog !== null ? (
@@ -767,17 +873,12 @@ export default function TasksPage() {
       {mounted && selectedTask && createPortal(
         <div className="tasks-modal-backdrop" onClick={closeTask} role="dialog" aria-modal="true">
           <div className="tasks-modal" onClick={e => e.stopPropagation()}>
-
-            {/* Modal header */}
             <div className="tasks-modal-header" style={{ borderTop: `4px solid ${priorityColor}` }}>
               <div className="tasks-modal-header-left">
                 {isEditing ? (
-                  <input
-                    type="text"
-                    className="tasks-modal-title-input"
+                  <input type="text" className="tasks-modal-title-input"
                     value={editDraft?.name || ""}
-                    onChange={e => setEditDraft(d => d ? { ...d, name: e.target.value } : d)}
-                  />
+                    onChange={e => setEditDraft(d => d ? { ...d, name: e.target.value } : d)} />
                 ) : (
                   <h2 className="tasks-modal-title">{selectedTask.name}</h2>
                 )}
@@ -809,13 +910,8 @@ export default function TasksPage() {
               </div>
             </div>
 
-            {/* Modal body */}
             <div className="tasks-modal-body">
-
-              {/* Left panel */}
               <div className="tasks-modal-left">
-
-                {/* Status + Priority */}
                 <div className="tasks-modal-meta-row">
                   {isEditing ? (
                     <>
@@ -856,7 +952,6 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {/* Concern type (edit only) */}
                 {isEditing && (
                   <div className="tasks-modal-field">
                     <label className="tasks-modal-label">Concern Type</label>
@@ -868,23 +963,18 @@ export default function TasksPage() {
                   </div>
                 )}
 
-                {/* Progress */}
                 {progress !== null && (
                   <div className="tasks-modal-progress-section">
                     <div className="tasks-modal-progress-header">
                       <span className="tasks-modal-label">Progress</span>
-                      <span className="tasks-modal-progress-pct" style={{ color: progress === 100 ? "#22c55e" : priorityColor }}>
-                        {progress}%
-                      </span>
+                      <span className="tasks-modal-progress-pct" style={{ color: progress === 100 ? "#22c55e" : priorityColor }}>{progress}%</span>
                     </div>
                     <div className="tasks-modal-progress-bar">
-                      <div className="tasks-modal-progress-fill"
-                        style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#22c55e" : priorityColor }} />
+                      <div className="tasks-modal-progress-fill" style={{ width: `${progress}%`, backgroundColor: progress === 100 ? "#22c55e" : priorityColor }} />
                     </div>
                   </div>
                 )}
 
-                {/* Checklist */}
                 <div className="tasks-modal-section">
                   <div className="tasks-modal-section-header">
                     <span className="tasks-modal-label">
@@ -897,19 +987,15 @@ export default function TasksPage() {
                     </span>
                   </div>
                   <div className="tasks-modal-checklist">
-                    {(activeTask?.checklist || []).length === 0 && (
-                      <p className="tasks-modal-empty-hint">No checklist items yet.</p>
-                    )}
+                    {(activeTask?.checklist || []).length === 0 && <p className="tasks-modal-empty-hint">No checklist items yet.</p>}
                     {(activeTask?.checklist || []).map(item => {
                       const itemId = item.id || item._id || "";
                       return (
                         <div key={itemId} className="tasks-modal-check-item">
-                          <button
-                            type="button"
+                          <button type="button"
                             className={`tasks-check-btn${item.done ? " tasks-check-btn--done" : ""}`}
                             style={item.done ? { backgroundColor: priorityColor, borderColor: priorityColor } : {}}
-                            onClick={() => isEditing ? editToggleChecklist(itemId) : toggleChecklist(selectedTask, itemId)}
-                          >
+                            onClick={() => isEditing ? editToggleChecklist(itemId) : toggleChecklist(selectedTask, itemId)}>
                             {item.done && (
                               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12"/>
@@ -935,7 +1021,6 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {/* Notes */}
                 <div className="tasks-modal-section">
                   <span className="tasks-modal-label">Notes</span>
                   {isEditing ? (
@@ -949,16 +1034,11 @@ export default function TasksPage() {
                 </div>
               </div>
 
-              {/* Right panel */}
               <div className="tasks-modal-right">
-
-                {/* Staff */}
                 <div className="tasks-modal-section">
                   <span className="tasks-modal-label">Assigned Staff</span>
                   <div className="tasks-modal-staff-list">
-                    {(activeTask?.assignedStaff || []).length === 0 && (
-                      <p className="tasks-modal-empty-hint">No staff assigned.</p>
-                    )}
+                    {(activeTask?.assignedStaff || []).length === 0 && <p className="tasks-modal-empty-hint">No staff assigned.</p>}
                     {(activeTask?.assignedStaff || []).map(name => (
                       <div key={name} className="tasks-modal-staff-row">
                         <span className="tasks-modal-staff-avatar" style={{ backgroundColor: priorityColor }}>
@@ -991,7 +1071,6 @@ export default function TasksPage() {
                   )}
                 </div>
 
-                {/* Task info */}
                 <div className="tasks-modal-section tasks-modal-info-box">
                   <span className="tasks-modal-label">Task Info</span>
                   <div className="tasks-modal-info-grid">
@@ -1008,7 +1087,6 @@ export default function TasksPage() {
                   </div>
                 </div>
 
-                {/* Move to status */}
                 {!isEditing && (
                   <div className="tasks-modal-section">
                     <span className="tasks-modal-label">Move to</span>
@@ -1028,7 +1106,6 @@ export default function TasksPage() {
               </div>
             </div>
 
-            {/* Modal footer */}
             {isEditing && (
               <div className="tasks-modal-footer">
                 <button type="button" className="tasks-modal-cancel-btn" onClick={cancelEdit} disabled={saving}>Cancel</button>
@@ -1068,6 +1145,14 @@ export default function TasksPage() {
           </div>
         </div>, document.body
       )}
+
+      {/* ── Bounce animation for debounce indicator ── */}
+      <style>{`
+        @keyframes tasks-bounce {
+          0%, 100% { transform: translateY(0); opacity: 0.4; }
+          50%       { transform: translateY(-3px); opacity: 1; }
+        }
+      `}</style>
     </>
   );
 }
