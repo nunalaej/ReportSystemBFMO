@@ -2,18 +2,9 @@ const express   = require("express");
 const router    = express.Router();
 const ListsTask = require("../models/Liststask");
 const Report    = require("../models/Report");
+const { logNotification } = require("../utils/notificationlogger");
 
-/* ─────────────────────────────────────────────────────────────
-   PRIORITY → DUE DATE
-   Called on task creation (or when priority changes and no
-   explicit dueDate was supplied by the caller).
-───────────────────────────────────────────────────────────── */
-const PRIORITY_MAX_DAYS = {
-  Urgent: 1,
-  High:   7,
-  Medium: 30,
-  Low:    90,
-};
+const PRIORITY_MAX_DAYS = { Urgent: 1, High: 7, Medium: 30, Low: 90 };
 
 function calcDueDate(priority) {
   const days = PRIORITY_MAX_DAYS[priority];
@@ -23,39 +14,28 @@ function calcDueDate(priority) {
   return due;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   GET /api/tasks
-   Returns all tasks sorted newest-first.
-───────────────────────────────────────────────────────────── */
+/* ── GET all ── */
 router.get("/", async (req, res) => {
   try {
     const tasks = await ListsTask.find({}).sort({ createdAt: -1 }).lean();
     return res.json({ success: true, tasks });
   } catch (err) {
-    console.error("GET /tasks:", err);
     return res.status(500).json({ success: false, message: "Failed to load tasks." });
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   GET /api/tasks/:id
-───────────────────────────────────────────────────────────── */
+/* ── GET one ── */
 router.get("/:id", async (req, res) => {
   try {
     const task = await ListsTask.findById(req.params.id).lean();
     if (!task) return res.status(404).json({ success: false, message: "Task not found." });
     return res.json({ success: true, task });
   } catch (err) {
-    console.error("GET /tasks/:id:", err);
     return res.status(500).json({ success: false, message: "Failed to load task." });
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   POST /api/tasks
-   Creates a new task.  Due date is auto-calculated from
-   priority unless the caller supplies one explicitly.
-───────────────────────────────────────────────────────────── */
+/* ── POST create ── */
 router.post("/", async (req, res) => {
   try {
     const {
@@ -76,9 +56,7 @@ router.post("/", async (req, res) => {
         });
     }
 
-    // Honour an explicit dueDate; otherwise derive from priority.
-    const resolvedDueDate =
-      dueDate ? new Date(dueDate) : calcDueDate(priority || "");
+    const resolvedDueDate = dueDate ? new Date(dueDate) : calcDueDate(priority || "");
 
     const newTask = await ListsTask.create({
       userId:        userId        || "admin",
@@ -101,6 +79,24 @@ router.post("/", async (req, res) => {
       ).catch(console.error);
     }
 
+    // ✅ Log creation
+    await logNotification({
+      type:          "task_created",
+      title:         `New task created: "${name}"`,
+      message:       `Task "${name}" was created by ${createdBy || "Admin"}.` +
+                     (priority           ? ` Priority: ${priority}.`              : "") +
+                     (reportId           ? ` Linked to report #${reportId}.`      : "") +
+                     (assignedStaff?.length ? ` Assigned to: ${assignedStaff.join(", ")}.` : ""),
+      taskId:        String(newTask._id),
+      taskName:      name,
+      reportId,
+      changedBy:     createdBy     || "Admin",
+      changedByRole: "admin",
+      toValue:       status        || "Pending",
+      affectedStaff: Array.isArray(assignedStaff) ? assignedStaff : [],
+      meta: { priority, concernType },
+    });
+
     return res.status(201).json({ success: true, task: newTask });
   } catch (err) {
     console.error("POST /tasks:", err);
@@ -108,21 +104,24 @@ router.post("/", async (req, res) => {
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   PUT /api/tasks/:id
-   Partial update — only fields present in the body are changed.
-───────────────────────────────────────────────────────────── */
+/* ── PUT update ── */
 router.put("/:id", async (req, res) => {
   try {
+    const task = await ListsTask.findById(req.params.id);
+    if (!task) return res.status(404).json({ success: false, message: "Task not found." });
+
     const {
       name, concernType, status, checklist,
       assignedStaff, priority, notes,
       comments, updatedBy, dueDate,
     } = req.body;
 
-    const task = await ListsTask.findById(req.params.id);
-    if (!task) return res.status(404).json({ success: false, message: "Task not found." });
+    // Capture old values BEFORE mutating
+    const oldStatus   = task.status;
+    const oldPriority = task.priority;
+    const oldStaff    = [...(task.assignedStaff || [])];
 
+    // Apply updates
     if (name          !== undefined) task.name          = String(name).trim();
     if (concernType   !== undefined) task.concernType   = concernType;
     if (checklist     !== undefined) task.checklist     = checklist;
@@ -130,16 +129,12 @@ router.put("/:id", async (req, res) => {
     if (notes         !== undefined) task.notes         = notes;
     if (comments      !== undefined) task.comments      = comments;
 
-    // ── Due date: explicit value wins; if priority changes and no
-    //    dueDate was sent, only recalculate when the task has none yet.
     if (dueDate !== undefined) {
       task.dueDate = dueDate ? new Date(dueDate) : null;
     }
 
     if (priority !== undefined && priority !== task.priority) {
       task.priority = priority;
-      // Recalculate dueDate only when the caller didn't supply one AND
-      // the task doesn't already have a custom due date.
       if (dueDate === undefined && !task.dueDate) {
         task.dueDate = calcDueDate(priority);
       }
@@ -147,7 +142,6 @@ router.put("/:id", async (req, res) => {
 
     if (status !== undefined) {
       task.status = status;
-      // Clear escalation flags when a task is closed.
       if (["Resolved", "Archived"].includes(status)) {
         task.isEscalated = false;
         task.escalatedAt = null;
@@ -156,12 +150,87 @@ router.put("/:id", async (req, res) => {
 
     const updated = await task.save();
 
-    // Mirror status back to the linked report if one exists.
+    // Mirror to report
     if (status !== undefined && task.reportId) {
       await Report.updateOne(
         { reportId: task.reportId },
         { $set: { status } }
       ).catch(console.error);
+    }
+
+    // ✅ Log status change
+    if (status !== undefined && status !== oldStatus) {
+      await logNotification({
+        type:          "task_status_changed",
+        title:         `Status changed: "${updated.name}"`,
+        message:       `Status changed from "${oldStatus}" to "${status}" by ${updatedBy || "Admin"}.`,
+        taskId:        String(updated._id),
+        taskName:      updated.name,
+        reportId:      updated.reportId,
+        changedBy:     updatedBy     || "Admin",
+        changedByRole: "admin",
+        fromValue:     oldStatus,
+        toValue:       status,
+        affectedStaff: updated.assignedStaff || [],
+        meta: { priority: updated.priority },
+      });
+    }
+
+    // ✅ Log priority change
+    if (priority !== undefined && priority !== oldPriority) {
+      await logNotification({
+        type:          "task_updated",
+        title:         `Priority changed: "${updated.name}"`,
+        message:       `Priority changed from "${oldPriority || "none"}" to "${priority}" by ${updatedBy || "Admin"}.`,
+        taskId:        String(updated._id),
+        taskName:      updated.name,
+        changedBy:     updatedBy     || "Admin",
+        changedByRole: "admin",
+        fromValue:     oldPriority   || "none",
+        toValue:       priority,
+        affectedStaff: updated.assignedStaff || [],
+      });
+    }
+
+    // ✅ Log staff assignment change
+    if (assignedStaff !== undefined) {
+      const newStaff = assignedStaff;
+      const added    = newStaff.filter(s => !oldStaff.includes(s));
+      const removed  = oldStaff.filter(s => !newStaff.includes(s));
+      if (added.length || removed.length) {
+        await logNotification({
+          type:          "task_assigned",
+          title:         `Staff assignment changed: "${updated.name}"`,
+          message:       [
+            added.length   ? `Added: ${added.join(", ")}.`     : "",
+            removed.length ? `Removed: ${removed.join(", ")}.` : "",
+            `Changed by ${updatedBy || "Admin"}.`,
+          ].filter(Boolean).join(" "),
+          taskId:        String(updated._id),
+          taskName:      updated.name,
+          changedBy:     updatedBy     || "Admin",
+          changedByRole: "admin",
+          affectedStaff: newStaff,
+          meta: { added, removed },
+        });
+      }
+    }
+
+    // ✅ Log general update (checklist, notes) only if nothing else was logged
+    const noSpecificLog = status === undefined && priority === undefined &&
+                          (assignedStaff === undefined ||
+                           assignedStaff.join() === oldStaff.join());
+    if (noSpecificLog && (checklist !== undefined || notes !== undefined || name !== undefined)) {
+      await logNotification({
+        type:          "task_updated",
+        title:         `Task updated: "${updated.name}"`,
+        message:       `Task details were updated by ${updatedBy || "Admin"}.`,
+        taskId:        String(updated._id),
+        taskName:      updated.name,
+        changedBy:     updatedBy     || "Admin",
+        changedByRole: "admin",
+        affectedStaff: updated.assignedStaff || [],
+      });
     }
 
     return res.json({ success: true, task: updated });
@@ -171,13 +240,26 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-/* ─────────────────────────────────────────────────────────────
-   DELETE /api/tasks/:id
-───────────────────────────────────────────────────────────── */
+/* ── DELETE ── */
 router.delete("/:id", async (req, res) => {
   try {
     const task = await ListsTask.findByIdAndDelete(req.params.id);
     if (!task) return res.status(404).json({ success: false, message: "Task not found." });
+
+    // ✅ Log deletion
+    await logNotification({
+      type:          "task_deleted",
+      title:         `Task deleted: "${task.name}"`,
+      message:       `Task "${task.name}" was permanently deleted by ${req.body?.deletedBy || "Admin"}.`,
+      taskId:        String(task._id),
+      taskName:      task.name,
+      reportId:      task.reportId,
+      changedBy:     req.body?.deletedBy || "Admin",
+      changedByRole: "admin",
+      affectedStaff: task.assignedStaff || [],
+      meta: { priority: task.priority, status: task.status },
+    });
+
     return res.json({ success: true, message: "Task deleted.", task });
   } catch (err) {
     console.error("DELETE /tasks/:id:", err);

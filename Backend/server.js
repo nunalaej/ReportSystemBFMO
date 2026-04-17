@@ -12,6 +12,7 @@ const staffRouter     = require("./api/staff");
 const reportsRouter   = require("./api/reports");
 const metaRouter      = require("./api/meta");
 const tasksRouter     = require("./api/tasks");
+const notificationsRouter = require("./api/notifications");
 
 const { sendReportStatusEmail } = require("./utils/mailer");
 
@@ -29,6 +30,8 @@ app.use("/api/tasks",     tasksRouter);
 app.use("/api/meta",      metaRouter);
 app.use("/api/user",      staffRouter);   // keep existing
 app.use("/api/staff",     staffRouter);   // ✅ ADD THIS — frontend calls /api/staff
+app.use("/api/notifications", notificationsRouter);
+
 
 const mongoUri = process.env.MONGODB_URI;
 const dbName   = process.env.MONGODB_NAME;
