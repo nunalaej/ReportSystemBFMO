@@ -75,13 +75,9 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
   { id: "other",         label: "Other",         subconcerns: ["Other"] },
 ];
 
-const COLLEGE_OPTIONS: string[] = [
-  "CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff",
-];
-
-const YEAR_OPTIONS: string[] = [
-  "1st Year","2nd Year","3rd Year","4th Year",
-];
+// ✅ Fallback defaults — overridden by meta API if available
+const FALLBACK_COLLEGE_OPTIONS: string[] = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
+const FALLBACK_YEAR_OPTIONS:    string[] = ["1st Year","2nd Year","3rd Year","4th Year"];
 
 const FLOOR_ORDINALS = [
   "1st Floor","2nd Floor","3rd Floor","4th Floor",
@@ -138,25 +134,25 @@ interface ConcernMeta {
 
 interface MetaState {
   buildings: BuildingMeta[];
-  concerns: ConcernMeta[];
+  concerns:  ConcernMeta[];
 }
 
 interface FormDataState {
-  email: string;
-  heading: string;
-  description: string;
-  concern: string;
-  subConcern: string;
-  building: string;
-  college: string;
-  year: string;        // ✅ FIXED: separate year field
-  userType: string;
-  floor: string;
-  room: string;
-  ImageFile: File | null;
-  otherConcern: string;
+  email:         string;
+  heading:       string;
+  description:   string;
+  concern:       string;
+  subConcern:    string;
+  building:      string;
+  college:       string;
+  year:          string;
+  userType:      string;
+  floor:         string;
+  room:          string;
+  ImageFile:     File | null;
+  otherConcern:  string;
   otherBuilding: string;
-  otherRoom: string;
+  otherRoom:     string;
 }
 
 interface Report {
@@ -176,19 +172,14 @@ interface Report {
 =============================== */
 
 const isValidImageFile = (file: File): boolean => {
-  const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(
-    file.type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]
-  );
+  const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]);
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const extValid = ALLOWED_IMAGE_EXTENSIONS.includes(
-    ext as (typeof ALLOWED_IMAGE_EXTENSIONS)[number]
-  );
+  const extValid = ALLOWED_IMAGE_EXTENSIONS.includes(ext as (typeof ALLOWED_IMAGE_EXTENSIONS)[number]);
   const sizeValid = file.size <= MAX_IMAGE_SIZE_BYTES;
   return (mimeValid || extValid) && sizeValid;
 };
 
-const norm = (v: unknown): string =>
-  v == null ? "" : String(v).trim().toLowerCase();
+const norm = (v: unknown): string => v == null ? "" : String(v).trim().toLowerCase();
 
 const normalizeLeet = (text: string): string =>
   text.toLowerCase()
@@ -197,9 +188,7 @@ const normalizeLeet = (text: string): string =>
 
 const containsProfanity = (text: string | undefined | null): boolean => {
   if (!text) return false;
-  const lower = text.toLowerCase();
-  const leet  = normalizeLeet(text);
-  return PROFANITY_PATTERNS.some((re) => re.test(lower) || re.test(leet));
+  return PROFANITY_PATTERNS.some((re) => re.test(text.toLowerCase()) || re.test(normalizeLeet(text)));
 };
 
 const getSimilarityKey = (r: {
@@ -209,28 +198,20 @@ const getSimilarityKey = (r: {
   const building = (r.building || "").trim();
   const concern  = (r.concern  || "").trim();
   const sub      = (r.subConcern || r.otherConcern || "").trim();
-  const room     = r.room && r.room !== "Other"
-    ? r.room.trim()
-    : (r.otherRoom || "").trim();
-  return room
-    ? `${building}|${concern}|${sub}|${room}`
-    : `${building}|${concern}|${sub}`;
+  const room     = r.room && r.room !== "Other" ? r.room.trim() : (r.otherRoom || "").trim();
+  return room ? `${building}|${concern}|${sub}|${room}` : `${building}|${concern}|${sub}`;
 };
 
 function normaliseRoomsPerFloor(raw: number | number[] | unknown, floors: number): number[] {
   let arr: number[];
   if (Array.isArray(raw)) {
-    arr = (raw as unknown[]).map((v) => {
-      const n = parseInt(String(v), 10);
-      return Number.isNaN(n) || n < 1 ? 1 : n;
-    });
+    arr = (raw as unknown[]).map((v) => { const n = parseInt(String(v),10); return Number.isNaN(n)||n<1?1:n; });
   } else {
-    const flat  = parseInt(String(raw), 10);
-    const count = Number.isNaN(flat) || flat < 1 ? 1 : flat;
-    arr = Array.from({ length: floors }, () => count);
+    const flat = parseInt(String(raw),10);
+    arr = Array.from({ length: floors }, () => Number.isNaN(flat)||flat<1?1:flat);
   }
-  while (arr.length < floors) arr.push(arr[arr.length - 1] ?? 1);
-  return arr.slice(0, floors);
+  while (arr.length < floors) arr.push(arr[arr.length-1]??1);
+  return arr.slice(0,floors);
 }
 
 function parseBuildingMeta(raw: unknown, idx: number): BuildingMeta {
@@ -238,10 +219,10 @@ function parseBuildingMeta(raw: unknown, idx: number): BuildingMeta {
     const name = raw.trim();
     return { id: norm(name).replace(/\s+/g,"-")||`b-${idx}`, name: name||"Unnamed", floors:1, roomsPerFloor:[1], hasRooms:true };
   }
-  const obj    = raw as any;
-  const name   = String(obj?.name  || "").trim();
-  const id     = String(obj?.id    || "").trim() || norm(name).replace(/\s+/g,"-") || `b-${idx}-${Math.random().toString(36).slice(2,6)}`;
-  const floors = typeof obj?.floors==="number" && obj.floors>0 ? Math.round(obj.floors) : 1;
+  const obj  = raw as any;
+  const name = String(obj?.name||"").trim();
+  const id   = String(obj?.id||"").trim() || norm(name).replace(/\s+/g,"-") || `b-${idx}-${Math.random().toString(36).slice(2,6)}`;
+  const floors = typeof obj?.floors==="number"&&obj.floors>0 ? Math.round(obj.floors) : 1;
   return {
     id, name: name||"Unnamed", floors,
     roomsPerFloor: normaliseRoomsPerFloor(obj?.roomsPerFloor, floors),
@@ -254,11 +235,11 @@ function getRoomsForFloor(building: BuildingMeta|null, floorLabel: string): stri
   if (!building||building.hasRooms===false||!floorLabel||floorLabel==="Other") return null;
   const match = floorLabel.match(/^(\d+)/);
   if (!match) return null;
-  const floorNum = parseInt(match[1], 10);
+  const floorNum = parseInt(match[1],10);
   const arr   = normaliseRoomsPerFloor(building.roomsPerFloor, building.floors);
-  const count = arr[floorNum - 1];
+  const count = arr[floorNum-1];
   if (!count||count<1) return null;
-  return Array.from({ length: count }, (_, i) => String(floorNum * 100 + i + 1));
+  return Array.from({ length: count }, (_,i) => String(floorNum*100+i+1));
 }
 
 /* ===============================
@@ -307,10 +288,7 @@ const useBodyScrollLock = (lock: boolean) => {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
     }
-    return () => {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-    };
+    return () => { document.body.style.overflow = ""; document.documentElement.style.overflow = ""; };
   }, [lock]);
 };
 
@@ -347,8 +325,7 @@ export default function Create() {
   const { theme } = useTheme();
   const light = theme === "light";
 
-  const { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen } =
-    useSidebarState();
+  const { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen } = useSidebarState();
 
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   useBodyScrollLock(sidebarOverlayOpen || isConfirming);
@@ -356,12 +333,12 @@ export default function Create() {
   const [formData, setFormData] = useState<FormDataState>({
     email: "", heading: "", description: "",
     concern: "", subConcern: "", building: "",
-    college: "", year: "", userType: "Student",   // ✅ year added
+    college: "", year: "", userType: "",
     floor: "", room: "", ImageFile: null,
     otherConcern: "", otherBuilding: "", otherRoom: "",
   });
 
-  const [preview,           setPreview]           = useState<string | null>(null);
+  const [preview,           setPreview]           = useState<string|null>(null);
   const [message,           setMessage]           = useState<string>("");
   const [messageType,       setMessageType]       = useState<"success"|"error"|"info"|"">("");
   const [submitting,        setSubmitting]        = useState<boolean>(false);
@@ -375,6 +352,10 @@ export default function Create() {
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError,   setMetaError]   = useState<string>("");
 
+  // ✅ Dynamic college/year options from meta API
+  const [collegeOptions, setCollegeOptions] = useState<string[]>(FALLBACK_COLLEGE_OPTIONS);
+  const [yearOptions,    setYearOptions]    = useState<string[]>(FALLBACK_YEAR_OPTIONS);
+
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
@@ -387,13 +368,19 @@ export default function Create() {
       user.emailAddresses[0]?.emailAddress || "";
     if (emailFromClerk) {
       setCurrentUserEmail(emailFromClerk);
-      // ✅ FIXED: auto-detect Student from email format
-      const userType = isStudentEmail(emailFromClerk) ? "Student" : "";
-      setFormData((f) => ({ ...f, email: emailFromClerk, userType }));
+      const student = isStudentEmail(emailFromClerk);
+      setFormData((f) => ({
+        ...f,
+        email:    emailFromClerk,
+        userType: student ? "Student" : "",
+        // ✅ Clear college/year if not a student
+        college:  student ? f.college : "",
+        year:     student ? f.year    : "",
+      }));
     }
   }, [isLoaded, user]);
 
-  /* ── Load meta ── */
+  /* ── Load meta (buildings, concerns, colleges, yearLevels) ── */
   useEffect(() => {
     let alive = true;
     async function loadMeta() {
@@ -401,7 +388,7 @@ export default function Create() {
       try {
         const res  = await fetch(META_URL, { credentials: "omit" });
         if (!res.ok) throw new Error(`Failed to load options. Status ${res.status}`);
-        const data = await res.json() as { buildings?: unknown; concerns?: unknown };
+        const data = await res.json();
         if (!alive) return;
         setMeta({
           buildings: Array.isArray(data.buildings) && data.buildings.length
@@ -409,7 +396,10 @@ export default function Create() {
           concerns: Array.isArray(data.concerns) && data.concerns.length
             ? (data.concerns as ConcernMeta[]) : FALLBACK_CONCERNS,
         });
-      } catch (err) {
+        // ✅ Load dynamic college/year options from meta
+        if (Array.isArray(data.colleges)   && data.colleges.length)   setCollegeOptions(data.colleges);
+        if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearOptions(data.yearLevels);
+      } catch {
         if (!alive) return;
         setMeta({ buildings: FALLBACK_BUILDINGS, concerns: FALLBACK_CONCERNS });
         setMetaError("Could not load latest options. Using defaults.");
@@ -421,7 +411,7 @@ export default function Create() {
 
   /* ── Load existing reports for similarity check ── */
   useEffect(() => {
-    const fetchReports = async () => {
+    (async () => {
       try {
         const url = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
         const res = await fetch(url, { credentials: "omit" });
@@ -432,37 +422,36 @@ export default function Create() {
         else if (Array.isArray((data as any).reports)) list = (data as any).reports as Report[];
         else if (Array.isArray((data as any).data))    list = (data as any).data as Report[];
         setExistingReports(list);
-      } catch (err) { console.error("Error fetching reports for similarity:", err); }
-    };
-    fetchReports();
+      } catch {}
+    })();
   }, []);
 
   /* ── Building/floor/room derived state ── */
-  const selectedBuildingMeta = useMemo((): BuildingMeta | null => {
-    if (!formData.building || formData.building === "Other") return null;
-    return meta.buildings.find((b) => b.name === formData.building) ?? null;
+  const selectedBuildingMeta = useMemo((): BuildingMeta|null => {
+    if (!formData.building||formData.building==="Other") return null;
+    return meta.buildings.find((b) => b.name===formData.building)??null;
   }, [meta.buildings, formData.building]);
 
-  const buildingHasRooms = useMemo(() => selectedBuildingMeta?.hasRooms === true, [selectedBuildingMeta]);
+  const buildingHasRooms = useMemo(() => selectedBuildingMeta?.hasRooms===true, [selectedBuildingMeta]);
 
   const visibleFloorOptions = useMemo((): string[] => {
-    if (!selectedBuildingMeta || !buildingHasRooms) return [];
-    const opts = Array.from({ length: selectedBuildingMeta.floors ?? 1 }, (_, i) => getFloorLabel(i));
+    if (!selectedBuildingMeta||!buildingHasRooms) return [];
+    const opts = Array.from({ length: selectedBuildingMeta.floors??1 }, (_,i) => getFloorLabel(i));
     opts.push("Other");
     return opts;
   }, [selectedBuildingMeta, buildingHasRooms]);
 
-  const availableRooms = useMemo((): string[] | null => {
-    if (!buildingHasRooms || !formData.floor || formData.floor === "Other") return null;
+  const availableRooms = useMemo((): string[]|null => {
+    if (!buildingHasRooms||!formData.floor||formData.floor==="Other") return null;
     return getRoomsForFloor(selectedBuildingMeta, formData.floor);
   }, [selectedBuildingMeta, buildingHasRooms, formData.floor]);
 
-  const availableRoomsWithOther = useMemo((): string[] | null => {
+  const availableRoomsWithOther = useMemo((): string[]|null => {
     if (!availableRooms) return null;
     return [...availableRooms, "Other"];
   }, [availableRooms]);
 
-  const hasRoom = useMemo(() => Array.isArray(availableRooms) && availableRooms.length > 0, [availableRooms]);
+  const hasRoom = useMemo(() => Array.isArray(availableRooms)&&availableRooms.length>0, [availableRooms]);
 
   /* ── Conditional flags ── */
   const showSubConcern       = !!formData.concern && formData.concern !== "Other";
@@ -481,10 +470,12 @@ export default function Create() {
 
   /* ── Required fields ── */
   const requiredNow = useMemo((): (keyof FormDataState)[] => {
-    // ✅ FIXED: year is required, userType only required if not auto-detected student
     const req: (keyof FormDataState)[] = [
-      "email","heading","description","concern","building","college","year",
+      "email","heading","description","concern","building",
     ];
+    // ✅ College & year only required for students
+    if (isStudent) { req.push("college"); req.push("year"); }
+    // ✅ userType only required for non-students (students are auto-detected)
     if (!isStudent) req.push("userType");
     if (showSubConcern)       req.push("subConcern");
     if (needsOtherConcern || needsOtherSubConcern) req.push("otherConcern");
@@ -508,86 +499,85 @@ export default function Create() {
     [requiredNow, formData]
   );
 
-  const progressPct   = useMemo(() => Math.round((filledCount / (requiredNow.length || 1)) * 100), [filledCount, requiredNow]);
+  const progressPct   = useMemo(() => Math.round((filledCount/(requiredNow.length||1))*100), [filledCount, requiredNow]);
   const readyToSubmit = progressPct === 100;
 
   /* ── Similarity check ── */
   const similarMatches = useMemo((): Report[] => {
-    if (!formData.building || !formData.concern) return [];
+    if (!formData.building||!formData.concern) return [];
     const currentKey = getSimilarityKey({
-      building:     formData.building === "Other" ? formData.otherBuilding : formData.building,
+      building:     formData.building==="Other" ? formData.otherBuilding : formData.building,
       concern:      formData.concern,
-      subConcern:   formData.concern === "Other" ? "" : formData.subConcern,
-      otherConcern: formData.concern === "Other" ? formData.otherConcern : undefined,
-      room:         formData.room    || undefined,
-      otherRoom:    formData.room    ? undefined : formData.otherRoom || undefined,
+      subConcern:   formData.concern==="Other" ? "" : formData.subConcern,
+      otherConcern: formData.concern==="Other" ? formData.otherConcern : undefined,
+      room:         formData.room||undefined,
+      otherRoom:    formData.room ? undefined : formData.otherRoom||undefined,
     });
     if (!currentKey.trim()) return [];
     return existingReports.filter((r) => {
-      if (norm(r.status || "Pending") === "archived") return false;
-      return getSimilarityKey(r) === currentKey;
+      if (norm(r.status||"Pending")==="archived") return false;
+      return getSimilarityKey(r)===currentKey;
     });
   }, [existingReports, formData]);
 
   const similarReportsCount = useMemo(() => similarMatches.length, [similarMatches]);
 
-  const similarStatus = useMemo((): string | null => {
-    if (similarMatches.length === 0) return null;
-    const best = similarMatches.reduce((prev, curr) => {
-      const prevP = STATUS_PRIORITY[prev.status || "Pending"] ?? 0;
-      const currP = STATUS_PRIORITY[curr.status || "Pending"] ?? 0;
-      return currP > prevP ? curr : prev;
+  const similarStatus = useMemo((): string|null => {
+    if (similarMatches.length===0) return null;
+    const best = similarMatches.reduce((prev,curr) => {
+      const prevP = STATUS_PRIORITY[prev.status||"Pending"]??0;
+      const currP = STATUS_PRIORITY[curr.status||"Pending"]??0;
+      return currP>prevP ? curr : prev;
     });
-    return best.status || "Pending";
+    return best.status||"Pending";
   }, [similarMatches]);
 
   /* ── Summary text ── */
   const summaryText = useMemo((): string => {
     const parts: string[] = [];
-    parts.push(`Title: ${formData.heading || "-"}`);
-    let concernDisplay = formData.concern || "-";
-    if (formData.concern === "Other" && formData.otherConcern) {
+    parts.push(`Title: ${formData.heading||"-"}`);
+    let concernDisplay = formData.concern||"-";
+    if (formData.concern==="Other"&&formData.otherConcern) {
       concernDisplay = `Other: ${formData.otherConcern}`;
     } else if (formData.subConcern) {
-      concernDisplay += formData.subConcern === "Other" && formData.otherConcern
+      concernDisplay += formData.subConcern==="Other"&&formData.otherConcern
         ? ` / Other: ${formData.otherConcern}` : ` / ${formData.subConcern}`;
     }
     parts.push(`Concern: ${concernDisplay}`);
-    let buildingDisplay = formData.building || "-";
-    if (formData.building === "Other" && formData.otherBuilding) buildingDisplay = `Other: ${formData.otherBuilding}`;
+    let buildingDisplay = formData.building||"-";
+    if (formData.building==="Other"&&formData.otherBuilding) buildingDisplay = `Other: ${formData.otherBuilding}`;
     parts.push(`Building: ${buildingDisplay}`);
-    parts.push(`User Type: ${isStudent ? "Student" : (formData.userType || "-")}`);
+    parts.push(`User Type: ${isStudent ? "Student" : (formData.userType||"-")}`);
     if (specificRoom) {
-      if (showFloorDropdown && formData.floor) parts.push(`Floor: ${formData.floor}`);
-      if (showRoomDropdown || needsOtherRoomText) {
-        const roomDisplay = formData.room === "Other" && formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room || "-";
+      if (showFloorDropdown&&formData.floor) parts.push(`Floor: ${formData.floor}`);
+      if (showRoomDropdown||needsOtherRoomText) {
+        const roomDisplay = formData.room==="Other"&&formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room||"-";
         parts.push(`Room: ${roomDisplay}`);
-      } else if (needsOtherRoom) { parts.push(`Spot: ${formData.otherRoom || "-"}`); }
+      } else if (needsOtherRoom) { parts.push(`Spot: ${formData.otherRoom||"-"}`); }
     } else { parts.push("Specific room: No"); }
-    // ✅ FIXED: show college + year together
-    if (formData.college) parts.push(`College: ${formData.college}${formData.year ? ` - ${formData.year}` : ""}`);
+    if (isStudent&&formData.college) parts.push(`College: ${formData.college}${formData.year ? ` - ${formData.year}` : ""}`);
     parts.push(`Photo attached: ${formData.ImageFile ? "Yes" : "No"}`);
     return parts.join("\n");
   }, [formData, specificRoom, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom, isStudent]);
 
   /* ── Options ── */
   const buildingOptions = useMemo((): string[] => {
-    const list = meta.buildings.map((b) => String(b.name || "").trim()).filter((n) => n.length > 0);
-    return [...list.filter((x) => norm(x) !== "other").sort((a,b) => a.localeCompare(b)), ...list.filter((x) => norm(x) === "other")];
+    const list = meta.buildings.map((b) => String(b.name||"").trim()).filter((n) => n.length>0);
+    return [...list.filter((x) => norm(x)!=="other").sort((a,b) => a.localeCompare(b)), ...list.filter((x) => norm(x)==="other")];
   }, [meta.buildings]);
 
   const concernOptions = useMemo((): string[] => {
-    const list = meta.concerns.map((c) => c.label).filter((l) => l && String(l).trim().length > 0);
-    return [...list.filter((x) => norm(x) !== "other").sort((a,b) => String(a).localeCompare(String(b))), ...list.filter((x) => norm(x) === "other")];
+    const list = meta.concerns.map((c) => c.label).filter((l) => l&&String(l).trim().length>0);
+    return [...list.filter((x) => norm(x)!=="other").sort((a,b) => String(a).localeCompare(String(b))), ...list.filter((x) => norm(x)==="other")];
   }, [meta.concerns]);
 
   const selectedConcern = useMemo(
-    () => meta.concerns.find((c) => c.label === formData.concern) || null,
+    () => meta.concerns.find((c) => c.label===formData.concern)||null,
     [meta.concerns, formData.concern]
   );
 
   const dynamicSubconcernOptions = useMemo((): string[] => {
-    if (!selectedConcern || !Array.isArray(selectedConcern.subconcerns)) return [];
+    if (!selectedConcern||!Array.isArray(selectedConcern.subconcerns)) return [];
     return selectedConcern.subconcerns;
   }, [selectedConcern]);
 
@@ -606,20 +596,19 @@ export default function Create() {
   }, []);
 
   const handleChange = useCallback(
-    (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    (e: ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => {
       const { name, value } = e.target;
       const target = e.target as HTMLInputElement;
 
-      if (name === "room" && value === "Other") {
+      if (name==="room"&&value==="Other") {
         setFormData((prev) => ({ ...prev, room: "Other", otherRoom: "" })); return;
       }
 
-      if (target.files && target.files[0]) {
+      if (target.files&&target.files[0]) {
         const file = target.files[0];
         if (!isValidImageFile(file)) {
-          showMsg("error", "Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP).");
-          target.value = "";
-          setFormData((prev) => ({ ...prev, ImageFile: null })); setPreview(null); return;
+          showMsg("error","Unsupported file type. Please upload an image (JPG, PNG, HEIC, WEBP).");
+          target.value = ""; setFormData((prev) => ({ ...prev, ImageFile: null })); setPreview(null); return;
         }
         setFormData((prev) => ({ ...prev, ImageFile: file }));
         setPreview(URL.createObjectURL(file)); return;
@@ -627,10 +616,10 @@ export default function Create() {
 
       setFormData((prev) => {
         const next = { ...prev, [name]: value } as FormDataState;
-        if (name === "concern")  { next.subConcern = ""; next.otherConcern = ""; }
-        if (name === "building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
-        if (name === "floor")    { next.room = ""; next.otherRoom = ""; }
-        if (name === "room" && value !== "Other") { next.otherRoom = ""; }
+        if (name==="concern")  { next.subConcern = ""; next.otherConcern = ""; }
+        if (name==="building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
+        if (name==="floor")    { next.room = ""; next.otherRoom = ""; }
+        if (name==="room"&&value!=="Other") { next.otherRoom = ""; }
         return next;
       });
     },
@@ -640,7 +629,7 @@ export default function Create() {
   const onDrop = useCallback((e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("is-dragover");
     const file = e.dataTransfer.files?.[0]; if (!file) return;
-    if (!isValidImageFile(file)) { showMsg("error", "Unsupported file type. Only image files are allowed."); return; }
+    if (!isValidImageFile(file)) { showMsg("error","Unsupported file type. Only image files are allowed."); return; }
     setFormData((prev) => ({ ...prev, ImageFile: file }));
     setPreview(URL.createObjectURL(file));
   }, [showMsg]);
@@ -648,95 +637,92 @@ export default function Create() {
   const onDragOver  = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.add("is-dragover"); }, []);
   const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.remove("is-dragover"); }, []);
 
-  /* ── EMPTY STATE for resets ── */
-  const getEmptyState = useCallback((): FormDataState => ({
-    email:         currentUserEmail || "",
-    heading:       "", description: "",
-    concern:       "", subConcern:  "", building: "",
-    college:       "", year:        "",
-    // ✅ FIXED: preserve auto-detected userType on reset
-    userType:      isStudentEmail(currentUserEmail) ? "Student" : "",
-    floor:         "", room:        "", ImageFile: null,
-    otherConcern:  "", otherBuilding: "", otherRoom: "",
-  }), [currentUserEmail]);
+  /* ── Empty state for resets ── */
+  const getEmptyState = useCallback((): FormDataState => {
+    const student = isStudentEmail(currentUserEmail);
+    return {
+      email:         currentUserEmail || "",
+      heading:       "", description:   "",
+      concern:       "", subConcern:    "", building: "",
+      college:       "", year:          "",
+      userType:      student ? "Student" : "",
+      floor:         "", room:          "", ImageFile: null,
+      otherConcern:  "", otherBuilding: "", otherRoom: "",
+    };
+  }, [currentUserEmail]);
 
   const performSubmit = useCallback(async () => {
-    setSubmitting(true); setIsConfirming(false); showMsg("info", "Submitting report...");
+    setSubmitting(true); setIsConfirming(false); showMsg("info","Submitting report...");
     try {
       const data = new FormData();
       data.append("email",       formData.email);
       data.append("heading",     formData.heading);
       data.append("description", formData.description);
-      // ✅ FIXED: use auto-detected userType for students
       data.append("userType",    isStudent ? "Student" : formData.userType);
-      // ✅ FIXED: send college + year combined
-      data.append("college",     formData.year ? `${formData.college} - ${formData.year}` : formData.college);
+      // ✅ Only send college/year for students
+      data.append("college",
+        isStudent && formData.college
+          ? (formData.year ? `${formData.college} - ${formData.year}` : formData.college)
+          : ""
+      );
 
-      if (formData.concern === "Other") {
+      if (formData.concern==="Other") {
         data.append("concern",    formData.concern);
         data.append("subConcern", "");
       } else {
         data.append("concern",    formData.concern);
-        data.append("subConcern", formData.subConcern === "Other" ? "Other" : formData.subConcern);
+        data.append("subConcern", formData.subConcern==="Other" ? "Other" : formData.subConcern);
       }
 
-      data.append("building",
-        formData.building === "Other"
-          ? `Other: ${formData.otherBuilding.trim()}`
-          : formData.building
-      );
+      data.append("building", formData.building==="Other" ? `Other: ${formData.otherBuilding.trim()}` : formData.building);
       data.append("floor",    formData.floor);
-      data.append("room",
-        formData.room === "Other"
-          ? `Other: ${formData.otherRoom.trim()}`
-          : formData.room
-      );
+      data.append("room",     formData.room==="Other" ? `Other: ${formData.otherRoom.trim()}` : formData.room);
       data.append("otherConcern",  formData.otherConcern.trim());
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom",     formData.otherRoom);
 
-      if (similarStatus && similarStatus !== "Pending") data.append("inheritedStatus", similarStatus);
+      if (similarStatus&&similarStatus!=="Pending") data.append("inheritedStatus", similarStatus);
       if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
       const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
       const res = await fetch(submitUrl, { method: "POST", body: data });
       const raw = await res.text().catch(() => "");
 
-      if (!res.ok) { showMsg("error", raw || `Submission failed with status ${res.status}`); return; }
+      if (!res.ok) { showMsg("error", raw||`Submission failed with status ${res.status}`); return; }
 
       let result: any = {};
       try { result = raw ? JSON.parse(raw) : {}; } catch {}
 
       if (result.success) {
-        if (result.report && typeof result.report === "object") {
+        if (result.report&&typeof result.report==="object") {
           setExistingReports((prev) => [...prev, result.report as Report]);
           if (result.report.reportId) setGeneratedReportId(result.report.reportId);
         }
-        showMsg("success", "Report submitted successfully.");
+        showMsg("success","Report submitted successfully.");
         setFormData(getEmptyState());
         setPreview(null); setSpecificRoom(false);
-      } else { showMsg("error", result.message || "Submission failed."); }
-    } catch (err) { showMsg("error", "Network error while submitting report."); }
+      } else { showMsg("error", result.message||"Submission failed."); }
+    } catch { showMsg("error","Network error while submitting report."); }
     finally { setSubmitting(false); }
   }, [formData, showMsg, similarStatus, isStudent, getEmptyState]);
 
   const handleSubmit = useCallback(
     (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (formData.ImageFile && !isValidImageFile(formData.ImageFile)) {
-        showMsg("error", "Invalid attachment detected. Please upload a valid image file."); return;
+      if (formData.ImageFile&&!isValidImageFile(formData.ImageFile)) {
+        showMsg("error","Invalid attachment detected. Please upload a valid image file."); return;
       }
-      if (!formData.ImageFile) { showMsg("error", "Please attach an image before submitting."); return; }
-      if (hasProfanity) { showMsg("error", "Your report contains foul or inappropriate language. Please remove it before submitting."); return; }
-      if (similarReportsCount > 0) { setIsConfirming(true); return; }
+      if (!formData.ImageFile) { showMsg("error","Please attach an image before submitting."); return; }
+      if (hasProfanity) { showMsg("error","Your report contains foul or inappropriate language. Please remove it before submitting."); return; }
+      if (similarReportsCount>0) { setIsConfirming(true); return; }
       void performSubmit();
     },
     [formData, hasProfanity, similarReportsCount, showMsg, performSubmit]
   );
 
   const copySummary = useCallback(async () => {
-    try { await navigator.clipboard.writeText(summaryText); showMsg("success", "Summary copied to clipboard."); }
-    catch { showMsg("error", "Could not copy summary."); }
+    try { await navigator.clipboard.writeText(summaryText); showMsg("success","Summary copied to clipboard."); }
+    catch { showMsg("error","Could not copy summary."); }
   }, [summaryText, showMsg]);
 
   const viewreports = useCallback(() => {
@@ -748,7 +734,7 @@ export default function Create() {
     setFormData(getEmptyState());
     setPreview(null); setSpecificRoom(false);
     setIsConfirming(false); setGeneratedReportId("");
-    showMsg("info", "Form cleared.");
+    showMsg("info","Form cleared.");
   }, [getEmptyState, showMsg]);
 
   /* ── Render ── */
@@ -761,7 +747,7 @@ export default function Create() {
           --text-color-light: #ffffff;
           --text-color-dark: #ffffff;
           --bubble-size: 12px;
-          --glow-color: rgba(255, 255, 255, 0.5);
+          --glow-color: rgba(255,255,255,0.5);
           position: relative;
           background: var(--background-light);
           cursor: pointer;
@@ -849,17 +835,17 @@ export default function Create() {
               <div className="create-scope__kv">
                 <div>Similar reports</div>
                 <div>
-                  {formData.building && formData.concern
-                    ? similarReportsCount === 0
+                  {formData.building&&formData.concern
+                    ? similarReportsCount===0
                       ? "None found"
                       : <>
                           {similarReportsCount} similar{" "}
-                          {similarReportsCount === 1 ? "report" : "reports"}
-                          {similarStatus && similarStatus !== "Pending" && (
+                          {similarReportsCount===1 ? "report" : "reports"}
+                          {similarStatus&&similarStatus!=="Pending" && (
                             <span className="similar-status-badge" style={{
-                              background: STATUS_COLOR[similarStatus] ? STATUS_COLOR[similarStatus] + "22" : "#88888822",
-                              color: STATUS_COLOR[similarStatus] ?? "#888",
-                              border: `1px solid ${STATUS_COLOR[similarStatus] ?? "#888"}55`,
+                              background: STATUS_COLOR[similarStatus] ? STATUS_COLOR[similarStatus]+"22" : "#88888822",
+                              color: STATUS_COLOR[similarStatus]??"#888",
+                              border: `1px solid ${STATUS_COLOR[similarStatus]??"#888"}55`,
                             }}>{similarStatus}</span>
                           )}
                         </>
@@ -889,8 +875,8 @@ export default function Create() {
                 </div>
                 <div className="create-scope__summary-row">
                   <span>Ready to submit</span>
-                  <strong className={readyToSubmit && !hasProfanity ? "is-ok" : "is-warn"}>
-                    {readyToSubmit && !hasProfanity ? "Yes" : "No"}
+                  <strong className={readyToSubmit&&!hasProfanity ? "is-ok" : "is-warn"}>
+                    {readyToSubmit&&!hasProfanity ? "Yes" : "No"}
                   </strong>
                 </div>
 
@@ -908,40 +894,43 @@ export default function Create() {
 
                 <div className="create-scope__summary-kv">
                   <div>Title</div>
-                  <div>{formData.heading || "-"}</div>
+                  <div>{formData.heading||"-"}</div>
                   <div>Concern</div>
                   <div>
-                    {formData.concern || "-"}
-                    {formData.concern === "Other" && formData.otherConcern ? `: ${formData.otherConcern}`
-                      : formData.subConcern === "Other" && formData.otherConcern ? ` / Other: ${formData.otherConcern}`
+                    {formData.concern||"-"}
+                    {formData.concern==="Other"&&formData.otherConcern ? `: ${formData.otherConcern}`
+                      : formData.subConcern==="Other"&&formData.otherConcern ? ` / Other: ${formData.otherConcern}`
                       : formData.subConcern ? ` / ${formData.subConcern}` : ""}
                   </div>
                   <div>Building</div>
                   <div>
-                    {formData.building || "-"}
-                    {formData.building === "Other" && formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
+                    {formData.building||"-"}
+                    {formData.building==="Other"&&formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
                   </div>
                   <div>User Type</div>
-                  {/* ✅ FIXED: show auto-detected type in summary */}
-                  <div>{isStudent ? "Student" : (formData.userType || "-")}</div>
+                  <div>{isStudent ? "Student" : (formData.userType||"-")}</div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
 
-                  {specificRoom && showFloorDropdown && (
-                    <><div>Floor</div><div>{formData.floor || "-"}</div></>
+                  {specificRoom&&showFloorDropdown && (
+                    <><div>Floor</div><div>{formData.floor||"-"}</div></>
                   )}
-                  {specificRoom && (showRoomDropdown || needsOtherRoomText) && (
+                  {specificRoom&&(showRoomDropdown||needsOtherRoomText) && (
                     <><div>Room</div><div>
-                      {formData.room === "Other" && formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room || "-"}
+                      {formData.room==="Other"&&formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room||"-"}
                     </div></>
                   )}
-                  {specificRoom && needsOtherRoom && (
-                    <><div>Spot</div><div>{formData.otherRoom || "-"}</div></>
+                  {specificRoom&&needsOtherRoom && (
+                    <><div>Spot</div><div>{formData.otherRoom||"-"}</div></>
                   )}
 
-                  <div>College</div>
-                  {/* ✅ FIXED: show college + year in summary */}
-                  <div>{formData.college ? `${formData.college}${formData.year ? ` - ${formData.year}` : ""}` : "-"}</div>
+                  {/* ✅ Only show college in summary for students */}
+                  {isStudent && (
+                    <>
+                      <div>College</div>
+                      <div>{formData.college ? `${formData.college}${formData.year ? ` - ${formData.year}` : ""}` : "-"}</div>
+                    </>
+                  )}
                   <div>Photo</div>
                   <div>{formData.ImageFile ? "Attached" : "None"}</div>
                 </div>
@@ -988,7 +977,7 @@ export default function Create() {
             }
           >
             {message && (
-              <div className={`create-scope__message ${messageType === "error" ? "is-error" : messageType === "success" ? "is-success" : "is-info"}`}
+              <div className={`create-scope__message ${messageType==="error" ? "is-error" : messageType==="success" ? "is-success" : "is-info"}`}
                 role="status" aria-live="polite">
                 {message}
               </div>
@@ -1007,24 +996,9 @@ export default function Create() {
                   required autoComplete="email"
                   readOnly={Boolean(currentUserEmail)}
                 />
-
-
-                {/* ✅ FIXED: Two separate selects with correct names */}
-                <div className="create-scope__group">
-                  <label>College &amp; Year <RequiredStar value={formData.college && formData.year ? "filled" : ""} /></label>
-                  <select name="college" value={formData.college} onChange={handleChange} required>
-                    <option value="">Select college</option>
-                    {COLLEGE_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <select name="year" value={formData.year} onChange={handleChange} required style={{ marginTop: 8 }}>
-                    <option value="">Select year</option>
-                    {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </div>
-                
               </div>
 
-              {/* Subject & College/Year */}
+              {/* Subject */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
                   <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
@@ -1034,9 +1008,27 @@ export default function Create() {
                     value={formData.heading} onChange={handleChange} required
                   />
                 </div>
+
+                {/* ✅ College & Year — only shown for students */}
+                {isStudent ? (
+                  <div className="create-scope__group">
+                    <label>College &amp; Year <RequiredStar value={formData.college&&formData.year ? "filled" : ""} /></label>
+                    <select name="college" value={formData.college} onChange={handleChange} required>
+                      <option value="">Select college</option>
+                      {collegeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select name="year" value={formData.year} onChange={handleChange} required style={{ marginTop: 8 }}>
+                      <option value="">Select year</option>
+                      {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  // ✅ Empty placeholder column to keep grid alignment
+                  <div />
+                )}
               </div>
 
-              {/* ✅ FIXED: User Type — auto-badge for students, dropdown for others */}
+              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
               <div className="create-scope__group">
                 <label htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
                 {isStudent ? (
@@ -1053,10 +1045,11 @@ export default function Create() {
                     </p>
                   </>
                 ) : (
+                  // ✅ Staff and Faculty only — no Student option
                   <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
                     <option value="">Select user type</option>
-                    <option value="Student">Student</option>
-                    <option value="Staff/Faculty">Staff / Faculty</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Faculty">Faculty</option>
                   </select>
                 )}
               </div>
@@ -1077,7 +1070,7 @@ export default function Create() {
                 <div className="create-scope__group">
                   <div className="concern-label-wrapper">
                     <label htmlFor="concern">Concern Type <RequiredStar value={formData.concern} /></label>
-                    {formData.concern && CONCERN_INFO[formData.concern] && (
+                    {formData.concern&&CONCERN_INFO[formData.concern] && (
                       <InfoTooltip text={CONCERN_INFO[formData.concern]} />
                     )}
                   </div>
@@ -1094,7 +1087,7 @@ export default function Create() {
                 {showSubConcern && (
                   <div className="create-scope__group">
                     <label htmlFor="subConcern">Concern Category <RequiredStar value={formData.subConcern} /></label>
-                    {formData.subConcern === "Other" ? (
+                    {formData.subConcern==="Other" ? (
                       <div style={{ display: "flex", gap: "8px" }}>
                         <select
                           id="subConcern" name="subConcern"
@@ -1232,7 +1225,7 @@ export default function Create() {
                   />
                   <p className="create-scope__hint">
                     Describe the specific location within{" "}
-                    {formData.building === "Other" ? "the building" : formData.building}.
+                    {formData.building==="Other" ? "the building" : formData.building}.
                   </p>
                 </div>
               )}
@@ -1275,7 +1268,7 @@ export default function Create() {
               <button
                 className="create-scope__btn create-scope__btn--primary create-scope__w-full"
                 type="submit"
-                disabled={submitting || !readyToSubmit || hasProfanity}
+                disabled={submitting||!readyToSubmit||hasProfanity}
               >
                 {submitting ? "Submitting..." : "Submit report"}
               </button>
@@ -1285,27 +1278,27 @@ export default function Create() {
       </div>
 
       {/* ── Confirmation Modal ── */}
-      {isConfirming && similarReportsCount > 0 && (
+      {isConfirming&&similarReportsCount>0 && (
         <div className="confirm-overlay">
           <div className="card">
             <p className="cookieHeading">Similar report exists</p>
             <p className="cookieDescription">
-              There {similarReportsCount === 1 ? "is" : "are"}{" "}
+              There {similarReportsCount===1 ? "is" : "are"}{" "}
               <strong>{similarReportsCount}</strong> similar report
-              {similarReportsCount === 1 ? "" : "s"} about the same building, room, and concern.
+              {similarReportsCount===1 ? "" : "s"} about the same building, room, and concern.
 
-              {similarStatus && similarStatus !== "Pending" && (
+              {similarStatus&&similarStatus!=="Pending" && (
                 <>
                   <br /><br />
                   The existing report is currently{" "}
-                  <strong style={{ color: STATUS_COLOR[similarStatus] ?? "inherit" }}>
+                  <strong style={{ color: STATUS_COLOR[similarStatus]??"inherit" }}>
                     {similarStatus}
                   </strong>
-                  {similarStatus === "Resolved"
+                  {similarStatus==="Resolved"
                     ? " — this issue may already be fixed."
-                    : similarStatus === "In Progress"
+                    : similarStatus==="In Progress"
                     ? " — staff are already working on it."
-                    : similarStatus === "Waiting for Materials"
+                    : similarStatus==="Waiting for Materials"
                     ? " — staff are awaiting materials."
                     : "."}
                   {" "}Submitting a duplicate may be unnecessary.
@@ -1320,7 +1313,7 @@ export default function Create() {
                 Submit
               </button>
               <button type="button" className="declineButton"
-                onClick={() => { setIsConfirming(false); showMsg("info", "Submission cancelled. You can adjust your report and try again."); }}>
+                onClick={() => { setIsConfirming(false); showMsg("info","Submission cancelled. You can adjust your report and try again."); }}>
                 Cancel
               </button>
             </div>
