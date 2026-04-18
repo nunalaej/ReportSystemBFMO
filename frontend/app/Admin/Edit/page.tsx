@@ -37,20 +37,9 @@ const IconCheck = () => (
     <polyline points="20 6 9 17 4 12"/>
   </svg>
 );
-const IconBell = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-  </svg>
-);
 const IconClock = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
-const IconZap = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
   </svg>
 );
 
@@ -59,16 +48,16 @@ type BuildingMeta  = { id: string; name: string; floors: number; roomsPerFloor: 
 type ConcernMeta   = { id: string; label: string; subconcerns: string[]; };
 type StatusMeta    = { id: string; name: string; color: string; };
 type PriorityMeta  = { id: string; name: string; color: string; notifyInterval?: string; };
+type NotifRule     = { name: string; color: string; maxDuration: string; schedule: { phase: string; interval: string }[]; unfinishedNote: string; };
 type StaffMember   = {
   _id?: string; name: string; email: string; phone?: string;
   position: string; disciplines: string[]; active: boolean;
   notes?: string; clerkUsername?: string; clerkId?: string;
 };
 
-/* ─────────────────────────── Constants ──────────────────────── */
-const POSITION_OPTIONS = ["Head Engineer", "Staff Engineer", "Supervisor", "Technician", "Other"];
-
-const POSITION_COLORS: Record<string, { bg: string; text: string }> = {
+/* ─────────────────────────── Default position colors ───────── */
+// Used as a fallback for positions not in the dynamic map.
+const POSITION_COLOR_DEFAULTS: Record<string, { bg: string; text: string }> = {
   "Head Engineer":  { bg: "#fef3c7", text: "#92400e" },
   "Staff Engineer": { bg: "#dbeafe", text: "#1e40af" },
   "Supervisor":     { bg: "#f3e8ff", text: "#6b21a8" },
@@ -76,14 +65,33 @@ const POSITION_COLORS: Record<string, { bg: string; text: string }> = {
   "Other":          { bg: "#f1f5f9", text: "#475569" },
 };
 
-const EMPTY_STAFF: Omit<StaffMember, "_id"> = {
+// Cycle of soft badge colours for dynamically-added positions.
+const POSITION_COLOR_CYCLE = [
+  { bg: "#fef3c7", text: "#92400e" },
+  { bg: "#dbeafe", text: "#1e40af" },
+  { bg: "#f3e8ff", text: "#6b21a8" },
+  { bg: "#dcfce7", text: "#166534" },
+  { bg: "#f1f5f9", text: "#475569" },
+  { bg: "#fce7f3", text: "#9d174d" },
+  { bg: "#ecfdf5", text: "#065f46" },
+  { bg: "#fff7ed", text: "#9a3412" },
+];
+
+function getPositionStyle(position: string, positionOptions: string[]): { bg: string; text: string } {
+  if (POSITION_COLOR_DEFAULTS[position]) return POSITION_COLOR_DEFAULTS[position];
+  const idx = positionOptions.indexOf(position);
+  return POSITION_COLOR_CYCLE[idx >= 0 ? idx % POSITION_COLOR_CYCLE.length : 0];
+}
+
+/* ─────────────────────────── Default data ──────────────────── */
+const DEFAULT_POSITION_OPTIONS: string[] = ["Head Engineer", "Staff Engineer", "Supervisor", "Technician", "Other"];
+const DEFAULT_DISCIPLINE_OPTIONS: string[] = ["Electrical", "Civil", "Mechanical", "Safety Hazard"];
+
+const DEFAULT_EMPTY_STAFF = (positionOptions: string[]): Omit<StaffMember, "_id"> => ({
   name: "", email: "", phone: "",
-  position: "Staff Engineer",
-  disciplines: [], active: true, notes: "",
-  clerkUsername: "",
-};
-
-
+  position: positionOptions[1] || positionOptions[0] || "Staff Engineer",
+  disciplines: [], active: true, notes: "", clerkUsername: "",
+});
 
 const DEFAULT_BUILDINGS: BuildingMeta[] = [
   { id: "ayuntamiento", name: "Ayuntamiento", floors: 4, roomsPerFloor: 20, hasRooms: false },
@@ -121,6 +129,44 @@ const DEFAULT_PRIORITIES: PriorityMeta[] = [
 const DEFAULT_COLLEGES:    string[] = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
 const DEFAULT_YEAR_LEVELS: string[] = ["1st Year","2nd Year","3rd Year","4th Year"];
 
+const DEFAULT_NOTIF_RULES: NotifRule[] = [
+  {
+    name: "Urgent", color: "#a40010", maxDuration: "1 Day",
+    schedule: [
+      { phase: "Immediately",   interval: "Every 1 hour" },
+      { phase: "After deadline", interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name: "High", color: "#ce4f01", maxDuration: "1 Week (7 days)",
+    schedule: [
+      { phase: "Days 1–6",      interval: "Every 1 day"   },
+      { phase: "Last 12 hours", interval: "Every 4 hours" },
+      { phase: "After deadline", interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name: "Medium", color: "#FFC107", maxDuration: "1 Month (30 days)",
+    schedule: [
+      { phase: "Days 1–29",     interval: "Every 3 days"  },
+      { phase: "Last 24 hours", interval: "Every 8 hours" },
+      { phase: "After deadline", interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+  {
+    name: "Low", color: "#28A745", maxDuration: "3 Months (90 days)",
+    schedule: [
+      { phase: "Days 1–87",  interval: "Every 7 days" },
+      { phase: "Last 3 days", interval: "Every 1 day" },
+      { phase: "After deadline", interval: "Escalate → Unfinished, notify every 3 days" },
+    ],
+    unfinishedNote: "Staff notified every 3 days until task is closed.",
+  },
+];
+
 const NOTIFY_INTERVAL_OPTIONS = [
   { value: "daily",   label: "Every Day"      },
   { value: "1week",   label: "Every Week"     },
@@ -130,58 +176,6 @@ const NOTIFY_INTERVAL_OPTIONS = [
 const NOTIFY_INTERVAL_LABELS: Record<string, string> = {
   daily: "Every Day", "1week": "Every Week", "1month": "Every Month", "3months": "Every 3 Months",
 };
-
-/**
- * Fixed notification behaviour per priority level.
- * These reflect the actual notificationJob.js logic and are
- * displayed in the Priority Notification Rules panel (read-only).
- */
-const PRIORITY_NOTIFICATION_RULES = [
-  {
-    name:        "Urgent",
-    color:       "#a40010",
-    maxDuration: "1 Day",
-    schedule: [
-      { phase: "Immediately",              interval: "Every 1 hour" },
-      { phase: "After deadline",           interval: "Escalate → Unfinished, notify every 3 days" },
-    ],
-    unfinishedNote: "Staff notified every 3 days until task is closed.",
-  },
-  {
-    name:        "High",
-    color:       "#ce4f01",
-    maxDuration: "1 Week (7 days)",
-    schedule: [
-      { phase: "Days 1–6",                interval: "Every 1 day"  },
-      { phase: "Last 12 hours",           interval: "Every 4 hours" },
-      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
-    ],
-    unfinishedNote: "Staff notified every 3 days until task is closed.",
-  },
-  {
-    name:        "Medium",
-    color:       "#FFC107",
-    maxDuration: "1 Month (30 days)",
-    schedule: [
-      { phase: "Days 1–29",               interval: "Every 3 days"  },
-      { phase: "Last 24 hours",           interval: "Every 8 hours" },
-      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
-    ],
-    unfinishedNote: "Staff notified every 3 days until task is closed.",
-  },
-  {
-    name:        "Low",
-    color:       "#28A745",
-    maxDuration: "3 Months (90 days)",
-    schedule: [
-      { phase: "Days 1–87",               interval: "Every 7 days"  },
-      { phase: "Last 3 days",             interval: "Every 1 day"  },
-      { phase: "After deadline",          interval: "Escalate → Unfinished, notify every 3 days" },
-    ],
-    unfinishedNote: "Staff notified every 3 days until task is closed.",
-  },
-];
-
 const FLOOR_ORDINALS = ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"].map(n => `${n} Floor`);
 
 /* ─────────────────────────── Color palette ──────────────────── */
@@ -255,13 +249,13 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (c: string)
   );
 }
 
-/* ─────────────────────────── API ────────────────────────────── */
+/* ─────────────────────────── API constants ─────────────────── */
 const API_BASE  = (process.env.NEXT_PUBLIC_API_BASE?.replace(/\/+$/, "")) || "http://localhost:3000";
 const META_URL  = `${API_BASE}/api/meta`;
 const STAFF_URL = `${API_BASE}/api/staff`;
 const norm = (v: unknown) => v == null ? "" : String(v).trim().toLowerCase();
 
-/* ─────────────────────────── Helpers ───────────────────────── */
+/* ─────────────────────────── Normalise helpers ─────────────── */
 function normaliseRPF(raw: unknown, floors: number): number[] {
   if (Array.isArray(raw)) {
     const arr = (raw as unknown[]).map(v => { const n = parseInt(String(v), 10); return isNaN(n) || n <= 0 ? 1 : n; });
@@ -294,12 +288,11 @@ function normConcerns(raw: unknown[]): ConcernMeta[] {
 function normStatuses(raw: unknown[]): StatusMeta[] {
   return raw.map((s, idx) => { const o = s as any; return { id: String(o?.id || idx + 1), name: String(o?.name || "").trim() || "Unnamed", color: String(o?.color || "#6C757D").trim() }; });
 }
-// REPLACE normPriorities helper:
 function normPriorities(raw: unknown[]): PriorityMeta[] {
+  const validIntervals = ["daily", "1week", "1month", "3months"];
   return raw.map((p, idx) => {
     const o = p as any;
     const ni = String(o?.notifyInterval ?? "").trim();
-    const validIntervals = ["daily", "1week", "1month", "3months"];
     return {
       id:             String(o?.id || idx + 1).trim(),
       name:           String(o?.name || "").trim() || "Unnamed",
@@ -307,6 +300,15 @@ function normPriorities(raw: unknown[]): PriorityMeta[] {
       notifyInterval: validIntervals.includes(ni) ? ni : "1month",
     };
   });
+}
+function normNotifRules(raw: unknown[]): NotifRule[] {
+  return raw.map((r: any) => ({
+    name:           String(r?.name || "").trim() || "Unnamed",
+    color:          String(r?.color || "#6C757D").trim(),
+    maxDuration:    String(r?.maxDuration || "").trim(),
+    schedule:       Array.isArray(r?.schedule) ? r.schedule.map((s: any) => ({ phase: String(s?.phase || ""), interval: String(s?.interval || "") })) : [],
+    unfinishedNote: String(r?.unfinishedNote || "").trim(),
+  }));
 }
 
 /* ─────────────────────────── Panel ─────────────────────────── */
@@ -331,7 +333,9 @@ function Panel({ title, subtitle, badge, children, defaultOpen = false }: {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════════════════ */
 export default function AdminEditPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
@@ -342,8 +346,7 @@ export default function AdminEditPage() {
   const [concerns,   setConcerns]   = useState<ConcernMeta[]>(DEFAULT_CONCERNS);
   const [statuses,   setStatuses]   = useState<StatusMeta[]>(DEFAULT_STATUSES);
   const [priorities, setPriorities] = useState<PriorityMeta[]>(DEFAULT_PRIORITIES);
-  // Replace the const with a state
-const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
+  const [notifRules, setNotifRules] = useState<NotifRule[]>(DEFAULT_NOTIF_RULES);
   const [loading,    setLoading]    = useState(false);
   const [saving,     setSaving]     = useState(false);
   const [error,      setError]      = useState("");
@@ -356,6 +359,14 @@ const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
   const [newYearLevel,     setNewYearLevel]     = useState("");
   const [editCollegeIdx,   setEditCollegeIdx]   = useState<number | null>(null);
   const [editYearLevelIdx, setEditYearLevelIdx] = useState<number | null>(null);
+
+  /* ── Dynamic staff options ── */
+  const [positionOptions,   setPositionOptions]   = useState<string[]>(DEFAULT_POSITION_OPTIONS);
+  const [disciplineOptions, setDisciplineOptions] = useState<string[]>(DEFAULT_DISCIPLINE_OPTIONS);
+  const [newPosition,       setNewPosition]       = useState("");
+  const [newDiscipline,     setNewDiscipline]     = useState("");
+  const [editPositionIdx,   setEditPositionIdx]   = useState<number | null>(null);
+  const [editDisciplineIdx, setEditDisciplineIdx] = useState<number | null>(null);
 
   /* ── Selectors ── */
   const [selBuildingId, setSelBuildingId] = useState("");
@@ -373,7 +384,7 @@ const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
   const [staffSaving,    setStaffSaving]    = useState(false);
   const [discFilter,     setDiscFilter]     = useState("All");
   const [showAddStaff,   setShowAddStaff]   = useState(false);
-  const [newStaff,       setNewStaff]       = useState<Omit<StaffMember, "_id">>(EMPTY_STAFF);
+  const [newStaff,       setNewStaff]       = useState<Omit<StaffMember, "_id">>(() => DEFAULT_EMPTY_STAFF(DEFAULT_POSITION_OPTIONS));
   const [editStaffId,    setEditStaffId]    = useState<string | null>(null);
   const [editStaffDraft, setEditStaffDraft] = useState<StaffMember | null>(null);
 
@@ -382,16 +393,6 @@ const [notifRules, setNotifRules] = useState(PRIORITY_NOTIFICATION_RULES);
   const [clerkResult,   setClerkResult]   = useState<{ success: boolean; message: string } | null>(null);
   const [newClerkPw,    setNewClerkPw]    = useState("");
   const [showClerkForm, setShowClerkForm] = useState<string | null>(null);
-
-const disciplineOptions = useMemo(() => {
-  const fromConcerns = concerns
-    .map(c => c.label)
-    .filter(l => l.toLowerCase() !== "other");
-  const fromStaff = staffList.flatMap(s => s.disciplines);
-  const merged = Array.from(new Set([...fromConcerns, ...fromStaff]))
-    .filter(l => l.toLowerCase() !== "other");
-  return merged;
-}, [concerns, staffList]);
 
   /* ── Auth ── */
   const role = useMemo(() => {
@@ -417,7 +418,7 @@ const disciplineOptions = useMemo(() => {
       if (!res.ok) throw new Error("Failed to load options from server.");
       const data = await res.json().catch(() => null);
       if (!data)  throw new Error("Empty meta from server.");
-      
+
       const rawB = Array.isArray(data.buildings)  ? data.buildings  : [];
       const rawC = Array.isArray(data.concerns)   ? data.concerns   : [];
       const rawS = Array.isArray(data.statuses)   ? data.statuses   : [];
@@ -430,15 +431,21 @@ const disciplineOptions = useMemo(() => {
       if (iB.length > 0 && !selBuildingId) setSelBuildingId(iB[0].id);
       if (iC.length > 0 && !selConcernId)  setSelConcernId(iC[0].id);
       if (iS.length > 0 && !selStatusId)   setSelStatusId(iS[0].id);
-      if (Array.isArray(data.colleges)   && data.colleges.length)   setColleges(data.colleges);
-      if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
-      if (Array.isArray(data.notifRules) && data.notifRules.length) setNotifRules(data.notifRules);
+
+      if (Array.isArray(data.colleges)         && data.colleges.length)         setColleges(data.colleges);
+      if (Array.isArray(data.yearLevels)        && data.yearLevels.length)       setYearLevels(data.yearLevels);
+      if (Array.isArray(data.notifRules)        && data.notifRules.length)       setNotifRules(normNotifRules(data.notifRules));
+      if (Array.isArray(data.positionOptions)   && data.positionOptions.length)  setPositionOptions(data.positionOptions);
+      if (Array.isArray(data.disciplineOptions) && data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
     } catch (err: any) {
       setError(err?.message || "Could not load. Using defaults.");
       if (mode === "preferDefaults") {
         setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS);
         setStatuses(DEFAULT_STATUSES);   setPriorities(DEFAULT_PRIORITIES);
         setColleges(DEFAULT_COLLEGES);   setYearLevels(DEFAULT_YEAR_LEVELS);
+        setNotifRules(DEFAULT_NOTIF_RULES);
+        setPositionOptions(DEFAULT_POSITION_OPTIONS);
+        setDisciplineOptions(DEFAULT_DISCIPLINE_OPTIONS);
       }
     } finally { setLoading(false); }
   }, [selBuildingId, selConcernId, selStatusId]);
@@ -482,27 +489,34 @@ const disciplineOptions = useMemo(() => {
 
     const cleanS = statuses.map((s, idx)   => { const name = String(s.name || "").trim(); if (!name) return null; return { id: String(s.id || idx + 1).trim(), name, color: String(s.color || "#6C757D").trim() }; }).filter(Boolean) as StatusMeta[];
     const cleanP = priorities.map((p, idx) => { const name = String(p.name || "").trim(); if (!name) return null; return { id: String(p.id || idx + 1).trim(), name, color: String(p.color || "#6C757D").trim(), notifyInterval: String(p.notifyInterval || "1month") }; }).filter(Boolean) as PriorityMeta[];
-    const cleanColleges   = colleges.map(c => String(c).trim()).filter(Boolean);
-    const cleanYearLevels = yearLevels.map(y => String(y).trim()).filter(Boolean);
 
-    
     try {
       const res = await fetch(META_URL, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ 
-  buildings: cleanB, concerns: cleanC, statuses: cleanS, 
-  priorities: cleanP, colleges: cleanColleges, 
-  yearLevels: cleanYearLevels, notifRules: notifRules  // ← add this
-}),      });
+        body:    JSON.stringify({
+          buildings:        cleanB,
+          concerns:         cleanC,
+          statuses:         cleanS,
+          priorities:       cleanP,
+          colleges:         colleges.map(c => String(c).trim()).filter(Boolean),
+          yearLevels:       yearLevels.map(y => String(y).trim()).filter(Boolean),
+          notifRules,
+          positionOptions:  positionOptions.map(p => String(p).trim()).filter(Boolean),
+          disciplineOptions: disciplineOptions.map(d => String(d).trim()).filter(Boolean),
+        }),
+      });
       if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Failed to save.");
       const data = await res.json().catch(() => null);
-      if (data?.buildings)  setBuildings(normBuildings(data.buildings));
-      if (data?.concerns)   setConcerns(normConcerns(data.concerns));
-      if (data?.statuses)   setStatuses(normStatuses(data.statuses));
-      if (data?.priorities) setPriorities(normPriorities(data.priorities));
-      if (Array.isArray(data?.colleges)   && data.colleges.length)   setColleges(data.colleges);
-      if (Array.isArray(data?.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
+      if (data?.buildings)         setBuildings(normBuildings(data.buildings));
+      if (data?.concerns)          setConcerns(normConcerns(data.concerns));
+      if (data?.statuses)          setStatuses(normStatuses(data.statuses));
+      if (data?.priorities)        setPriorities(normPriorities(data.priorities));
+      if (Array.isArray(data?.colleges)          && data.colleges.length)          setColleges(data.colleges);
+      if (Array.isArray(data?.yearLevels)         && data.yearLevels.length)        setYearLevels(data.yearLevels);
+      if (Array.isArray(data?.notifRules)         && data.notifRules.length)        setNotifRules(normNotifRules(data.notifRules));
+      if (Array.isArray(data?.positionOptions)    && data.positionOptions.length)   setPositionOptions(data.positionOptions);
+      if (Array.isArray(data?.disciplineOptions)  && data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
       setSaveMsg("All changes saved successfully.");
     } catch (err: any) { setError(err?.message || "Failed to save."); }
     finally { setSaving(false); }
@@ -567,21 +581,13 @@ body: JSON.stringify({
     setStatuses(rem); setSelStatusId(rem[0]?.id || "");
   };
 
-  
-
   /* ── Priority handlers ── */
-// The button onClick already sets the correct value, but verify the initial draft copy:
-// In startEditPri, change { ...p } to explicitly copy notifyInterval:
-const startEditPri = (p: PriorityMeta) => {
-  setEditPriId(p.id);
-  setEditPriDraft({
-    id:             p.id,
-    name:           p.name,
-    color:          p.color,
-    notifyInterval: p.notifyInterval || "1month",
-  });
-  setShowAddPri(false);
-};  const cancelEditPri = ()                => { setEditPriId(null);  setEditPriDraft(null); };
+  const startEditPri = (p: PriorityMeta) => {
+    setEditPriId(p.id);
+    setEditPriDraft({ id: p.id, name: p.name, color: p.color, notifyInterval: p.notifyInterval || "1month" });
+    setShowAddPri(false);
+  };
+  const cancelEditPri = () => { setEditPriId(null); setEditPriDraft(null); };
   const saveEditPri   = () => {
     if (!editPriDraft) return;
     const prev = priorities.find(p => p.id === editPriDraft.id);
@@ -603,12 +609,29 @@ const startEditPri = (p: PriorityMeta) => {
     setShowAddPri(false); setNewPriDraft({ id: "", name: "", color: "#6C757D", notifyInterval: "1month" });
   };
 
+  /* ── Notif rule helpers ── */
+  const updateRule = (rIdx: number, patch: Partial<NotifRule>) =>
+    setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, ...patch } : r));
+  const updateRuleStep = (rIdx: number, sIdx: number, patch: Partial<{ phase: string; interval: string }>) =>
+    setNotifRules(p => p.map((r, i) => {
+      if (i !== rIdx) return r;
+      const schedule = r.schedule.map((s, j) => j === sIdx ? { ...s, ...patch } : s);
+      return { ...r, schedule };
+    }));
+  const addRuleStep = (rIdx: number) =>
+    setNotifRules(p => p.map((r, i) => i !== rIdx ? r : { ...r, schedule: [...r.schedule, { phase: "", interval: "" }] }));
+  const removeRuleStep = (rIdx: number, sIdx: number) =>
+    setNotifRules(p => p.map((r, i) => i !== rIdx ? r : { ...r, schedule: r.schedule.filter((_, j) => j !== sIdx) }));
+  const addRule = () =>
+    setNotifRules(p => [...p, { name: "New Priority", color: "#6C757D", maxDuration: "1 Week", schedule: [{ phase: "", interval: "" }], unfinishedNote: "Staff notified every 3 days." }]);
+  const removeRule = (rIdx: number) =>
+    setNotifRules(p => p.filter((_, i) => i !== rIdx));
+
   /* ── Staff helpers ── */
   const toggleDisc = (disc: string, current: string[], setter: (fn: (d: any) => any) => void) => {
     const next = current.includes(disc) ? current.filter(d => d !== disc) : [...current, disc];
     setter((d: any) => ({ ...d, disciplines: next }));
   };
-
   const addStaff = async () => {
     if (!newStaff.name.trim()) return;
     try {
@@ -617,12 +640,12 @@ const startEditPri = (p: PriorityMeta) => {
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.message || "Failed.");
       setStaffList(p => [...p, data.staff]);
-      setNewStaff(EMPTY_STAFF); setShowAddStaff(false);
+      setNewStaff(DEFAULT_EMPTY_STAFF(positionOptions));
+      setShowAddStaff(false);
       addNotification(`Staff "${newStaff.name}" added.`, "staff");
     } catch (err: any) { setStaffError(err.message || "Failed to add staff."); }
     finally { setStaffSaving(false); }
   };
-
   const saveStaff = async () => {
     if (!editStaffDraft?._id) return;
     try {
@@ -636,7 +659,6 @@ const startEditPri = (p: PriorityMeta) => {
     } catch (err: any) { setStaffError(err.message || "Failed to save."); }
     finally { setStaffSaving(false); }
   };
-
   const deleteStaff = async (m: StaffMember) => {
     if (!m._id) return;
     try {
@@ -649,8 +671,6 @@ const startEditPri = (p: PriorityMeta) => {
     } catch { setStaffError("Failed to delete."); }
     finally { setStaffSaving(false); }
   };
-
-  /* ── Clerk account creation ── */
   const createClerkAccount = async (member: StaffMember) => {
     if (!member.clerkUsername?.trim() || !newClerkPw.trim()) {
       setClerkResult({ success: false, message: "Username and password are required." }); return;
@@ -676,7 +696,9 @@ const startEditPri = (p: PriorityMeta) => {
   if (!isLoaded || !isSignedIn) return <div className="admin-edit__wrapper"><p>Checking permissions…</p></div>;
   if (role !== "admin")         return <div className="admin-edit__wrapper"><p>Access denied.</p></div>;
 
-  /* ════════════════════════════════════════════════════════════ */
+  /* ════════════════════════════════════════════════════════════
+     RENDER
+  ════════════════════════════════════════════════════════════ */
   return (
     <div className="admin-edit admin-edit__wrapper">
       <main className="admin-edit__layout">
@@ -696,6 +718,9 @@ const startEditPri = (p: PriorityMeta) => {
                 setBuildings(DEFAULT_BUILDINGS); setConcerns(DEFAULT_CONCERNS);
                 setStatuses(DEFAULT_STATUSES);   setPriorities(DEFAULT_PRIORITIES);
                 setColleges(DEFAULT_COLLEGES);   setYearLevels(DEFAULT_YEAR_LEVELS);
+                setNotifRules(DEFAULT_NOTIF_RULES);
+                setPositionOptions(DEFAULT_POSITION_OPTIONS);
+                setDisciplineOptions(DEFAULT_DISCIPLINE_OPTIONS);
                 setSaveMsg(""); setError("");
                 setSelBuildingId(DEFAULT_BUILDINGS[0].id);
                 setSelConcernId(DEFAULT_CONCERNS[0].id);
@@ -933,115 +958,77 @@ const startEditPri = (p: PriorityMeta) => {
             </Panel>
 
             {/* ══ PRIORITY NOTIFICATION RULES ══ */}
-<Panel title="Priority Notification Rules" subtitle="Configure escalation schedules per priority">
-  <div className="admin-edit__notif-rules-grid">
-    {notifRules.map((rule, rIdx) => (
-      <div key={rule.name} className="admin-edit__notif-rule-card" style={{ "--rule-color": rule.color } as React.CSSProperties}>
-        
-        {/* Header — name, color, max duration */}
-        <div className="admin-edit__notif-rule-header" style={{ gap: 8, flexWrap: "wrap" }}>
-          <input
-            type="text"
-            className="admin-edit__input"
-            style={{ width: 100, fontWeight: 700 }}
-            value={rule.name}
-            onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, name: e.target.value } : r))}
-          />
-          <ColorPicker
-            value={rule.color}
-            onChange={color => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, color } : r))}
-          />
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <IconClock />
-            <span style={{ fontSize: 12, color: "#6b7280" }}>Max:</span>
-            <input
-              type="text"
-              className="admin-edit__input"
-              style={{ width: 160 }}
-              value={rule.maxDuration}
-              onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, maxDuration: e.target.value } : r))}
-            />
-          </div>
-        </div>
+            <Panel title="Priority Notification Rules" subtitle="Configure escalation schedules and intervals per priority level">
+              <p className="admin-edit__panel-subtitle" style={{ marginBottom: 16, fontSize: 12 }}>
+                ⚠️ These rules are read by the server-side notification job. Update them here, then click <strong>Save All Changes</strong> to persist.
+              </p>
+              <div className="admin-edit__notif-rules-grid">
+                {notifRules.map((rule, rIdx) => (
+                  <div key={rIdx} className="admin-edit__notif-rule-card" style={{ "--rule-color": rule.color } as React.CSSProperties}>
 
-        {/* Schedule steps */}
-        <div className="admin-edit__notif-rule-timeline" style={{ marginTop: 12 }}>
-          <label className="admin-edit__label">Schedule Steps</label>
-          {rule.schedule.map((step, sIdx) => (
-            <div key={sIdx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-              <input
-                type="text"
-                className="admin-edit__input"
-                placeholder="Phase (e.g. Days 1–6)"
-                value={step.phase}
-                onChange={e => setNotifRules(p => p.map((r, i) => {
-                  if (i !== rIdx) return r;
-                  const s = [...r.schedule];
-                  s[sIdx] = { ...s[sIdx], phase: e.target.value };
-                  return { ...r, schedule: s };
-                }))}
-              />
-              <input
-                type="text"
-                className="admin-edit__input"
-                placeholder="Interval (e.g. Every 1 day)"
-                value={step.interval}
-                onChange={e => setNotifRules(p => p.map((r, i) => {
-                  if (i !== rIdx) return r;
-                  const s = [...r.schedule];
-                  s[sIdx] = { ...s[sIdx], interval: e.target.value };
-                  return { ...r, schedule: s };
-                }))}
-              />
-              <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
-                onClick={() => setNotifRules(p => p.map((r, i) => {
-                  if (i !== rIdx) return r;
-                  return { ...r, schedule: r.schedule.filter((_, si) => si !== sIdx) };
-                }))}>
-                <IconTrash />
+                    {/* Card header — name, color, max duration */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                      <input
+                        type="text"
+                        className="admin-edit__input"
+                        style={{ width: 110, fontWeight: 700 }}
+                        value={rule.name}
+                        onChange={e => updateRule(rIdx, { name: e.target.value })}
+                      />
+                      <ColorPicker value={rule.color} onChange={color => updateRule(rIdx, { color })} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <IconClock />
+                        <span style={{ fontSize: 12, color: "#6b7280", whiteSpace: "nowrap" }}>Max:</span>
+                        <input
+                          type="text"
+                          className="admin-edit__input"
+                          style={{ width: 150 }}
+                          value={rule.maxDuration}
+                          onChange={e => updateRule(rIdx, { maxDuration: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Schedule steps */}
+                    <div style={{ marginBottom: 10 }}>
+                      <label className="admin-edit__label" style={{ marginBottom: 6 }}>Schedule Steps</label>
+                      {rule.schedule.map((step, sIdx) => (
+                        <div key={sIdx} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
+                          <input type="text" className="admin-edit__input" placeholder="Phase (e.g. Days 1–6)"
+                            value={step.phase} onChange={e => updateRuleStep(rIdx, sIdx, { phase: e.target.value })} />
+                          <input type="text" className="admin-edit__input" placeholder="Interval (e.g. Every 1 day)"
+                            value={step.interval} onChange={e => updateRuleStep(rIdx, sIdx, { interval: e.target.value })} />
+                          <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                            onClick={() => removeRuleStep(rIdx, sIdx)} title="Remove step"><IconTrash /></button>
+                        </div>
+                      ))}
+                      <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 4 }}
+                        onClick={() => addRuleStep(rIdx)}>
+                        + Add Step
+                      </button>
+                    </div>
+
+                    {/* Unfinished note */}
+                    <div className="admin-edit__field-group">
+                      <label className="admin-edit__label">Unfinished Note</label>
+                      <input type="text" className="admin-edit__input"
+                        value={rule.unfinishedNote}
+                        onChange={e => updateRule(rIdx, { unfinishedNote: e.target.value })} />
+                    </div>
+
+                    {/* Delete rule */}
+                    <div style={{ marginTop: 12, textAlign: "right" }}>
+                      <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRule(rIdx)}>
+                        Delete Rule
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="btn btn-secondary" style={{ marginTop: 16 }} onClick={addRule}>
+                + Add Rule
               </button>
-            </div>
-          ))}
-          <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 4 }}
-            onClick={() => setNotifRules(p => p.map((r, i) => i !== rIdx ? r : {
-              ...r, schedule: [...r.schedule, { phase: "", interval: "" }]
-            }))}>
-            + Add Step
-          </button>
-        </div>
-
-        {/* Unfinished note */}
-        <div className="admin-edit__field-group" style={{ marginTop: 12 }}>
-          <label className="admin-edit__label">Unfinished Note</label>
-          <input
-            type="text"
-            className="admin-edit__input"
-            value={rule.unfinishedNote}
-            onChange={e => setNotifRules(p => p.map((r, i) => i === rIdx ? { ...r, unfinishedNote: e.target.value } : r))}
-          />
-        </div>
-
-        {/* Delete rule */}
-        <div style={{ marginTop: 10, textAlign: "right" }}>
-          <button type="button" className="btn btn-danger"
-            onClick={() => setNotifRules(p => p.filter((_, i) => i !== rIdx))}>
-            Delete Rule
-          </button>
-        </div>
-      </div>
-    ))}
-  </div>
-
-  {/* Add new rule */}
-  <button type="button" className="btn btn-secondary" style={{ marginTop: 16 }}
-    onClick={() => setNotifRules(p => [...p, {
-      name: "New Priority", color: "#6C757D",
-      maxDuration: "1 Week", schedule: [{ phase: "", interval: "" }],
-      unfinishedNote: "Staff notified every 3 days."
-    }])}>
-    + Add Rule
-  </button>
-</Panel>
+            </Panel>
 
             {/* ══ STUDENT REPORT SETTINGS ══ */}
             <Panel
@@ -1050,8 +1037,7 @@ const startEditPri = (p: PriorityMeta) => {
               badge={colleges.length + yearLevels.length}
             >
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28 }}>
-
-                {/* ── Colleges ── */}
+                {/* Colleges */}
                 <div>
                   <div className="admin-edit__subconcerns-head" style={{ marginBottom: 10 }}>
                     <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Colleges / Departments</h4>
@@ -1069,11 +1055,9 @@ const startEditPri = (p: PriorityMeta) => {
                         <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
                           onClick={() => setEditCollegeIdx(idx)}>{c}</span>
                       )}
-                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
-                        onClick={() => setEditCollegeIdx(idx)} title="Edit"><IconPencil/></button>
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={() => setEditCollegeIdx(idx)} title="Edit"><IconPencil/></button>
                       <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
-                        onClick={() => { setColleges(p => p.filter((_, i) => i !== idx)); addNotification(`College "${c}" removed.`, "concern"); }}
-                        title="Remove"><IconTrash/></button>
+                        onClick={() => { setColleges(p => p.filter((_, i) => i !== idx)); addNotification(`College "${c}" removed.`, "concern"); }} title="Remove"><IconTrash/></button>
                     </div>
                   ))}
                   <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
@@ -1086,8 +1070,7 @@ const startEditPri = (p: PriorityMeta) => {
                     </button>
                   </div>
                 </div>
-
-                {/* ── Year Levels ── */}
+                {/* Year Levels */}
                 <div>
                   <div className="admin-edit__subconcerns-head" style={{ marginBottom: 10 }}>
                     <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>Year Levels</h4>
@@ -1105,11 +1088,9 @@ const startEditPri = (p: PriorityMeta) => {
                         <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "var(--surface-2, #f8f9fa)", cursor: "pointer" }}
                           onClick={() => setEditYearLevelIdx(idx)}>{y}</span>
                       )}
-                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit"
-                        onClick={() => setEditYearLevelIdx(idx)} title="Edit"><IconPencil/></button>
+                      <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={() => setEditYearLevelIdx(idx)} title="Edit"><IconPencil/></button>
                       <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
-                        onClick={() => { setYearLevels(p => p.filter((_, i) => i !== idx)); addNotification(`Year level "${y}" removed.`, "concern"); }}
-                        title="Remove"><IconTrash/></button>
+                        onClick={() => { setYearLevels(p => p.filter((_, i) => i !== idx)); addNotification(`Year level "${y}" removed.`, "concern"); }} title="Remove"><IconTrash/></button>
                     </div>
                   ))}
                   <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
@@ -1131,6 +1112,104 @@ const startEditPri = (p: PriorityMeta) => {
             {/* ══ STAFF MANAGEMENT ══ */}
             <Panel title="Staff Management" subtitle="Configure engineers and technicians — assign disciplines and positions" badge={staffList.length}>
               {staffError && <div className="admin-edit__alert admin-edit__alert--error" style={{ marginBottom: 12 }}>{staffError}</div>}
+
+              {/* ── Positions sub-panel ── */}
+              <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Positions</h4>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "#6b7280" }}>Used in the position dropdown when adding or editing staff</p>
+                  </div>
+                  <span className="admin-edit__panel-badge">{positionOptions.length}</span>
+                </div>
+                {positionOptions.map((pos, idx) => (
+                  <div key={idx} className="admin-edit__subconcern-row">
+                    {editPositionIdx === idx ? (
+                      <input type="text" className="admin-edit__input" value={pos} autoFocus
+                        onChange={e => setPositionOptions(p => p.map((x, i) => i === idx ? e.target.value : x))}
+                        onBlur={() => setEditPositionIdx(null)}
+                        onKeyDown={e => { if (e.key === "Enter") setEditPositionIdx(null); }}/>
+                    ) : (
+                      <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "#fff", border: "1px solid #e5e7eb", cursor: "pointer" }}
+                        onClick={() => setEditPositionIdx(idx)}>
+                        <span className="staff-pos-badge" style={{ ...getPositionStyle(pos, positionOptions), marginRight: 6 }}>{pos}</span>
+                      </span>
+                    )}
+                    <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={() => setEditPositionIdx(idx)} title="Edit"><IconPencil/></button>
+                    <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                      onClick={() => { setPositionOptions(p => p.filter((_, i) => i !== idx)); addNotification(`Position "${pos}" removed.`, "staff"); }} title="Remove"><IconTrash/></button>
+                  </div>
+                ))}
+                <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
+                  <input type="text" className="admin-edit__input" value={newPosition} placeholder="e.g. Plumber"
+                    onChange={e => setNewPosition(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && newPosition.trim()) {
+                        setPositionOptions(p => [...p, newPosition.trim()]);
+                        addNotification(`Position "${newPosition.trim()}" added.`, "staff");
+                        setNewPosition("");
+                      }
+                    }}/>
+                  <button type="button" className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      if (!newPosition.trim()) return;
+                      setPositionOptions(p => [...p, newPosition.trim()]);
+                      addNotification(`Position "${newPosition.trim()}" added.`, "staff");
+                      setNewPosition("");
+                    }}>+ Add</button>
+                </div>
+              </div>
+
+              {/* ── Disciplines sub-panel ── */}
+              <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 10, padding: "14px 16px", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Disciplines</h4>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "#6b7280" }}>Staff are assigned disciplines — tasks are filtered to match</p>
+                  </div>
+                  <span className="admin-edit__panel-badge">{disciplineOptions.length}</span>
+                </div>
+                {disciplineOptions.map((disc, idx) => (
+                  <div key={idx} className="admin-edit__subconcern-row">
+                    {editDisciplineIdx === idx ? (
+                      <input type="text" className="admin-edit__input" value={disc} autoFocus
+                        onChange={e => setDisciplineOptions(p => p.map((x, i) => i === idx ? e.target.value : x))}
+                        onBlur={() => setEditDisciplineIdx(null)}
+                        onKeyDown={e => { if (e.key === "Enter") setEditDisciplineIdx(null); }}/>
+                    ) : (
+                      <span style={{ flex: 1, fontSize: 13, padding: "8px 10px", borderRadius: 6, background: "#fff", border: "1px solid #e5e7eb", cursor: "pointer" }}
+                        onClick={() => setEditDisciplineIdx(idx)}>{disc}</span>
+                    )}
+                    <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={() => setEditDisciplineIdx(idx)} title="Edit"><IconPencil/></button>
+                    <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                      onClick={() => { setDisciplineOptions(p => p.filter((_, i) => i !== idx)); addNotification(`Discipline "${disc}" removed.`, "staff"); }} title="Remove"><IconTrash/></button>
+                  </div>
+                ))}
+                <div className="admin-edit__subconcern-row" style={{ marginTop: 10 }}>
+                  <input type="text" className="admin-edit__input" value={newDiscipline} placeholder="e.g. Plumbing"
+                    onChange={e => setNewDiscipline(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && newDiscipline.trim()) {
+                        if (!disciplineOptions.includes(newDiscipline.trim())) {
+                          setDisciplineOptions(p => [...p, newDiscipline.trim()]);
+                          addNotification(`Discipline "${newDiscipline.trim()}" added.`, "staff");
+                        }
+                        setNewDiscipline("");
+                      }
+                    }}/>
+                  <button type="button" className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      if (!newDiscipline.trim()) return;
+                      if (!disciplineOptions.includes(newDiscipline.trim())) {
+                        setDisciplineOptions(p => [...p, newDiscipline.trim()]);
+                        addNotification(`Discipline "${newDiscipline.trim()}" added.`, "staff");
+                      }
+                      setNewDiscipline("");
+                    }}>+ Add</button>
+                </div>
+              </div>
+
+              {/* ── Staff list ── */}
               <div className="staff-topbar">
                 <div className="staff-disc-tabs">
                   {["All", ...disciplineOptions].map(d => (
@@ -1140,7 +1219,7 @@ const startEditPri = (p: PriorityMeta) => {
                   ))}
                 </div>
                 <button type="button" className="btn btn-primary btn-sm staff-add-btn"
-                  onClick={() => { setShowAddStaff(v => !v); setEditStaffId(null); setEditStaffDraft(null); setNewStaff(EMPTY_STAFF); }}>
+                  onClick={() => { setShowAddStaff(v => !v); setEditStaffId(null); setEditStaffDraft(null); setNewStaff(DEFAULT_EMPTY_STAFF(positionOptions)); }}>
                   <IconPlus/> Add Staff
                 </button>
               </div>
@@ -1169,7 +1248,7 @@ const startEditPri = (p: PriorityMeta) => {
                     <div className="admin-edit__field-group">
                       <label className="admin-edit__label">Position</label>
                       <select className="admin-edit__input" value={newStaff.position} onChange={e => setNewStaff(d => ({ ...d, position: e.target.value }))}>
-                        {POSITION_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                        {positionOptions.map(p => <option key={p} value={p}>{p}</option>)}
                       </select>
                     </div>
                     <div className="admin-edit__field-group">
@@ -1216,13 +1295,13 @@ const startEditPri = (p: PriorityMeta) => {
                         <circle cx="32" cy="24" r="12" stroke="currentColor" strokeWidth="2" opacity="0.25"/>
                         <path d="M8 56c0-13.3 10.7-24 24-24s24 10.7 24 24" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
                       </svg>
-                      <p>{discFilter === "All" ? 'No staff yet. Click "Add Staff" to get started.' : `No ${discFilter} engineers assigned.`}</p>
+                      <p>{discFilter === "All" ? 'No staff yet. Click "Add Staff" to get started.' : `No ${discFilter} staff assigned.`}</p>
                     </div>
                   )}
 
                   {filteredStaff.map(member => {
                     const isEditing = editStaffId === member._id;
-                    const posStyle  = POSITION_COLORS[member.position] || POSITION_COLORS["Other"];
+                    const posStyle  = getPositionStyle(member.position, positionOptions);
                     const initials  = member.name.split(" ").slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("");
                     return (
                       <div key={member._id}>
@@ -1244,7 +1323,7 @@ const startEditPri = (p: PriorityMeta) => {
                                   <label className="admin-edit__label">Position</label>
                                   <select className="admin-edit__input" value={editStaffDraft.position}
                                     onChange={e => setEditStaffDraft(d => d ? { ...d, position: e.target.value } : d)}>
-                                    {POSITION_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                                    {positionOptions.map(p => <option key={p} value={p}>{p}</option>)}
                                   </select>
                                 </div>
                                 <div className="admin-edit__field-group">
@@ -1416,5 +1495,3 @@ const startEditPri = (p: PriorityMeta) => {
     </div>
   );
 }
-
-
