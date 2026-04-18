@@ -34,10 +34,10 @@ const DEFAULT_STATUSES = [
 ];
 
 const DEFAULT_PRIORITIES = [
-  { id: "1", name: "Low",    color: "#28A745", notifyInterval: "3months" },
-  { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "1month"  },
-  { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
-  { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
+  { id: "1", name: "Low",    color: "#28A745", notifyInterval: "5d" },
+  { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "3d" },
+  { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1d" },
+  { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "1h" },
 ];
 
 // ✅ NEW defaults
@@ -105,13 +105,15 @@ function sanitiseStatus(s, idx) {
 function sanitisePriority(p, idx) {
   const name = String(p?.name || "").trim();
   if (!name) return null;
-  const validIntervals = ["daily", "1week", "1month", "3months"];
+  // Accept any interval string: "1h","3d","5d","1d","daily","1week","1month","3months"
   const ni = String(p?.notifyInterval || "").trim();
+  const validIntervals = ["hourly","daily","1h","1d","2d","3d","4d","5d","6d","7d","1week","2weeks","1month","3months"];
+  const notifyInterval = (ni && /^(\d+)(h|d|w)?$/.test(ni)) || validIntervals.includes(ni) ? ni : "1d";
   return {
     id:             String(p?.id || String(idx + 1)).trim(),
     name,
     color:          String(p?.color || "#6C757D").trim(),
-    notifyInterval: validIntervals.includes(ni) ? ni : "1month",  // ✅ ADDED
+    notifyInterval,
   };
 }
 

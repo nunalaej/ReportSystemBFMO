@@ -65,10 +65,11 @@ const MetaSchema = new mongoose.Schema(
     priorities: {
       type: [PrioritySchema],
       default: [
-        { id: "1", name: "Low",    color: "#28A745", notifyInterval: "3months" },
-        { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "1month"  },
-        { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1week"   },
-        { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "daily"   },
+        // notifyInterval shorthand: Nh = hours, Nd = days
+        { id: "1", name: "Low",    color: "#28A745", notifyInterval: "5d" }, // every 5 days
+        { id: "2", name: "Medium", color: "#FFC107", notifyInterval: "3d" }, // every 3 days
+        { id: "3", name: "High",   color: "#ce4f01", notifyInterval: "1d" }, // every 1 day
+        { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "1h" }, // every 1 hour
       ],
     },
 
