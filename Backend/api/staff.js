@@ -203,32 +203,29 @@ router.post("/", async (req, res) => {
   }
 });
 
+/* PUT /api/staff/:id */
 router.put("/:id", async (req, res) => {
   try {
-    const { name, concernType, status, checklist, assignedStaff, priority, notes, comments, updatedBy } = req.body;
+    const { name, email, phone, position, disciplines, active, notes, clerkUsername, clerkId } = req.body;
 
-    const task = await ListsTask.findById(req.params.id);
-    if (!task) return res.status(404).json({ success: false, message: "Task not found." });
+    const member = await Staff.findById(req.params.id);
+    if (!member) return res.status(404).json({ success: false, message: "Staff not found." });
 
-    if (name          !== undefined) task.name          = String(name).trim();
-    if (concernType   !== undefined) task.concernType   = concernType;
-    if (status        !== undefined) task.status        = status;
-    if (checklist     !== undefined) task.checklist     = checklist;
-    if (assignedStaff !== undefined) task.assignedStaff = assignedStaff;
-    if (priority      !== undefined) task.priority      = priority;
-    if (notes         !== undefined) task.notes         = notes;
-    if (comments      !== undefined) task.comments      = comments; // ✅ ADD THIS
+    if (name          !== undefined) member.name          = String(name).trim();
+    if (email         !== undefined) member.email         = String(email).trim().toLowerCase();
+    if (phone         !== undefined) member.phone         = phone;
+    if (position      !== undefined) member.position      = position;
+    if (disciplines   !== undefined) member.disciplines   = Array.isArray(disciplines) ? disciplines.map(d => String(d).trim()).filter(Boolean) : [];
+    if (active        !== undefined) member.active        = active;
+    if (notes         !== undefined) member.notes         = notes;
+    if (clerkUsername !== undefined) member.clerkUsername = String(clerkUsername).trim();
+    if (clerkId       !== undefined) member.clerkId       = String(clerkId).trim();
 
-    const updated = await task.save();
-
-    if (status && task.reportId) {
-      await Report.updateOne({ reportId: task.reportId }, { status }).catch(console.error);
-    }
-
-    return res.json({ success: true, task: updated });
+    const updated = await member.save();
+    return res.json({ success: true, staff: updated });
   } catch (err) {
-    console.error("PUT /tasks/:id:", err);
-    return res.status(500).json({ success: false, message: "Failed to update task." });
+    console.error("PUT /staff/:id:", err);
+    return res.status(500).json({ success: false, message: "Failed to update staff." });
   }
 });
 

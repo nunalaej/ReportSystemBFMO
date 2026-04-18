@@ -62,7 +62,7 @@ function getPerms(position: string): Perms {
   const pos = position.toLowerCase();
   if (pos.includes("head engineer"))  return { canCreate: true,  canEdit: true,  canAssign: true,  canStatus: true,  canComment: true  };
   if (pos.includes("staff engineer")) return { canCreate: false, canEdit: false, canAssign: false, canStatus: true,  canComment: true  };
-  if (pos.includes("supervisor"))     return { canCreate: false, canEdit: false, canAssign: false, canStatus: false, canComment: false };
+  if (pos.includes("supervisor"))     return { canCreate: false, canEdit: false, canAssign: true, canStatus: false, canComment: false };
   if (pos.includes("technician"))     return { canCreate: false, canEdit: false, canAssign: false, canStatus: false, canComment: false };
   // fallback
   return { canCreate: false, canEdit: false, canAssign: false, canStatus: false, canComment: false };

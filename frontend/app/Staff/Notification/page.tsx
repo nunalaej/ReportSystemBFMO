@@ -8,7 +8,6 @@ const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "";
 
-/* ── Backend notification shape ── */
 type DbNotification = {
   _id:            string;
   type:           string;
@@ -18,7 +17,6 @@ type DbNotification = {
   taskName?:      string;
   reportId?:      string;
   changedBy?:     string;
-  changedByRole?: string;
   fromValue?:     string;
   toValue?:       string;
   affectedStaff?: string[];
@@ -26,184 +24,170 @@ type DbNotification = {
   createdAt:      string;
 };
 
-/* ── Type → visual style ── */
+/* ── Staff ONLY sees status updates on their assigned tasks ──
+   Admin sees everything (created, deleted, assigned, etc.)
+   Staff sees: task_status_changed + task_escalated only,
+               AND only where they are in affectedStaff
+─────────────────────────────────────────────────────────── */
+const STAFF_VISIBLE_TYPES = new Set(["task_status_changed", "task_escalated"]);
+
 const TYPE_STYLES: Record<string, { bg: string; color: string; label: string; icon: string }> = {
-  task_status_changed: { bg: "#fef3c7", color: "#92400e", label: "Status",   icon: "🔄" },
-  task_created:        { bg: "#dcfce7", color: "#166534", label: "Created",  icon: "✅" },
-  task_updated:        { bg: "#e0f2fe", color: "#0369a1", label: "Updated",  icon: "✏️" },
-  task_deleted:        { bg: "#fee2e2", color: "#991b1b", label: "Deleted",  icon: "🗑️" },
-  task_assigned:       { bg: "#f3e8ff", color: "#6b21a8", label: "Assigned", icon: "👤" },
-  task_escalated:      { bg: "#fff7ed", color: "#9a3412", label: "Escalated",icon: "⚠️" },
-  task_completed:      { bg: "#dcfce7", color: "#166534", label: "Done",     icon: "🎉" },
-  report_updated:      { bg: "#dbeafe", color: "#1e40af", label: "Report",   icon: "📋" },
-  system:              { bg: "#f1f5f9", color: "#334155", label: "System",   icon: "⚙️" },
+  task_status_changed: { bg: "#fef3c7", color: "#92400e", label: "Status Updated", icon: "🔄" },
+  task_escalated:      { bg: "#fee2e2", color: "#991b1b", label: "Escalated",       icon: "⚠️" },
 };
 
 function getStyle(type: string) {
-  return TYPE_STYLES[type] || TYPE_STYLES.system;
+  return TYPE_STYLES[type] ?? { bg: "#f1f5f9", color: "#334155", label: type, icon: "📋" };
 }
 
-function getRelativeTime(dateString: string) {
-  const diff = Date.now() - new Date(dateString).getTime();
+function getRelativeTime(d: string) {
+  const diff = Date.now() - new Date(d).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60)  return "just now";
+  if (s < 60) return "just now";
   const m = Math.floor(s / 60);
-  if (m < 60)  return `${m}m ago`;
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24)  return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30)  return `${d}d ago`;
-  return new Date(dateString).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(d).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
-
-const PAGE_SIZE = 20;
 
 export default function StaffNotificationPage() {
   const { user } = useUser();
 
-  const [staffName,     setStaffName]     = useState("");
-  const [notifications, setNotifications] = useState<DbNotification[]>([]);
-  const [total,         setTotal]         = useState(0);
-  const [unreadCount,   setUnreadCount]   = useState(0);
-  const [loading,       setLoading]       = useState(true);
-  const [loadingMore,   setLoadingMore]   = useState(false);
-  const [error,         setError]         = useState("");
-  const [skip,          setSkip]          = useState(0);
-  const [readFilter,    setReadFilter]    = useState<"all" | "unread" | "read">("all");
+  const [staffName,    setStaffName]    = useState("");
+  const [notifs,       setNotifs]       = useState<DbNotification[]>([]);
+  const [unread,       setUnread]       = useState(0);
+  const [loading,      setLoading]      = useState(true);
+  const [loadingMore,  setLoadingMore]  = useState(false);
+  const [error,        setError]        = useState("");
+  const [serverSkip,   setServerSkip]   = useState(0);
+  const [serverTotal,  setServerTotal]  = useState(0);
+  const [readFilter,   setReadFilter]   = useState<"all" | "unread" | "read">("all");
 
-  /* ── Fetch staff name from backend ── */
+  /* ── Resolve staff name from Clerk ID ── */
   useEffect(() => {
     if (!user?.id) return;
     fetch(`${API_BASE}/api/staff/by-clerk/${user.id}`, { cache: "no-store" })
-      .then(r => r.json())
-      .catch(() => null)
+      .then(r => r.json()).catch(() => null)
       .then(data => { if (data?.staff?.name) setStaffName(data.staff.name); });
   }, [user?.id]);
 
-  /* ── Fetch notifications filtered by affectedStaff ── */
-  const fetchNotifications = useCallback(async (newSkip = 0, replace = true) => {
+  /* ── Filter helper: only visible types + only assigned to this staff ── */
+  const filterMine = useCallback((raw: DbNotification[], name: string): DbNotification[] => {
+    if (!name) return [];
+    return raw.filter(n =>
+      STAFF_VISIBLE_TYPES.has(n.type) &&
+      (n.affectedStaff || []).some(s => s.toLowerCase() === name.toLowerCase())
+    );
+  }, []);
+
+  /* ── Fetch from backend ── */
+  const fetchNotifs = useCallback(async (skip = 0, replace = true) => {
+    const name = staffName;
+    if (!name) return;
+
     try {
       replace ? setLoading(true) : setLoadingMore(true);
       setError("");
 
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        skip:  String(newSkip),
-      });
-      if (readFilter === "unread") params.set("unread", "true");
+      // Fetch both allowed types in parallel
+      const [r1, r2] = await Promise.all([
+        fetch(`${API_BASE}/api/notifications?limit=50&skip=${skip}&type=task_status_changed`, { cache: "no-store" }),
+        fetch(`${API_BASE}/api/notifications?limit=50&skip=${skip}&type=task_escalated`,      { cache: "no-store" }),
+      ]);
+      const [d1, d2] = await Promise.all([r1.json().catch(()=>null), r2.json().catch(()=>null)]);
 
-      const res  = await fetch(`${API_BASE}/api/notifications?${params}`, { cache: "no-store" });
-      const data = await res.json().catch(() => null);
+      // Merge + sort newest first
+      const combined: DbNotification[] = [
+        ...(d1?.notifications || []),
+        ...(d2?.notifications || []),
+      ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      if (!res.ok || !data?.success) {
-        setError(data?.message || "Failed to load notifications.");
-        return;
-      }
+      const total = (d1?.total || 0) + (d2?.total || 0);
 
-      // Filter to only notifications relevant to this staff member:
-      // either they are in affectedStaff OR they made the change (changedBy)
-      const name = staffName || user?.fullName || "";
-      let items: DbNotification[] = (data.notifications || []).filter((n: DbNotification) => {
-        if (!name) return true; // show all if name not resolved yet
-        const inAffected = (n.affectedStaff || []).some(
-          s => s.toLowerCase() === name.toLowerCase()
-        );
-        const isChanger  = (n.changedBy || "").toLowerCase() === name.toLowerCase();
-        return inAffected || isChanger;
-      });
+      // Keep only mine
+      let items = filterMine(combined, name);
 
-      // client-side read filter
+      // Apply read filter client-side
       if (readFilter === "read")   items = items.filter(n => n.read);
       if (readFilter === "unread") items = items.filter(n => !n.read);
 
-      const unread = items.filter(n => !n.read).length;
-
       if (replace) {
-        setNotifications(items);
-        setUnreadCount(unread);
-        setTotal(items.length); // total after staff filter
+        setNotifs(items);
+        setUnread(items.filter(n => !n.read).length);
       } else {
-        setNotifications(prev => {
+        setNotifs(prev => {
           const merged = [...prev, ...items];
-          setUnreadCount(merged.filter(n => !n.read).length);
-          setTotal(merged.length);
+          setUnread(merged.filter(n => !n.read).length);
           return merged;
         });
       }
-
-      setSkip(newSkip + (data.notifications?.length || 0));
-      // whether there are more pages from the server
-      setTotal(data.total ?? items.length);
+      setServerSkip(skip + combined.length);
+      setServerTotal(total);
     } catch {
-      setError("Network error loading notifications.");
+      setError("Network error.");
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [staffName, readFilter, user?.fullName]);
+  }, [staffName, readFilter, filterMine]);
 
   useEffect(() => {
-    fetchNotifications(0, true);
-  }, [fetchNotifications]);
+    if (staffName) fetchNotifs(0, true);
+  }, [staffName, readFilter]);
 
-  /* ── Mark one as read ── */
-  const markAsRead = async (n: DbNotification) => {
+  /* ── Mark one read ── */
+  const markRead = async (n: DbNotification) => {
     if (n.read) return;
-    setNotifications(prev => prev.map(x => x._id === n._id ? { ...x, read: true } : x));
-    setUnreadCount(c => Math.max(0, c - 1));
-    try {
-      await fetch(`${API_BASE}/api/notifications/${n._id}/read`, { method: "PATCH" });
-    } catch {
-      setNotifications(prev => prev.map(x => x._id === n._id ? { ...x, read: false } : x));
-      setUnreadCount(c => c + 1);
+    setNotifs(prev => prev.map(x => x._id === n._id ? { ...x, read: true } : x));
+    setUnread(c => Math.max(0, c - 1));
+    try { await fetch(`${API_BASE}/api/notifications/${n._id}/read`, { method: "PATCH" }); }
+    catch {
+      setNotifs(prev => prev.map(x => x._id === n._id ? { ...x, read: false } : x));
+      setUnread(c => c + 1);
     }
   };
 
-  /* ── Mark all as read (local only — only marks staff's own) ── */
-  const markAllAsRead = async () => {
-    const unreadIds = notifications.filter(n => !n.read).map(n => n._id);
-    setNotifications(prev => prev.map(x => ({ ...x, read: true })));
-    setUnreadCount(0);
-    // Patch each one individually (backend mark-all-read affects ALL notifications)
-    await Promise.allSettled(
-      unreadIds.map(id => fetch(`${API_BASE}/api/notifications/${id}/read`, { method: "PATCH" }))
-    );
+  /* ── Mark all read ── */
+  const markAllRead = async () => {
+    const ids = notifs.filter(n => !n.read).map(n => n._id);
+    setNotifs(prev => prev.map(x => ({ ...x, read: true })));
+    setUnread(0);
+    await Promise.allSettled(ids.map(id =>
+      fetch(`${API_BASE}/api/notifications/${id}/read`, { method: "PATCH" })
+    ));
   };
 
-  const hasMore = skip < total;
+  const hasMore = serverSkip < serverTotal;
 
-  /* ══════════════════════════════════════════════════════════ */
+  /* ─────────────────────────────────────────────────── */
   return (
-    <div style={{
-      maxWidth: 780,
-      margin: "0 auto",
-      padding: "32px 20px 60px",
-      fontFamily: "system-ui, -apple-system, sans-serif",
-    }}>
+    <div style={{ maxWidth: 780, margin: "0 auto", padding: "32px 20px 60px", fontFamily: "system-ui, -apple-system, sans-serif" }}>
 
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{
-            fontSize: "1.5rem", fontWeight: 800, margin: "0 0 4px",
-            color: "var(--tasks-text-1, #0d1b2a)",
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: "0 0 4px", color: "var(--tasks-text-1, #0d1b2a)", display: "flex", alignItems: "center", gap: 10 }}>
             My Notifications
-            {unreadCount > 0 && (
-              <span style={{ background: "#ef4444", color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: 999, lineHeight: 1.5 }}>
-                {unreadCount}
+            {unread > 0 && (
+              <span style={{ background: "#ef4444", color: "#fff", fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>
+                {unread}
               </span>
             )}
           </h1>
-          <p style={{ fontSize: "0.78rem", color: "var(--tasks-text-3, #8a97a8)", margin: 0 }}>
-            {loading ? "Loading…" : `${notifications.length} notifications · ${unreadCount} unread`}
-            {staffName && <span style={{ marginLeft: 8, opacity: 0.6 }}>· {staffName}</span>}
+          <p style={{ fontSize: "0.78rem", color: "var(--tasks-text-3, #8a97a8)", margin: 0, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+            {loading ? "Loading…" : `${notifs.length} notifications · ${unread} unread`}
+            {staffName && <span style={{ opacity: 0.6 }}>· {staffName}</span>}
+            <span style={{ fontSize: "0.65rem", background: "#f0f9ff", color: "#0369a1", border: "1px solid #bae6fd", borderRadius: 999, padding: "1px 8px", fontWeight: 600 }}>
+              Status updates only
+            </span>
           </p>
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={() => fetchNotifications(0, true)}
+          <button type="button" onClick={() => fetchNotifs(0, true)}
             style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--tasks-border, #e8ecf0)", background: "var(--tasks-surface, #fff)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "var(--tasks-text-2, #4a5568)", display: "flex", alignItems: "center", gap: 5 }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -211,8 +195,8 @@ export default function StaffNotificationPage() {
             </svg>
             Refresh
           </button>
-          {unreadCount > 0 && (
-            <button type="button" onClick={markAllAsRead}
+          {unread > 0 && (
+            <button type="button" onClick={markAllRead}
               style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--tasks-border, #e8ecf0)", background: "var(--tasks-surface, #fff)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", color: "var(--tasks-text-2, #4a5568)" }}>
               Mark all read
             </button>
@@ -220,14 +204,8 @@ export default function StaffNotificationPage() {
         </div>
       </div>
 
-      {/* ── Read filter tabs ── */}
-      <div style={{
-        display: "flex", gap: 4, marginBottom: 20,
-        background: "var(--tasks-surface-2, #f8fafc)",
-        borderRadius: 10, padding: 4,
-        border: "1px solid var(--tasks-border, #e8ecf0)",
-        width: "fit-content",
-      }}>
+      {/* ── All / Unread / Read tabs ── */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "var(--tasks-surface-2, #f8fafc)", borderRadius: 10, padding: 4, border: "1px solid var(--tasks-border, #e8ecf0)", width: "fit-content" }}>
         {(["all", "unread", "read"] as const).map(v => (
           <button key={v} type="button" onClick={() => setReadFilter(v)}
             style={{
@@ -236,8 +214,7 @@ export default function StaffNotificationPage() {
               boxShadow: readFilter === v ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               fontSize: "0.78rem", fontWeight: readFilter === v ? 700 : 500,
               color: readFilter === v ? "var(--tasks-text-1, #0d1b2a)" : "var(--tasks-text-3, #8a97a8)",
-              cursor: "pointer", transition: "all 0.12s", textTransform: "capitalize",
-              fontFamily: "inherit",
+              cursor: "pointer", fontFamily: "inherit",
             }}>
             {v === "all" ? "All" : v.charAt(0).toUpperCase() + v.slice(1)}
           </button>
@@ -248,124 +225,100 @@ export default function StaffNotificationPage() {
       {error && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", padding: "10px 14px", borderRadius: 8, fontSize: "0.82rem", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>{error}</span>
-          <button type="button" onClick={() => fetchNotifications(0, true)} style={{ color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontSize: "0.82rem", textDecoration: "underline" }}>Retry</button>
+          <button type="button" onClick={() => fetchNotifs(0, true)} style={{ color: "#dc2626", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: "0.82rem" }}>Retry</button>
         </div>
       )}
 
       {/* ── Loading skeleton ── */}
       {loading && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {[...Array(5)].map((_, i) => (
-            <div key={i} style={{
-              height: 72, borderRadius: 10,
-              background: "linear-gradient(90deg, var(--tasks-border,#e8ecf0) 25%, var(--tasks-surface-2,#f8fafc) 50%, var(--tasks-border,#e8ecf0) 75%)",
-              backgroundSize: "200% 100%",
-              animation: "shimmer 1.4s infinite",
-            }} />
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{ height: 72, borderRadius: 10, background: "linear-gradient(90deg, var(--tasks-border,#e8ecf0) 25%, var(--tasks-surface-2,#f8fafc) 50%, var(--tasks-border,#e8ecf0) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }}/>
           ))}
           <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
         </div>
       )}
 
       {/* ── Empty state ── */}
-      {!loading && notifications.length === 0 && !error && (
+      {!loading && notifs.length === 0 && !error && (
         <div style={{ textAlign: "center", padding: "72px 20px", color: "var(--tasks-text-4, #b8c4ce)" }}>
           <svg viewBox="0 0 64 64" fill="none" width="56" height="56" style={{ margin: "0 auto 14px", display: "block" }}>
             <path d="M32 6C19.85 6 10 15.85 10 28v8L6 42v4h52v-4l-4-6v-8C54 15.85 44.15 6 32 6z" stroke="currentColor" strokeWidth="1.5" opacity="0.25"/>
             <path d="M26 46c0 3.31 2.69 6 6 6s6-2.69 6-6" stroke="currentColor" strokeWidth="1.5" opacity="0.2"/>
           </svg>
           <p style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--tasks-text-3, #8a97a8)", margin: "0 0 6px" }}>
-            {readFilter !== "all" ? "No notifications match your filter." : "No notifications yet"}
+            {readFilter !== "all" ? "No notifications match your filter." : "No status updates yet"}
           </p>
           <span style={{ fontSize: "0.78rem", color: "var(--tasks-text-4, #b8c4ce)" }}>
-            {readFilter !== "all" ? "Try switching to All." : "Task assignments and status updates will appear here."}
+            {readFilter !== "all" ? "Try switching to All." : "You'll be notified here when a task assigned to you changes status."}
           </span>
         </div>
       )}
 
       {/* ── Notification list ── */}
-      {!loading && notifications.length > 0 && (
+      {!loading && notifs.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {notifications.map(n => {
+          {notifs.map(n => {
             const s = getStyle(n.type);
             return (
-              <div key={n._id} onClick={() => markAsRead(n)}
+              <div key={n._id} onClick={() => markRead(n)}
                 style={{
                   display: "flex", alignItems: "flex-start", gap: 12,
                   padding: "14px 16px",
-                  background: n.read
-                    ? "var(--tasks-surface, #fff)"
-                    : "var(--tasks-accent-bg, rgba(37,99,235,0.05))",
+                  background: n.read ? "var(--tasks-surface, #fff)" : "var(--tasks-accent-bg, rgba(37,99,235,0.05))",
                   border: `1.5px solid ${n.read ? "var(--tasks-border, #e8ecf0)" : "var(--tasks-accent, #2563eb)33"}`,
                   borderLeft: `3px solid ${n.read ? "var(--tasks-border, #e8ecf0)" : s.color}`,
                   borderRadius: 10,
                   cursor: n.read ? "default" : "pointer",
-                  transition: "background 0.15s, border-color 0.15s",
+                  transition: "background 0.15s",
                   boxShadow: n.read ? "none" : "0 2px 8px rgba(37,99,235,0.06)",
-                }}
-              >
-                {/* Type badge */}
-                <span style={{
-                  flexShrink: 0, padding: "3px 9px", borderRadius: 999,
-                  fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase",
-                  letterSpacing: "0.06em", marginTop: 2,
-                  backgroundColor: s.bg, color: s.color,
-                  whiteSpace: "nowrap",
                 }}>
+
+                {/* Type badge */}
+                <span style={{ flexShrink: 0, padding: "3px 9px", borderRadius: 999, fontSize: "0.62rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2, backgroundColor: s.bg, color: s.color, whiteSpace: "nowrap" }}>
                   {s.icon} {s.label}
                 </span>
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: "0.78rem", color: "var(--tasks-text-3, #8a97a8)",
-                    margin: "0 0 2px", fontWeight: 500,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                  }}>
-                    {n.title}
-                  </p>
-                  <p style={{
-                    fontSize: "0.85rem", color: "var(--tasks-text-1, #0d1b2a)",
-                    margin: "0 0 6px", lineHeight: 1.45,
-                    fontWeight: n.read ? 400 : 600,
-                  }}>
+                  {/* Task name */}
+                  {n.taskName && (
+                    <p style={{ fontSize: "0.78rem", color: "var(--tasks-text-3, #8a97a8)", margin: "0 0 2px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                      </svg>
+                      {n.taskName}
+                    </p>
+                  )}
+                  {/* Message */}
+                  <p style={{ fontSize: "0.85rem", color: "var(--tasks-text-1, #0d1b2a)", margin: "0 0 6px", lineHeight: 1.45, fontWeight: n.read ? 400 : 600 }}>
                     {n.message}
                   </p>
-
-                  {/* Meta */}
+                  {/* Meta row */}
                   <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "4px 12px" }}>
-                    <span style={{ fontSize: "0.68rem", color: "var(--tasks-text-4, #b8c4ce)" }}>
-                      {getRelativeTime(n.createdAt)}
-                    </span>
-                    {n.taskName && (
+                    <span style={{ fontSize: "0.68rem", color: "var(--tasks-text-4, #b8c4ce)" }}>{getRelativeTime(n.createdAt)}</span>
+                    {n.changedBy && (
                       <span style={{ fontSize: "0.68rem", color: "var(--tasks-text-4, #b8c4ce)", display: "flex", alignItems: "center", gap: 3 }}>
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                         </svg>
-                        {n.taskName}
+                        {n.changedBy}
+                      </span>
+                    )}
+                    {/* from → to status pill */}
+                    {n.fromValue && n.toValue && (
+                      <span style={{ fontSize: "0.65rem", fontWeight: 700, color: s.color, background: s.bg, padding: "2px 8px", borderRadius: 999 }}>
+                        {n.fromValue} → {n.toValue}
                       </span>
                     )}
                     {n.reportId && (
-                      <span style={{ fontSize: "0.68rem", color: "var(--tasks-text-4, #b8c4ce)" }}>
-                        #{n.reportId}
-                      </span>
-                    )}
-                    {n.fromValue && n.toValue && (
-                      <span style={{
-                        fontSize: "0.65rem", fontWeight: 600,
-                        color: s.color, background: s.bg,
-                        padding: "1px 7px", borderRadius: 999,
-                      }}>
-                        {n.fromValue} → {n.toValue}
-                      </span>
+                      <span style={{ fontSize: "0.68rem", color: "var(--tasks-text-4, #b8c4ce)" }}>#{n.reportId}</span>
                     )}
                   </div>
                 </div>
 
                 {/* Unread dot */}
-                {!n.read && (
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, marginTop: 5 }} />
-                )}
+                {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", flexShrink: 0, marginTop: 5 }}/>}
               </div>
             );
           })}
@@ -375,27 +328,16 @@ export default function StaffNotificationPage() {
       {/* ── Load more ── */}
       {!loading && hasMore && (
         <div style={{ marginTop: 16, textAlign: "center" }}>
-          <button type="button"
-            onClick={() => fetchNotifications(skip, false)}
-            disabled={loadingMore}
-            style={{
-              padding: "8px 24px", borderRadius: 8,
-              border: "1px solid var(--tasks-border, #e8ecf0)",
-              background: "var(--tasks-surface, #fff)",
-              color: "var(--tasks-text-2, #4a5568)",
-              fontSize: "0.82rem", fontWeight: 600,
-              cursor: loadingMore ? "not-allowed" : "pointer",
-              opacity: loadingMore ? 0.6 : 1,
-              fontFamily: "inherit",
-            }}>
+          <button type="button" onClick={() => fetchNotifs(serverSkip, false)} disabled={loadingMore}
+            style={{ padding: "8px 24px", borderRadius: 8, border: "1px solid var(--tasks-border, #e8ecf0)", background: "var(--tasks-surface, #fff)", color: "var(--tasks-text-2, #4a5568)", fontSize: "0.82rem", fontWeight: 600, cursor: loadingMore ? "not-allowed" : "pointer", opacity: loadingMore ? 0.6 : 1, fontFamily: "inherit" }}>
             {loadingMore ? "Loading…" : "Load more"}
           </button>
         </div>
       )}
 
-      {!loading && notifications.length > 0 && (
+      {!loading && notifs.length > 0 && (
         <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--tasks-text-4, #b8c4ce)", marginTop: 20 }}>
-          Showing {notifications.length} notification{notifications.length !== 1 ? "s" : ""}
+          Showing {notifs.length} notification{notifs.length !== 1 ? "s" : ""}
         </p>
       )}
     </div>
