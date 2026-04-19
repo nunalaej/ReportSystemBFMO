@@ -335,7 +335,7 @@ export default function AdminEditPage() {
   const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "Head Engineer":  ["Create tasks","Edit tasks","Assign staff","Update status","Comment"],
     "Staff Engineer": ["Update status","Comment"],
-    "Supervisor":     ["View only", "Assign staff"],
+    "Supervisor":     ["View only"],
     "Technician":     ["View only"],
     "Other":          ["View only"],
   };
@@ -526,6 +526,26 @@ export default function AdminEditPage() {
         zIndex: 10,
         boxShadow: "2px 0 12px rgba(0,0,0,0.15)",
       }}>
+
+        {/* Logo / toggle */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(v=>!v)}
+          style={{
+            display:"flex", alignItems:"center", gap:10,
+            padding:"16px 14px",
+            background:"none", border:"none", cursor:"pointer",
+            borderBottom:"1px solid rgba(255,255,255,0.06)",
+            width:"100%", textAlign:"left",
+          }}
+        >
+          <img src="/logo-dlsud.png" alt="BFMO" style={{ width:28, height:28, objectFit:"contain", flexShrink:0 }}/>
+          {sidebarOpen && (
+            <span style={{ color:"#f1f5f9", fontSize:"0.82rem", fontWeight:700, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden" }}>
+              System Config
+            </span>
+          )}
+        </button>
 
         {/* Nav items */}
         <nav style={{ flex:1, overflowY:"auto", overflowX:"hidden", paddingTop:8 }}>
@@ -1124,115 +1144,106 @@ export default function AdminEditPage() {
                   {staffTab==="positions" && (
                     <div>
                       <div style={{ background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:8, padding:"10px 14px", marginBottom:20, fontSize:12, color:"#0369a1" }}>
-                        <strong style={{color:"#0c4a6e"}}>How permissions work:</strong> Permissions are matched by position name (case-insensitive) in the Staff Task page. Click a position card to edit its permissions. Changes are saved with <strong>Save All Changes</strong>.
+                        <strong style={{color:"#0c4a6e"}}>How permissions work:</strong> Toggle checkboxes to grant or revoke permissions per position. Click <strong>Edit</strong> on a card to enable editing. Changes are saved with <strong>Save All Changes</strong>.
                       </div>
 
-                      {/* Editable permission cards grid */}
-                      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:12, marginBottom:24 }}>
-                        {positionOptions.map((pos) => {
-                          const style   = getPositionStyle(pos, positionOptions);
-                          const perms   = positionPerms[pos] || ["View only"];
-                          const isOpen  = editingPermPos === pos;
-                          const staffCt = staffList.filter(s => s.position === pos).length;
-                          return (
-                            <div key={pos} style={{
-                              background:"var(--tasks-surface,#fff)",
-                              border:`1.5px solid ${isOpen ? style.text : "var(--tasks-border,#e8ecf0)"}`,
-                              borderRadius:12,
-                              borderLeft:`4px solid ${style.text}`,
-                              overflow:"hidden",
-                              boxShadow: isOpen ? `0 0 0 3px ${style.bg}` : "none",
-                              transition:"all 0.15s",
-                            }}>
-                              {/* Card header */}
-                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", borderBottom: isOpen ? "1px solid var(--tasks-border,#e8ecf0)" : "none" }}>
-                                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                  <span style={{ background:style.bg, color:style.text, fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:999 }}>{pos}</span>
-                                  <span style={{ fontSize:11, color:"#9ca3af" }}>{staffCt} staff</span>
-                                </div>
-                                <button type="button"
-                                  onClick={() => setEditingPermPos(isOpen ? null : pos)}
-                                  style={{ display:"flex", alignItems:"center", gap:4, background: isOpen ? style.bg : "var(--tasks-surface-2,#f8fafc)", border:`1px solid ${isOpen ? style.text : "var(--tasks-border,#e8ecf0)"}`, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:11, fontWeight:600, color: isOpen ? style.text : "var(--tasks-text-2,#4a5568)" }}>
-                                  {isOpen ? (<><IconCheck/> Done</>) : (<><IconPencil/> Edit</>)}
-                                </button>
-                              </div>
-
-                              {/* Permissions list */}
-                              <div style={{ padding:"10px 14px" }}>
-                                {perms.map((perm, pIdx) => (
-                                  <div key={pIdx} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                                    <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"var(--tasks-text-1,#0d1b2a)" }}>
-                                      {isOpen ? (
-                                        <input
-                                          type="text"
-                                          value={perm}
-                                          onChange={e => {
-                                            const updated = [...perms];
-                                            updated[pIdx] = e.target.value;
-                                            setPositionPerms(prev => ({ ...prev, [pos]: updated }));
-                                          }}
-                                          style={{ fontSize:12, padding:"3px 8px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:5, width:170, fontFamily:"inherit" }}
-                                        />
-                                      ) : (
-                                        <>
-                                          <span style={{ color:"#22c55e", fontWeight:700, fontSize:13 }}>✓</span>
-                                          <span>{perm}</span>
-                                        </>
-                                      )}
+                      {/* Checkbox permission cards */}
+                      {(() => {
+                        const ALL_PERMS = [
+                          "Create tasks", "Edit tasks", "Assign staff",
+                          "Update status", "Comment", "Delete tasks",
+                          "View reports", "View only",
+                        ];
+                        return (
+                          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:12, marginBottom:24 }}>
+                            {positionOptions.map((pos) => {
+                              const posStyle = getPositionStyle(pos, positionOptions);
+                              const perms    = positionPerms[pos] || [];
+                              const isOpen   = editingPermPos === pos;
+                              const staffCt  = staffList.filter(s => s.position === pos).length;
+                              return (
+                                <div key={pos} style={{
+                                  background:"var(--tasks-surface,#fff)",
+                                  borderTop:`3px solid ${posStyle.text}`,
+                                  borderRight:"1px solid var(--tasks-border,#e8ecf0)",
+                                  borderBottom:"1px solid var(--tasks-border,#e8ecf0)",
+                                  borderLeft: isOpen ? `3px solid ${posStyle.text}` : "1px solid var(--tasks-border,#e8ecf0)",
+                                  borderRadius:10,
+                                  overflow:"hidden",
+                                  boxShadow: isOpen ? "0 2px 12px rgba(0,0,0,0.08)" : "none",
+                                  transition:"box-shadow 0.15s",
+                                }}>
+                                  {/* Card header */}
+                                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"11px 14px", background: isOpen ? posStyle.bg : "transparent", borderBottom:"1px solid var(--tasks-border,#e8ecf0)" }}>
+                                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                                      <span style={{ background:posStyle.bg, color:posStyle.text, fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:999, border:`1px solid ${posStyle.text}33` }}>{pos}</span>
+                                      <span style={{ fontSize:11, color:"var(--tasks-text-3,#8a97a8)" }}>{staffCt} staff</span>
                                     </div>
-                                    {isOpen && (
-                                      <button type="button"
-                                        onClick={() => setPositionPerms(prev => ({ ...prev, [pos]: perms.filter((_,i)=>i!==pIdx) }))}
-                                        style={{ background:"none", border:"none", cursor:"pointer", color:"#ef4444", padding:"2px 4px", display:"flex", alignItems:"center" }}>
-                                        <IconTrash/>
-                                      </button>
-                                    )}
-                                  </div>
-                                ))}
-
-                                {/* Add permission input */}
-                                {isOpen && (
-                                  <div style={{ display:"flex", gap:6, marginTop:8 }}>
-                                    <input
-                                      type="text"
-                                      placeholder="e.g. Delete tasks"
-                                      value={newPermInput[pos] || ""}
-                                      onChange={e => setNewPermInput(prev => ({ ...prev, [pos]: e.target.value }))}
-                                      onKeyDown={e => {
-                                        if (e.key==="Enter" && newPermInput[pos]?.trim()) {
-                                          setPositionPerms(prev => ({ ...prev, [pos]: [...(prev[pos]||[]), newPermInput[pos].trim()] }));
-                                          setNewPermInput(prev => ({ ...prev, [pos]: "" }));
-                                        }
-                                      }}
-                                      style={{ flex:1, fontSize:12, padding:"4px 8px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:5, fontFamily:"inherit" }}
-                                    />
                                     <button type="button"
-                                      onClick={() => {
-                                        if (!newPermInput[pos]?.trim()) return;
-                                        setPositionPerms(prev => ({ ...prev, [pos]: [...(prev[pos]||[]), newPermInput[pos].trim()] }));
-                                        setNewPermInput(prev => ({ ...prev, [pos]: "" }));
-                                      }}
-                                      style={{ background:style.text, color:"#fff", border:"none", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontSize:11, fontWeight:700, whiteSpace:"nowrap" }}>
-                                      + Add
+                                      onClick={() => setEditingPermPos(isOpen ? null : pos)}
+                                      style={{ display:"flex", alignItems:"center", gap:4, background: isOpen ? posStyle.text : "var(--tasks-surface-2,#f8fafc)", border:`1px solid ${isOpen ? posStyle.text : "var(--tasks-border,#e8ecf0)"}`, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontSize:11, fontWeight:600, color: isOpen ? "#fff" : "var(--tasks-text-2,#4a5568)", fontFamily:"inherit" }}>
+                                      {isOpen ? "✓ Done" : "✎ Edit"}
                                     </button>
                                   </div>
-                                )}
 
-                                {perms.length === 0 && !isOpen && (
-                                  <span style={{ fontSize:11, color:"#9ca3af", fontStyle:"italic" }}>No permissions set</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                                  {/* Permission checkboxes */}
+                                  <div style={{ padding:"10px 14px" }}>
+                                    {ALL_PERMS.map(perm => {
+                                      const checked = perms.includes(perm);
+                                      return (
+                                        <label key={perm}
+                                          onClick={() => {
+                                            if (!isOpen) return;
+                                            setPositionPerms(prev => ({
+                                              ...prev,
+                                              [pos]: checked
+                                                ? (prev[pos]||[]).filter(p => p !== perm)
+                                                : [...(prev[pos]||[]), perm],
+                                            }));
+                                          }}
+                                          style={{ display:"flex", alignItems:"center", gap:9, padding:"4px 0", cursor: isOpen ? "pointer" : "default", userSelect:"none" as const }}>
+                                          {/* Custom checkbox */}
+                                          <div style={{
+                                            width:16, height:16, borderRadius:4, flexShrink:0,
+                                            border: checked
+                                              ? `2px solid ${posStyle.text}`
+                                              : "2px solid var(--tasks-border,#d1d5db)",
+                                            background: checked ? posStyle.text : "transparent",
+                                            display:"flex", alignItems:"center", justifyContent:"center",
+                                            transition:"all 0.1s",
+                                            opacity: isOpen ? 1 : (checked ? 1 : 0.3),
+                                          }}>
+                                            {checked && (
+                                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="20 6 9 17 4 12"/>
+                                              </svg>
+                                            )}
+                                          </div>
+                                          <span style={{
+                                            fontSize:12,
+                                            fontWeight: checked ? 600 : 400,
+                                            color: checked
+                                              ? "var(--tasks-text-1,#0d1b2a)"
+                                              : "var(--tasks-text-3,#8a97a8)",
+                                            opacity: isOpen ? 1 : (checked ? 1 : 0.5),
+                                          }}>{perm}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
-                      {/* Position name list — add / rename / delete */}
+                      {/* Position name management */}
                       <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:16 }}>
-                        <p style={{ margin:"0 0 12px", fontSize:12, fontWeight:700, color:"#374151", textTransform:"uppercase", letterSpacing:"0.05em" }}>Manage Position Names</p>
+                        <p style={{ margin:"0 0 12px", fontSize:12, fontWeight:700, color:"var(--tasks-text-2,#4a5568)", textTransform:"uppercase", letterSpacing:"0.05em" }}>Manage Position Names</p>
                         <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                           {positionOptions.map((pos,idx)=>{
-                            const style=getPositionStyle(pos,positionOptions);
+                            const posStyle=getPositionStyle(pos,positionOptions);
                             return(
                               <div key={idx} className="admin-edit__subconcern-row">
                                 {editPositionIdx===idx?(
@@ -1241,7 +1252,6 @@ export default function AdminEditPage() {
                                       const oldName = positionOptions[idx];
                                       const newName = e.target.value;
                                       setPositionOptions(p=>p.map((x,i)=>i===idx?newName:x));
-                                      // rename key in perms map
                                       setPositionPerms(prev => {
                                         const copy = { ...prev };
                                         if (copy[oldName] !== undefined) { copy[newName] = copy[oldName]; delete copy[oldName]; }
@@ -1252,21 +1262,18 @@ export default function AdminEditPage() {
                                     onKeyDown={e=>{if(e.key==="Enter")setEditPositionIdx(null);}}/>
                                 ):(
                                   <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 12px", borderRadius:8, background:"var(--tasks-surface-2,#f8fafc)", border:"1px solid var(--tasks-border,#e8ecf0)" }}>
-                                    <span className="staff-pos-badge" style={{backgroundColor:style.bg,color:style.text}}>{pos}</span>
-                                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                                      <span style={{fontSize:11,color:"#9ca3af"}}>{(positionPerms[pos]||[]).length} permissions</span>
-                                      <span style={{fontSize:11,color:"#9ca3af"}}>·</span>
-                                      <span style={{fontSize:11,color:"#9ca3af"}}>{staffList.filter(s=>s.position===pos).length} staff</span>
+                                    <span className="staff-pos-badge" style={{backgroundColor:posStyle.bg,color:posStyle.text}}>{pos}</span>
+                                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                                      <span style={{fontSize:11,color:"var(--tasks-text-4,#b8c4ce)"}}>{(positionPerms[pos]||[]).length} permissions</span>
+                                      <span style={{fontSize:11,color:"var(--tasks-text-4,#b8c4ce)"}}>·</span>
+                                      <span style={{fontSize:11,color:"var(--tasks-text-4,#b8c4ce)"}}>{staffList.filter(s=>s.position===pos).length} staff</span>
                                     </div>
                                   </div>
                                 )}
                                 <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>setEditPositionIdx(idx)} title="Rename"><IconPencil/></button>
                                 <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
-                                  onClick={()=>{
-                                    setPositionOptions(p=>p.filter((_,i)=>i!==idx));
-                                    setPositionPerms(prev=>{ const copy={...prev}; delete copy[pos]; return copy; });
-                                    addNotification(`Position "${pos}" removed.`,"staff");
-                                  }} title="Delete"><IconTrash/></button>
+                                  onClick={()=>{setPositionOptions(p=>p.filter((_,i)=>i!==idx));setPositionPerms(prev=>{const copy={...prev};delete copy[pos];return copy;});addNotification(`Position "${pos}" removed.`,"staff");}}
+                                  title="Delete"><IconTrash/></button>
                               </div>
                             );
                           })}
