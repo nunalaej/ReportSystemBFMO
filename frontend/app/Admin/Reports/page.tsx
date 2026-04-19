@@ -231,7 +231,20 @@ function useStaffPerms(clerkUserId?: string) {
       fetch(`${API_BASE}/api/meta?ts=${Date.now()}`,          { cache: "no-store" }).then(r => r.json()).catch(() => null),
     ]).then(([staffData, metaData]) => {
       if (staffData?.staff) setStaffRecord(staffData.staff);
-      if (metaData?.positionPerms && typeof metaData.positionPerms === "object") setPositionPerms(metaData.positionPerms);
+
+      /* ── positionPerms: must be an object WITH at least one key ── */
+      const pp = metaData?.positionPerms;
+      if (pp && typeof pp === "object" && Object.keys(pp).length > 0) {
+        setPositionPerms(pp);
+      }
+      /* NOTE: if positionPerms is empty/missing here, the backend Mongoose Meta schema
+         likely doesn't declare positionPerms as a field — Mongoose strips unknown fields.
+         FIX NEEDED IN BACKEND: add positionPerms to your Meta schema, OR set strict:false.
+         See console for what /api/meta actually returns. */
+      if (process.env.NODE_ENV === "development") {
+        console.log("[useStaffPerms] /api/meta response keys:", Object.keys(metaData || {}));
+        console.log("[useStaffPerms] positionPerms from API:", pp);
+      }
     }).finally(() => setLoaded(true));
   }, [clerkUserId]);
 
