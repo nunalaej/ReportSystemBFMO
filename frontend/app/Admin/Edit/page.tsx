@@ -185,13 +185,12 @@ const FLOOR_ORDINALS = ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","1
 /* ─────────────────────────── Nav tabs config ───────────────── */
 type TabId = "buildings" | "concerns" | "statuses" | "priorities" | "notifications" | "students" | "staff";
 const NAV_TABS: { id: TabId; label: string; icon: React.ReactNode; badge?: (s: any) => number }[] = [
-  { id:"buildings",     label:"Buildings",          icon:<IconBuilding/>,  badge:s=>s.buildings.length  },
-  { id:"concerns",      label:"Concerns",           icon:<IconTag/>,       badge:s=>s.concerns.length   },
-  { id:"statuses",      label:"Statuses",           icon:<IconActivity/>,  badge:s=>s.statuses.length   },
-  { id:"priorities",    label:"Priorities",         icon:<IconActivity/>,  badge:s=>s.priorities.length },
-  { id:"notifications", label:"Notif. Rules",       icon:<IconBell/>,      badge:s=>s.notifRules.length },
-  { id:"students",      label:"Student Settings",   icon:<IconGraduate/>,  badge:s=>s.colleges.length+s.yearLevels.length },
-  { id:"staff",         label:"Staff Management",   icon:<IconUsers/>,     badge:s=>s.staffList.length  },
+  { id:"buildings",  label:"Buildings",        icon:<IconBuilding/>,  badge:s=>s.buildings.length  },
+  { id:"concerns",   label:"Concerns",         icon:<IconTag/>,       badge:s=>s.concerns.length   },
+  { id:"statuses",   label:"Statuses",         icon:<IconActivity/>,  badge:s=>s.statuses.length   },
+  { id:"priorities", label:"Priorities & Rules",icon:<IconBell/>,     badge:s=>s.priorities.length },
+  { id:"students",   label:"Student Settings", icon:<IconGraduate/>,  badge:s=>s.colleges.length+s.yearLevels.length },
+  { id:"staff",      label:"Staff Management", icon:<IconUsers/>,     badge:s=>s.staffList.length  },
 ];
 
 /* ─────────────────────────── Color palette ─────────────────── */
@@ -826,102 +825,203 @@ export default function AdminEditPage() {
                 </div>
               )}
 
-              {/* ══ PRIORITIES ══ */}
-              {activeTab==="priorities" && (
+              {/* ══ PRIORITIES + NOTIFICATION RULES (combined) ══ */}
+              {(activeTab==="priorities" || activeTab==="notifications") && (
                 <div>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24 }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
                     <div>
-                      <h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800, color:"var(--tasks-text-1,#0d1b2a)" }}>Priority Levels</h2>
-                      <p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Configure priority labels, colors, and notification intervals</p>
+                      <h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800, color:"var(--tasks-text-1,#0d1b2a)" }}>Priorities & Notification Rules</h2>
+                      <p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Configure priority levels and their escalation schedules</p>
                     </div>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={()=>{setShowAddPri(true);setEditPriId(null);setNewPriDraft({id:"",name:"",color:"#6C757D",notifyInterval:"1month"});}}>+ Add Priority</button>
+                    <button type="button" className="btn btn-primary btn-sm"
+                      onClick={()=>{setShowAddPri(true);setEditPriId(null);setNewPriDraft({id:"",name:"",color:"#6C757D",notifyInterval:"1month"});}}>
+                      + Add Priority
+                    </button>
                   </div>
+
+                  {/* ── Add new priority form ── */}
                   {showAddPri && (
-                    <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid #bfdbfe", borderRadius:12, padding:20, marginBottom:16 }}>
-                      <h4 style={{ margin:"0 0 14px", fontSize:13, fontWeight:700 }}>New Priority</h4>
-                      <div className="admin-edit__priority-form-fields">
-                        <div className="admin-edit__field-group"><label className="admin-edit__label">Name</label><input type="text" className="admin-edit__input" value={newPriDraft.name} placeholder="e.g. Critical" onChange={e=>setNewPriDraft(d=>({...d,name:e.target.value}))}/></div>
-                        <div className="admin-edit__field-group"><label className="admin-edit__label">Color</label><div className="admin-edit__color-row"><ColorPicker value={newPriDraft.color} onChange={color=>setNewPriDraft(d=>({...d,color}))}/><span className="admin-edit__color-preview" style={{backgroundColor:newPriDraft.color}}>{newPriDraft.name||"Preview"}</span></div></div>
-                        <div className="admin-edit__field-group"><label className="admin-edit__label">Notification Interval</label><div className="admin-edit__notify-timeline">{NOTIFY_INTERVAL_OPTIONS.map(opt=>(<button key={opt.value} type="button" className={`admin-edit__notify-option${newPriDraft.notifyInterval===opt.value?" admin-edit__notify-option--active":""}`} onClick={()=>setNewPriDraft(d=>({...d,notifyInterval:opt.value}))}>{opt.label}</button>))}</div></div>
-                      </div>
-                      <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={addPriority}>Add</button>
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setShowAddPri(false)}>Cancel</button>
+                    <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid #bfdbfe", borderRadius:12, padding:20, marginBottom:20 }}>
+                      <h4 style={{ margin:"0 0 14px", fontSize:13, fontWeight:700, color:"var(--tasks-text-1,#0d1b2a)" }}>New Priority</h4>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr auto", gap:12, alignItems:"end" }}>
+                        <div className="admin-edit__field-group" style={{margin:0}}>
+                          <label className="admin-edit__label">Name</label>
+                          <input type="text" className="admin-edit__input" value={newPriDraft.name} placeholder="e.g. Critical" onChange={e=>setNewPriDraft(d=>({...d,name:e.target.value}))}/>
+                        </div>
+                        <div className="admin-edit__field-group" style={{margin:0}}>
+                          <label className="admin-edit__label">Color</label>
+                          <div className="admin-edit__color-row">
+                            <ColorPicker value={newPriDraft.color} onChange={color=>setNewPriDraft(d=>({...d,color}))}/>
+                            <span className="admin-edit__color-preview" style={{backgroundColor:newPriDraft.color}}>{newPriDraft.name||"Preview"}</span>
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", gap:6 }}>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={addPriority}>Add</button>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setShowAddPri(false)}>Cancel</button>
+                        </div>
                       </div>
                     </div>
                   )}
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {priorities.map(p=>(
-                      <div key={p.id} style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, overflow:"hidden" }}>
-                        {editPriId===p.id&&editPriDraft ? (
-                          <div style={{ padding:20 }}>
-                            <div className="admin-edit__priority-form-fields">
-                              <div className="admin-edit__field-group"><label className="admin-edit__label">Name</label><input type="text" className="admin-edit__input" value={editPriDraft.name} onChange={e=>setEditPriDraft(d=>d?{...d,name:e.target.value}:d)}/></div>
-                              <div className="admin-edit__field-group"><label className="admin-edit__label">Color</label><div className="admin-edit__color-row"><ColorPicker value={editPriDraft.color} onChange={color=>setEditPriDraft(d=>d?{...d,color}:d)}/><span className="admin-edit__color-preview" style={{backgroundColor:editPriDraft.color}}>{editPriDraft.name}</span></div></div>
-                              <div className="admin-edit__field-group"><label className="admin-edit__label">Notification Interval</label><div className="admin-edit__notify-timeline">{NOTIFY_INTERVAL_OPTIONS.map(opt=>(<button key={opt.value} type="button" className={`admin-edit__notify-option${editPriDraft.notifyInterval===opt.value?" admin-edit__notify-option--active":""}`} onClick={()=>setEditPriDraft(d=>d?{...d,notifyInterval:opt.value}:d)}>{opt.label}</button>))}</div></div>
-                            </div>
-                            <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                              <button type="button" className="btn btn-primary btn-sm" onClick={saveEditPri}>Save</button>
-                              <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEditPri}>Cancel</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ display:"flex", alignItems:"center", padding:"12px 16px", gap:12 }}>
-                            <span style={{ width:14, height:14, borderRadius:"50%", backgroundColor:p.color, flexShrink:0 }}/>
-                            <span style={{ flex:1, fontWeight:600, fontSize:"0.88rem", color:"var(--tasks-text-1,#0d1b2a)" }}>{p.name}</span>
-                            <span style={{ fontSize:"0.72rem", color:"var(--tasks-text-3,#8a97a8)", background:"var(--tasks-surface-2,#f8fafc)", padding:"2px 10px", borderRadius:999, border:"1px solid var(--tasks-border,#e8ecf0)" }}>
-                              {NOTIFY_INTERVAL_LABELS[p.notifyInterval||"1month"]}
-                            </span>
-                            <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>startEditPri(p)} title="Edit"><IconPencil/></button>
-                            <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>deletePriority(p)} title="Delete"><IconTrash/></button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {priorities.length===0&&<p className="admin-edit__empty">No priorities yet.</p>}
-                  </div>
-                </div>
-              )}
 
-              {/* ══ NOTIFICATION RULES ══ */}
-              {activeTab==="notifications" && (
-                <div>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24 }}>
-                    <div>
-                      <h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800, color:"var(--tasks-text-1,#0d1b2a)" }}>Notification Rules</h2>
-                      <p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Configure escalation schedules per priority level</p>
-                    </div>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={addRule}>+ Add Rule</button>
-                  </div>
-                  <div className="admin-edit__notif-rules-grid">
-                    {notifRules.map((rule,rIdx)=>(
-                      <div key={rIdx} className="admin-edit__notif-rule-card" style={{"--rule-color":rule.color} as React.CSSProperties}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", marginBottom:12 }}>
-                          <input type="text" className="admin-edit__input" style={{width:110,fontWeight:700}} value={rule.name} onChange={e=>updateRule(rIdx,{name:e.target.value})}/>
-                          <ColorPicker value={rule.color} onChange={color=>updateRule(rIdx,{color})}/>
-                          <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                            <IconClock/><span style={{ fontSize:12, color:"#6b7280" }}>Max:</span>
-                            <input type="text" className="admin-edit__input" style={{width:150}} value={rule.maxDuration} onChange={e=>updateRule(rIdx,{maxDuration:e.target.value})}/>
+                  {/* ── Priority + Rule cards ── */}
+                  <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                    {priorities.map(p => {
+                      const ruleIdx = notifRules.findIndex(r => r.name.toLowerCase() === p.name.toLowerCase());
+                      const rule    = notifRules[ruleIdx];
+                      const isEditingPri = editPriId === p.id;
+
+                      // Parse "NUnit" helpers
+                      const parseMaxDuration = (s: string) => {
+                        const m = String(s||"").match(/^(\d+)\s*(hour|day|week|month|year)/i);
+                        return { num: m ? m[1] : "1", unit: m ? m[2].toLowerCase() : "day" };
+                      };
+                      const parseInterval = (s: string) => {
+                        const m = String(s||"").match(/^(\d+)\s*(hour|day|week|month|year)/i);
+                        return { num: m ? m[1] : "1", unit: m ? m[2].toLowerCase() : "day" };
+                      };
+                      const durationStr = (num: string, unit: string) => `${num} ${unit}${parseInt(num)>1?"s":""}`;
+
+                      const maxParsed = parseMaxDuration(rule?.maxDuration || "1 day");
+
+                      return (
+                        <div key={p.id} style={{
+                          background:"var(--tasks-surface,#fff)",
+                          border:`1px solid var(--tasks-border,#e8ecf0)`,
+                          borderLeft:`4px solid ${p.color}`,
+                          borderRadius:12, overflow:"hidden",
+                        }}>
+                          {/* ── Priority header row ── */}
+                          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 18px", borderBottom:"1px solid var(--tasks-border,#e8ecf0)", background:`${p.color}08` }}>
+                            <span style={{ width:14, height:14, borderRadius:"50%", background:p.color, flexShrink:0, boxShadow:`0 0 0 3px ${p.color}33` }}/>
+                            {isEditingPri && editPriDraft ? (
+                              <>
+                                <input type="text" className="admin-edit__input" value={editPriDraft.name} style={{width:140, fontWeight:700}} onChange={e=>setEditPriDraft(d=>d?{...d,name:e.target.value}:d)}/>
+                                <ColorPicker value={editPriDraft.color} onChange={color=>setEditPriDraft(d=>d?{...d,color}:d)}/>
+                                <span className="admin-edit__color-preview" style={{backgroundColor:editPriDraft.color, fontSize:11}}>{editPriDraft.name}</span>
+                                <div style={{marginLeft:"auto", display:"flex", gap:6}}>
+                                  <button type="button" className="btn btn-primary btn-sm" onClick={saveEditPri}>Save</button>
+                                  <button type="button" className="btn btn-secondary btn-sm" onClick={cancelEditPri}>Cancel</button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ fontWeight:700, fontSize:"0.92rem", color:"var(--tasks-text-1,#0d1b2a)" }}>{p.name}</span>
+                                <div style={{ marginLeft:"auto", display:"flex", gap:6 }}>
+                                  <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>startEditPri(p)} title="Edit priority"><IconPencil/></button>
+                                  <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>deletePriority(p)} title="Delete priority"><IconTrash/></button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {/* ── Notification rule section ── */}
+                          <div style={{ padding:"16px 18px" }}>
+                            {rule ? (
+                              <>
+                                {/* Max duration row */}
+                                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14, flexWrap:"wrap" }}>
+                                  <span style={{ fontSize:12, fontWeight:600, color:"var(--tasks-text-2,#4a5568)", minWidth:110 }}>⏱ Max Duration:</span>
+                                  <input type="number" min={1} max={999}
+                                    value={maxParsed.num}
+                                    onChange={e => {
+                                      const n = Math.max(1, parseInt(e.target.value)||1);
+                                      updateRule(ruleIdx, { maxDuration: durationStr(String(n), maxParsed.unit) });
+                                    }}
+                                    style={{ width:64, padding:"4px 8px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:6, fontSize:13, fontFamily:"inherit", background:"var(--tasks-surface-2,#f8fafc)", color:"var(--tasks-text-1,#0d1b2a)" }}
+                                  />
+                                  <select
+                                    value={maxParsed.unit}
+                                    onChange={e => updateRule(ruleIdx, { maxDuration: durationStr(maxParsed.num, e.target.value) })}
+                                    style={{ padding:"4px 10px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:6, fontSize:13, fontFamily:"inherit", background:"var(--tasks-surface-2,#f8fafc)", color:"var(--tasks-text-1,#0d1b2a)", cursor:"pointer" }}>
+                                    <option value="hour">Hour(s)</option>
+                                    <option value="day">Day(s)</option>
+                                    <option value="week">Week(s)</option>
+                                    <option value="month">Month(s)</option>
+                                    <option value="year">Year(s)</option>
+                                  </select>
+                                  <span style={{ fontSize:11, color:"var(--tasks-text-4,#b8c4ce)" }}>until task is marked Unfinished</span>
+                                </div>
+
+                                {/* Schedule steps */}
+                                <div style={{ marginBottom:10 }}>
+                                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                                    <span style={{ fontSize:12, fontWeight:600, color:"var(--tasks-text-2,#4a5568)" }}>📅 Notify assigned staff every:</span>
+                                    <button type="button" className="btn btn-secondary btn-sm"
+                                      onClick={()=>addRuleStep(ruleIdx)}
+                                      style={{ fontSize:11 }}>+ Add Step</button>
+                                  </div>
+                                  {rule.schedule.map((step, sIdx) => {
+                                    const iv = parseInterval(step.interval);
+                                    return (
+                                      <div key={sIdx} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8, background:"var(--tasks-surface-2,#f8fafc)", borderRadius:8, padding:"8px 10px", border:"1px solid var(--tasks-border,#e8ecf0)" }}>
+                                        {/* Phase label */}
+                                        <span style={{ fontSize:11, color:"var(--tasks-text-3,#8a97a8)", minWidth:20, fontWeight:600 }}>{sIdx+1}.</span>
+                                        <input type="text" placeholder="When (e.g. Days 1–6)"
+                                          value={step.phase}
+                                          onChange={e=>updateRuleStep(ruleIdx,sIdx,{phase:e.target.value})}
+                                          style={{ flex:1, minWidth:80, padding:"4px 8px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:5, fontSize:12, fontFamily:"inherit", background:"var(--tasks-surface,#fff)", color:"var(--tasks-text-1,#0d1b2a)" }}
+                                        />
+                                        <span style={{ fontSize:11, color:"var(--tasks-text-3,#8a97a8)", whiteSpace:"nowrap" }}>every</span>
+                                        <input type="number" min={1} max={999}
+                                          value={iv.num}
+                                          onChange={e => {
+                                            const n = Math.max(1, parseInt(e.target.value)||1);
+                                            updateRuleStep(ruleIdx, sIdx, { interval: durationStr(String(n), iv.unit) });
+                                          }}
+                                          style={{ width:56, padding:"4px 6px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:5, fontSize:12, fontFamily:"inherit", background:"var(--tasks-surface,#fff)", color:"var(--tasks-text-1,#0d1b2a)" }}
+                                        />
+                                        <select
+                                          value={iv.unit}
+                                          onChange={e => updateRuleStep(ruleIdx, sIdx, { interval: durationStr(iv.num, e.target.value) })}
+                                          style={{ padding:"4px 8px", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:5, fontSize:12, fontFamily:"inherit", background:"var(--tasks-surface,#fff)", color:"var(--tasks-text-1,#0d1b2a)", cursor:"pointer" }}>
+                                          <option value="hour">Hour(s)</option>
+                                          <option value="day">Day(s)</option>
+                                          <option value="week">Week(s)</option>
+                                          <option value="month">Month(s)</option>
+                                          <option value="year">Year(s)</option>
+                                        </select>
+                                        <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+                                          onClick={()=>removeRuleStep(ruleIdx,sIdx)} title="Remove step"
+                                          style={{ flexShrink:0 }}><IconTrash/></button>
+                                      </div>
+                                    );
+                                  })}
+                                  {rule.schedule.length === 0 && (
+                                    <p style={{ fontSize:12, color:"var(--tasks-text-4,#b8c4ce)", margin:"4px 0 8px", fontStyle:"italic" }}>No schedule steps yet — click + Add Step</p>
+                                  )}
+                                </div>
+
+                                {/* After deadline note */}
+                                <div style={{ display:"flex", alignItems:"center", gap:8, background:"#fff7ed", border:"1px solid #fed7aa", borderRadius:8, padding:"8px 12px" }}>
+                                  <span style={{ fontSize:11, color:"#9a3412", fontWeight:600, whiteSpace:"nowrap" }}>⚠️ After deadline:</span>
+                                  <input type="text" className="admin-edit__input"
+                                    value={rule.unfinishedNote}
+                                    onChange={e=>updateRule(ruleIdx,{unfinishedNote:e.target.value})}
+                                    style={{ fontSize:12 }}
+                                    placeholder="e.g. Marked Unfinished, notify every 3 days"
+                                  />
+                                </div>
+
+                                <div style={{ marginTop:10, display:"flex", justifyContent:"flex-end" }}>
+                                  <button type="button" className="btn btn-danger btn-sm"
+                                    onClick={()=>removeRule(ruleIdx)}
+                                    style={{ fontSize:11 }}>Remove Rule</button>
+                                </div>
+                              </>
+                            ) : (
+                              /* No rule yet for this priority */
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 0" }}>
+                                <span style={{ fontSize:12, color:"var(--tasks-text-4,#b8c4ce)", fontStyle:"italic" }}>No notification rule configured for this priority.</span>
+                                <button type="button" className="btn btn-secondary btn-sm"
+                                  onClick={()=>setNotifRules(prev=>[...prev,{name:p.name,color:p.color,maxDuration:"7 days",schedule:[{phase:"Before deadline",interval:"1 day"}],unfinishedNote:"Escalate to Unfinished, notify every 3 days."}])}
+                                  style={{ fontSize:11 }}>+ Add Rule</button>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <label className="admin-edit__label" style={{marginBottom:6}}>Schedule Steps</label>
-                        {rule.schedule.map((step,sIdx)=>(
-                          <div key={sIdx} style={{ display:"flex", gap:6, alignItems:"center", marginBottom:6 }}>
-                            <input type="text" className="admin-edit__input" placeholder="Phase" value={step.phase} onChange={e=>updateRuleStep(rIdx,sIdx,{phase:e.target.value})}/>
-                            <input type="text" className="admin-edit__input" placeholder="Interval" value={step.interval} onChange={e=>updateRuleStep(rIdx,sIdx,{interval:e.target.value})}/>
-                            <button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>removeRuleStep(rIdx,sIdx)}><IconTrash/></button>
-                          </div>
-                        ))}
-                        <button type="button" className="btn btn-secondary btn-sm" style={{marginTop:4}} onClick={()=>addRuleStep(rIdx)}>+ Add Step</button>
-                        <div className="admin-edit__field-group" style={{marginTop:10}}>
-                          <label className="admin-edit__label">Unfinished Note</label>
-                          <input type="text" className="admin-edit__input" value={rule.unfinishedNote} onChange={e=>updateRule(rIdx,{unfinishedNote:e.target.value})}/>
-                        </div>
-                        <div style={{ marginTop:12, textAlign:"right" }}>
-                          <button type="button" className="btn btn-danger btn-sm" onClick={()=>removeRule(rIdx)}>Delete Rule</button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                    {priorities.length===0 && <p className="admin-edit__empty">No priorities yet. Click + Add Priority to get started.</p>}
                   </div>
                 </div>
               )}
