@@ -136,6 +136,18 @@ html.dark {
 
   --switch-bg-off: #4b5563;
   --switch-text: #e5e7eb;
+
+  /* ── tasks-* vars used by the Admin Edit sidebar layout ── */
+  --tasks-bg:        #0d1526;
+  --tasks-surface:   #1e293b;
+  --tasks-surface-2: #162032;
+  --tasks-border:    #334155;
+  --tasks-text-1:    #f1f5f9;
+  --tasks-text-2:    #cbd5e1;
+  --tasks-text-3:    #94a3b8;
+  --tasks-text-4:    #64748b;
+  --tasks-accent:    #3b82f6;
+  --tasks-accent-bg: rgba(59,130,246,0.1);
 }
 
 /* =============================
@@ -1672,37 +1684,21 @@ html.dark .staff-disc-pill { background: #1e293b; color: #94a3b8; border-color: 
 .admin-edit__notif-rules-callout code  { font-size: 0.7rem; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; color: #374151; }
 html.dark .admin-edit__label { color: #94a3b8; }
 
+
 /* ─────────────────────────────────────────────────────
-   DARK MODE — New sidebar layout (no wrapper padding)
+   DARK MODE — Admin Edit sidebar layout
+   Since --tasks-* vars are now defined in html.dark {},
+   inline styles using var(--tasks-surface,#fff) etc.
+   automatically resolve correctly.
+   These rules cover class-based elements only.
    ───────────────────────────────────────────────────── */
 
-/* Main content area background */
 html.dark .admin-edit__wrapper {
-  background: #0d1526 !important;
+  background: var(--tasks-bg) !important;
   padding: 0 !important;
 }
 
-/* Top bar (breadcrumb strip) */
-html.dark .admin-edit__wrapper [style*="background:var(--tasks-surface"],
-html.dark .admin-edit__wrapper [style*='background:"var(--tasks-surface'] {
-  background: #1e293b !important;
-  border-color: #334155 !important;
-}
-
-/* All white surface cards inside the layout */
-html.dark .admin-edit__wrapper [style*="background:\"var(--tasks-surface,#fff)\""],
-html.dark .admin-edit__wrapper [style*='background:"var(--tasks-surface,#fff)"'] {
-  background: #1e293b !important;
-  border-color: #334155 !important;
-}
-
-/* Text inside the content area */
-html.dark .admin-edit__wrapper h2,
-html.dark .admin-edit__wrapper h4 { color: #f1f5f9 !important; }
-
-html.dark .admin-edit__wrapper p  { color: #94a3b8; }
-
-/* Inputs — ensure readable in dark mode */
+/* Inputs */
 html.dark .admin-edit__input {
   background: #0f172a !important;
   border-color: #475569 !important;
@@ -1713,31 +1709,11 @@ html.dark .admin-edit__input:focus {
   border-color: #3b82f6 !important;
   box-shadow: 0 0 0 2px rgba(59,130,246,0.2) !important;
 }
-html.dark select.admin-edit__input option {
-  background: #1e293b;
-  color: #f1f5f9;
-}
+html.dark select.admin-edit__input option { background: #1e293b; color: #f1f5f9; }
 
-/* Scrollable panel area */
-html.dark .admin-edit__wrapper > div > div:last-child {
-  background: #0d1526 !important;
-}
-
-/* Editor cards (two-column right panel) */
-html.dark .admin-edit__editor-card,
-html.dark .admin-edit__panel-body {
-  background: #1e293b !important;
-  border-color: #334155 !important;
-}
-
-/* Building/concern/status list sidebar buttons */
-html.dark .admin-edit__wrapper button[style*="background:none"],
-html.dark .admin-edit__wrapper button[style*='background:"none"'] {
-  color: #cbd5e1 !important;
-}
-html.dark .admin-edit__wrapper button[style*="borderBottom:\"1px solid var(--tasks-border"] {
-  border-bottom-color: #334155 !important;
-}
+/* Labels & hints */
+html.dark .admin-edit__label       { color: #94a3b8; }
+html.dark .admin-edit__label-hint  { color: #64748b; }
 
 /* Info box */
 html.dark .admin-edit__info-box {
@@ -1746,36 +1722,43 @@ html.dark .admin-edit__info-box {
   color: #93c5fd;
 }
 
-/* Switch text */
+/* Switch */
 html.dark .admin-edit__switch-text { color: #94a3b8; }
-
-/* Subconcern rows */
-html.dark .admin-edit__subconcern-row input { color: #f1f5f9; }
-html.dark .admin-edit__subconcern-row span  { color: #cbd5e1; }
 
 /* Alert boxes */
 html.dark .admin-edit__alert--error   { background: #2d1515; border-color: #7f1d1d; color: #fca5a5; }
 html.dark .admin-edit__alert--success { background: #0d2818; border-color: #166534; color: #86efac; }
 
 /* Priority rows */
-html.dark .admin-edit__priority-row { background: #1e293b; border-color: #334155; }
-html.dark .admin-edit__priority-name  { color: #f1f5f9; }
+html.dark .admin-edit__priority-row      { background: #1e293b; border-color: #334155; }
+html.dark .admin-edit__priority-name     { color: #f1f5f9; }
 html.dark .admin-edit__priority-interval { background: #0f172a; color: #64748b; border-color: #334155; }
 
 /* Notif rule cards */
-html.dark .admin-edit__notif-rule-card { background: #1e293b !important; border-color: #334155 !important; }
+html.dark .admin-edit__notif-rule-card { background: #1e293b; border-color: #334155; }
 
-/* Clerk form */
-html.dark .staff-clerk-form { background: #1e293b !important; border-color: #334155 !important; }
-html.dark .staff-clerk-form-title { color: #f1f5f9; }
-html.dark .staff-clerk-result--ok  { background: #0d2818; color: #86efac; border-color: #166534; }
-html.dark .staff-clerk-result--err { background: #2d1515; color: #fca5a5; border-color: #7f1d1d; }
+/* Staff clerk form */
+html.dark .staff-clerk-form           { background: #1e293b; border-color: #334155; }
+html.dark .staff-clerk-form-title     { color: #f1f5f9; }
+html.dark .staff-clerk-result--ok     { background: #0d2818; color: #86efac; border-color: #166534; }
+html.dark .staff-clerk-result--err    { background: #2d1515; color: #fca5a5; border-color: #7f1d1d; }
 
-/* Edit body */
+/* Staff edit form body */
 html.dark .staff-edit-body { background: #162032; border-radius: 8px; }
 
-/* Position/discipline management list rows */
-html.dark .admin-edit__subconcern-row > div[style*="background:\"var(--tasks-surface-2"] {
-  background: #162032 !important;
-  border-color: #334155 !important;
+/* Subconcern row spans/inputs */
+html.dark .admin-edit__subconcern-row input { color: #f1f5f9; }
+html.dark .admin-edit__subconcern-row span  { color: #cbd5e1; }
+
+/* Editor & panel bodies (accordion) */
+html.dark .admin-edit__editor-card { background: #1e293b; border-color: #334155; }
+html.dark .admin-edit__panel-body  { background: transparent; }
+
+/* Notif rules callout */
+html.dark .admin-edit__notif-rules-callout {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
 }
+html.dark .admin-edit__notif-rules-callout strong { color: #f1f5f9; }
+html.dark .admin-edit__notif-rules-callout code   { background: #0f172a; color: #93c5fd; }
