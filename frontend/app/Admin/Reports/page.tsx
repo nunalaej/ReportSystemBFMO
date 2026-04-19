@@ -8,7 +8,6 @@ import { useUser } from "@clerk/nextjs";
 import { createPortal } from "react-dom";
 import { useNotifications } from "@/app/context/notification";
 
-
 const defaultImg = "/default.jpg";
 
 const API_BASE =
@@ -59,9 +58,20 @@ type Report = {
   history?: HistoryEntry[];
 };
 
+type ExistingTask = {
+  _id: string;
+  name: string;
+  status?: string;
+  priority?: string;
+};
+
 type MetaStatus   = { id: string; name: string; color: string; };
 type MetaPriority = { id: string; name: string; color: string; notifyInterval?: string; };
 type ChecklistItem = { id: string; text: string; done: boolean; };
+
+/* ── View modes ── */
+type ViewMode   = "card" | "list";
+type DateFilter = "all" | "today" | "week" | "month" | "custom";
 
 /* ── Helpers ── */
 const formatConcern = (report: Report) => {
@@ -73,10 +83,10 @@ const formatConcern = (report: Report) => {
 const getBaseConcernFromReport = (r: Report) => (r.concern || "Unspecified").trim() || "Unspecified";
 
 const formatBuilding = (report: Report) => {
-  const rawBuilding  = report.building || "Unspecified";
-  const isOther      = rawBuilding.toLowerCase() === "other";
+  const rawBuilding   = report.building || "Unspecified";
+  const isOther       = rawBuilding.toLowerCase() === "other";
   const buildingLabel = isOther && report.otherBuilding ? report.otherBuilding : rawBuilding;
-  const roomOrSpot   = report.room || report.otherRoom;
+  const roomOrSpot    = report.room || report.otherRoom;
   return roomOrSpot ? `${buildingLabel} : ${roomOrSpot}` : buildingLabel;
 };
 
@@ -90,14 +100,44 @@ function getRelativeTime(dateString?: string) {
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return "just now";
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
+  if (diffMin < 60) return `${diffMin}m ago`;
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffDays < 30) return `${diffDays}d ago`;
   const diffMonths = Math.floor(diffDays / 30);
-  if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? "" : "s"} ago`;
-  return `${Math.floor(diffMonths / 12)} year${Math.floor(diffMonths / 12) === 1 ? "" : "s"} ago`;
+  if (diffMonths < 12) return `${diffMonths}mo ago`;
+  return `${Math.floor(diffMonths / 12)}y ago`;
+}
+
+/** Start of day in local time */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function isWithinDateRange(dateString: string | undefined, filter: DateFilter, customFrom: string, customTo: string): boolean {
+  if (!dateString || filter === "all") return true;
+  const date = new Date(dateString);
+  const now  = new Date();
+  if (filter === "today") {
+    return date >= startOfDay(now);
+  }
+  if (filter === "week") {
+    const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+    return date >= weekAgo;
+  }
+  if (filter === "month") {
+    const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
+    return date >= monthAgo;
+  }
+  if (filter === "custom") {
+    const from = customFrom ? new Date(customFrom) : null;
+    const to   = customTo   ? new Date(customTo + "T23:59:59") : null;
+    if (from && date < from) return false;
+    if (to   && date > to)   return false;
+    return true;
+  }
+  return true;
 }
 
 /* ── Fallbacks ── */
@@ -115,14 +155,6 @@ const FALLBACK_PRIORITIES: MetaPriority[] = [
   { id: "3", name: "High",   color: "#ce4f01" },
   { id: "4", name: "Urgent", color: "#a40010" },
 ];
-
-const DEFAULT_STATUSES_FALLBACK = [
-  { id: "1", name: "Pending",         color: "#FFA500" },
-  { id: "2", name: "Pending Inspect", color: "#FFD700" },
-  { id: "3", name: "In Progress",     color: "#4169E1" },
-  { id: "4", name: "Resolved",        color: "#28A745" },
-];
-
 
 const REPORTS_PER_PAGE = 12;
 
@@ -146,7 +178,6 @@ const resolveImageFile = (raw?: string) => {
   return src.startsWith("/") ? `${API_BASE}${src}` : `${API_BASE}/${src}`;
 };
 
-/* ── Build timeline from report data ── */
 function buildTimeline(report: Report): HistoryEntry[] {
   if (report.history && report.history.length > 0) {
     return [...report.history].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
@@ -206,7 +237,6 @@ function useEscapeKey(handler: () => void, active: boolean) {
 export default function ReportPage() {
   const router = useRouter();
   const { user, isLoaded, isSignedIn } = useUser();
-  const firstName = user?.firstName || "";
 
   const [canView,        setCanView]        = useState(false);
   const [reports,        setReports]        = useState<Report[]>([]);
@@ -214,9 +244,16 @@ export default function ReportPage() {
   const [isLoading,      setIsLoading]      = useState(false);
   const [loadError,      setLoadError]      = useState("");
 
+  /* ── Existing tasks map: reportId → task ── */
+  const [existingTasks,  setExistingTasks]  = useState<Record<string, ExistingTask>>({});
+
   /* ── Meta ── */
   const [metaStatuses,   setMetaStatuses]   = useState<MetaStatus[]>(FALLBACK_STATUSES);
   const [metaPriorities, setMetaPriorities] = useState<MetaPriority[]>(FALLBACK_PRIORITIES);
+  const [metaStaff,      setMetaStaff]      = useState<{ name: string; disciplines: string[] }[]>([]);
+
+  /* ── View ── */
+  const [viewMode,       setViewMode]       = useState<ViewMode>("card");
 
   /* ── Filters ── */
   const [buildingFilter,  setBuildingFilter]  = useState("All Buildings");
@@ -226,6 +263,11 @@ export default function ReportPage() {
   const [showDuplicates,  setShowDuplicates]  = useState(false);
   const [searchQuery,     setSearchQuery]     = useState("");
   const [userTypeFilter,  setUserTypeFilter]  = useState("All");
+
+  /* ── Date filter ── */
+  const [dateFilter,     setDateFilter]     = useState<DateFilter>("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo,   setCustomDateTo]   = useState("");
 
   /* ── Report modal ── */
   const [selectedReport,  setSelectedReport]  = useState<Report | null>(null);
@@ -252,23 +294,20 @@ export default function ReportPage() {
   const [taskCheckInput, setTaskCheckInput]  = useState("");
   const [taskNotes,      setTaskNotes]       = useState("");
   const [taskSaving,     setTaskSaving]      = useState(false);
-const [metaStaff, setMetaStaff] = useState<{ name: string; disciplines: string[] }[]>([]);
 
-
-
-const { addNotification } = useNotifications();
-const prevReportCountRef = React.useRef<number>(0);
+  const { addNotification } = useNotifications();
+  const prevReportCountRef = React.useRef<number>(0);
 
   /* ── Confirm dialog ── */
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean; message: string; onConfirm: () => void | Promise<void>;
-  }>({ open: false, message: "", onConfirm: () => {} });
+  const confirmCallbackRef = React.useRef<(() => void | Promise<void>) | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; message: string }>({
+    open: false, message: "",
+  });
 
   const { toasts, show: showToast, dismiss: dismissToast } = useToast();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  /* ── Cleanup on unmount ── */
   useEffect(() => {
     return () => {
       setSelectedReport(null); setStatusValue("Pending"); setCommentText("");
@@ -276,7 +315,6 @@ const prevReportCountRef = React.useRef<number>(0);
     };
   }, []);
 
-  /* ── Body scroll lock ── */
   useEffect(() => {
     document.body.style.overflow = (selectedReport || showTaskModal || showProgress) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
@@ -304,33 +342,51 @@ const prevReportCountRef = React.useRef<number>(0);
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
-  useEffect(() => { if (!canView) return; fetchReports(); }, [canView]);
+  useEffect(() => { if (!canView) return; fetchReports(); fetchTasks(); }, [canView]);
 
   /* ── Fetch meta ── */
-  // BROKEN — missing closing },[]);
-useEffect(() => {
-  fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
-    .then(r => r.json())
-    .then(data => {
-      if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
-      if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
-    }).catch(() => {});
+  useEffect(() => {
+    fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(data => {
+        if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
+        if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
+      }).catch(() => {});
 
-  fetch(`${API_BASE}/api/staff`, { cache: "no-store" })
-    .then(r => r.json())
-    .then(data => {
-      const raw = Array.isArray(data) ? data : Array.isArray(data?.staff) ? data.staff : [];
-      const list = raw
-        .map((s: any) => ({
-          name:        String(s?.name || s?.email || "").trim(),
-          disciplines: Array.isArray(s?.disciplines) ? s.disciplines : [],
-        }))
-        .filter((s: { name: string; disciplines: string[] }) => s.name);
-      if (list.length > 0) setMetaStaff(list);
-    }).catch(() => {});
+    fetch(`${API_BASE}/api/staff`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(data => {
+        const raw = Array.isArray(data) ? data : Array.isArray(data?.staff) ? data.staff : [];
+        const list = raw
+          .map((s: any) => ({
+            name:        String(s?.name || s?.email || "").trim(),
+            disciplines: Array.isArray(s?.disciplines) ? s.disciplines : [],
+          }))
+          .filter((s: { name: string; disciplines: string[] }) => s.name);
+        if (list.length > 0) setMetaStaff(list);
+      }).catch(() => {});
+  }, []);
 
-// ✅ ADD THIS CLOSING — was missing
-}, []);
+  /* ── Fetch all tasks to build existingTasks map ── */
+  const fetchTasks = useCallback(async () => {
+    try {
+      const res  = await fetch(`${API_BASE}/api/tasks?ts=${Date.now()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) return;
+      const list: any[] = Array.isArray(data) ? data
+        : Array.isArray(data.tasks) ? data.tasks
+        : Array.isArray(data.data)  ? data.data : [];
+
+      // Build map of reportId → task (use both _id and reportId as keys)
+      const map: Record<string, ExistingTask> = {};
+      list.forEach(t => {
+        const task: ExistingTask = { _id: t._id, name: t.name, status: t.status, priority: t.priority };
+        if (t.reportId) map[String(t.reportId)] = task;
+        map[String(t._id)] = task;
+      });
+      setExistingTasks(map);
+    } catch {}
+  }, []);
 
   /* ── Dynamic status helpers ── */
   const getStatusColor = useCallback((name?: string): string => {
@@ -357,17 +413,19 @@ useEffect(() => {
     return "pending";
   };
 
-const statusMatchesFilter = useCallback((reportStatus: string | undefined, filter: string) => {
-  const current      = reportStatus || "Pending";
-  const archivedName = metaStatuses.find(s => s.name.toLowerCase() === "archived")?.name  || "Archived";
-  const resolvedName = metaStatuses.find(s => s.name.toLowerCase() === "resolved")?.name  || "Resolved";
+  const statusMatchesFilter = useCallback((reportStatus: string | undefined, filter: string) => {
+    const current      = reportStatus || "Pending";
+    const archivedName = metaStatuses.find(s => s.name.toLowerCase() === "archived")?.name || "Archived";
+    const resolvedName = metaStatuses.find(s => s.name.toLowerCase() === "resolved")?.name  || "Resolved";
+    if (filter === "All Statuses") return current !== archivedName && current !== resolvedName;
+    return current === filter;
+  }, [metaStatuses]);
 
-  if (filter === "All Statuses") {
-    // ✅ Hide both Archived AND Resolved from the default view
-    return current !== archivedName && current !== resolvedName;
-  }
-  return current === filter;
-}, [metaStatuses]);
+  /* ── Helper: does a report already have a task? ── */
+  const getExistingTask = useCallback((report: Report): ExistingTask | null => {
+    const rid = report.reportId || report._id;
+    return existingTasks[rid] || existingTasks[report._id] || null;
+  }, [existingTasks]);
 
   /* ── Fetch reports ── */
   const fetchReports = async () => {
@@ -383,17 +441,11 @@ const statusMatchesFilter = useCallback((reportStatus: string | undefined, filte
       else { setLoadError("Could not load reports. Check the server response."); setReports([]); return; }
       setReports(list); setCurrentPage(1);
       if (prevReportCountRef.current > 0 && list.length > prevReportCountRef.current) {
-  const newCount = list.length - prevReportCountRef.current;
-  addNotification(
-    `${newCount} new report${newCount > 1 ? "s" : ""} submitted.`,
-    "followup"
-  );
-}
-prevReportCountRef.current = list.length;
-
+        const newCount = list.length - prevReportCountRef.current;
+        addNotification(`${newCount} new report${newCount > 1 ? "s" : ""} submitted.`, "followup" as any);
+      }
+      prevReportCountRef.current = list.length;
     } catch { setLoadError("Network error while loading reports."); setReports([]); }
-
-    
     finally { setIsLoading(false); }
   };
 
@@ -457,14 +509,17 @@ prevReportCountRef.current = list.length;
     const lm = collegeFilter   === "All Colleges"  || (report.college  || "Unspecified") === collegeFilter;
     const sm = statusMatchesFilter(report.status, statusFilter);
     const qm = !searchQuery.trim() ||
-      (report.reportId   || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (report.heading    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (report.description|| "").toLowerCase().includes(searchQuery.toLowerCase());
+      (report.reportId    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (report.heading     || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (report.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const um = userTypeFilter === "All" || (report.userType || "") === userTypeFilter;
-    return bm && cm && lm && sm && qm && um;
+    const dm = isWithinDateRange(report.createdAt, dateFilter, customDateFrom, customDateTo);
+    return bm && cm && lm && sm && qm && um && dm;
   });
 
-  useEffect(() => { setCurrentPage(1); }, [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates, searchQuery, userTypeFilter]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates, searchQuery, userTypeFilter, dateFilter, customDateFrom, customDateTo]);
 
   const totalPages       = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PER_PAGE));
   const startIndex       = (currentPage - 1) * REPORTS_PER_PAGE;
@@ -486,10 +541,22 @@ prevReportCountRef.current = list.length;
     setCollegeFilter("All Colleges");   setStatusFilter("All Statuses");
     setShowDuplicates(false);           setCurrentPage(1);
     setSearchQuery("");                 setUserTypeFilter("All");
+    setDateFilter("all");               setCustomDateFrom(""); setCustomDateTo("");
   };
 
-  const showConfirm = (message: string, onConfirm: () => void | Promise<void>) =>
-    setConfirmDialog({ open: true, message, onConfirm });
+  const showConfirm = (message: string, onConfirm: () => void | Promise<void>) => {
+    confirmCallbackRef.current = onConfirm;
+    setConfirmDialog({ open: true, message });
+  };
+  const closeConfirm = () => setConfirmDialog(d => ({ ...d, open: false }));
+  const runConfirm   = async () => {
+    closeConfirm();
+    const action = confirmCallbackRef.current;
+    if (!action) return;
+    confirmCallbackRef.current = null;
+    try { await Promise.resolve(action()); }
+    catch { showToast("Action failed. Please try again.", "error"); }
+  };
 
   /* ── Comments ── */
   const syncComments = async (updatedComments: Comment[]) => {
@@ -562,7 +629,7 @@ prevReportCountRef.current = list.length;
         setReports(prev => prev.map(r => updatedReports.find(u => u._id === r._id) || r));
         const updatedSelected = updatedReports.find(u => u._id === selectedReport._id) || updatedReports[0];
         setSelectedReport(updatedSelected); setStatusValue("Archived");
-        showToast(`Report archived.`, "success");
+        showToast("Report archived.", "success");
       } catch { showToast("Problem archiving the report(s).", "error"); }
       finally { setSaving(false); }
     });
@@ -603,7 +670,7 @@ prevReportCountRef.current = list.length;
       const updated = data.report as Report;
       setReports(prev => prev.map(r => r._id === updated._id ? updated : r));
       setSelectedReport(updated); setCommentText("");
-      showToast(`Comment added.`, "success");
+      showToast("Comment added.", "success");
     } catch (err: any) { showToast(err.message || "Problem adding comment.", "error"); }
     finally { setSaving(false); }
   };
@@ -623,6 +690,12 @@ prevReportCountRef.current = list.length;
     setShowTaskModal(true);
   };
   const closeTaskModal = () => { setShowTaskModal(false); setTaskReport(null); };
+
+  /* ── Navigate to task ── */
+  const viewExistingTask = (task: ExistingTask, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    router.push(`/Admin/tasks?highlight=${task._id}`);
+  };
 
   const addTaskStaff = () => {
     const v = taskStaffInput.trim();
@@ -659,6 +732,8 @@ prevReportCountRef.current = list.length;
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to create task");
       showToast(`Task "${taskName}" created.`, "success");
+      // Refresh task map so the button flips to "View Task"
+      await fetchTasks();
       closeTaskModal();
     } catch (err: any) { showToast(err.message || "Problem creating task.", "error"); }
     finally { setTaskSaving(false); }
@@ -703,13 +778,86 @@ prevReportCountRef.current = list.length;
 
   const commentsToShow: Comment[] = selectedReport?.comments || [];
 
+  /* ── Shared task action button renderer ── */
+  const renderTaskButton = (report: Report, variant: "modal" | "card" | "list") => {
+    const existing = getExistingTask(report);
+    if (existing) {
+      const pColor = metaPriorities.find(p => p.name === existing.priority)?.color || "#6b7280";
+      if (variant === "modal") {
+        return (
+          <button type="button" className="modal-view-task-btn"
+            onClick={() => viewExistingTask(existing)}
+            title={`View task: ${existing.name}`}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            View Task
+          </button>
+        );
+      }
+      if (variant === "card") {
+        return (
+          <button type="button" className="card-view-task-btn"
+            onClick={e => { e.stopPropagation(); viewExistingTask(existing, e); }}
+            style={{ borderColor: pColor + "60", color: pColor }}
+            title={`View task: ${existing.name}`}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4"/>
+            </svg>
+            Task Exists
+          </button>
+        );
+      }
+      // list variant
+      return (
+        <button type="button" className="list-view-task-btn"
+          onClick={e => { e.stopPropagation(); viewExistingTask(existing, e); }}
+          style={{ color: pColor }}>
+          ✓ Task
+        </button>
+      );
+    }
+
+    // No existing task
+    if (variant === "modal") {
+      return (
+        <button type="button" className="modal-create-task-btn"
+          onClick={() => { closeDetails(); openCreateTask(report); }}
+          title="Create a task from this report">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Create Task
+        </button>
+      );
+    }
+    if (variant === "card") {
+      return (
+        <button type="button" className="card-create-task-btn"
+          onClick={e => { e.stopPropagation(); openCreateTask(report); }}
+          title="Create task">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          + Task
+        </button>
+      );
+    }
+    // list
+    return (
+      <button type="button" className="list-create-task-btn"
+        onClick={e => { e.stopPropagation(); openCreateTask(report); }}>
+        + Task
+      </button>
+    );
+  };
+
   /* ══════════════════════════════════════════════════════════
      PROGRESS MODAL
   ══════════════════════════════════════════════════════════ */
   const progressModalContent = showProgress && progressReport ? (
     <div className="progress-backdrop" onClick={() => { setShowProgress(false); setProgressReport(null); }}>
       <div className="progress-modal" onClick={e => e.stopPropagation()}>
-
         <div className="progress-modal-header">
           <div>
             <h2 className="progress-modal-title">Report Progress</h2>
@@ -720,10 +868,7 @@ prevReportCountRef.current = list.length;
           <button type="button" className="progress-modal-close"
             onClick={() => { setShowProgress(false); setProgressReport(null); }}>✕</button>
         </div>
-
         <div className="progress-modal-body">
-
-          {/* ── Status Stepper ── */}
           <div className="progress-stepper-section">
             <h3 className="progress-section-title">Status Flow</h3>
             <div className="stepper-box">
@@ -759,8 +904,6 @@ prevReportCountRef.current = list.length;
               })}
             </div>
           </div>
-
-          {/* ── History Timeline ── */}
           <div className="progress-history-section">
             <h3 className="progress-section-title">History</h3>
             {(() => {
@@ -806,62 +949,38 @@ prevReportCountRef.current = list.length;
      REPORT DETAIL MODAL
   ══════════════════════════════════════════════════════════ */
   const modalContent = selectedReport ? (
-    <div className="report-modal-backdrop" onClick={closeDetails} role="dialog" aria-modal="true" aria-label="Report details">
+    <div className="report-modal-backdrop" onClick={closeDetails} role="dialog" aria-modal="true">
       <div className="report-modal" onClick={e => e.stopPropagation()}>
-
-        {/* Modal Header */}
         <div className="modal-header">
           <div className="modal-header-main">
             <h2>{selectedReport.heading || "Report details"}</h2>
             {selectedReport.reportId && <span className="modal-report-id-badge">#{selectedReport.reportId}</span>}
           </div>
           <div className="modal-header-actions">
-            {/* Progress button */}
-            <button
-              type="button"
-              className="modal-progress-btn"
-              onClick={() => openProgress(selectedReport)}
-              title="View progress & history"
-            >
+            <button type="button" className="modal-progress-btn" onClick={() => openProgress(selectedReport)} title="View progress & history">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
               </svg>
               Progress
             </button>
-            {/* Create Task button */}
-            <button
-              type="button"
-              className="modal-create-task-btn"
-              onClick={() => { closeDetails(); openCreateTask(selectedReport); }}
-              title="Create a task from this report"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Create Task
-            </button>
+            {renderTaskButton(selectedReport, "modal")}
             <button className="modal-close-btn" onClick={closeDetails} type="button" aria-label="Close modal">✕</button>
           </div>
         </div>
 
-        {/* Modal Body */}
         <div className="modal-content">
           <div className="modal-img-wrapper">
-            <img
-              src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+            <img src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
               alt="Report" className="report-img report-img-clickable"
               onClick={() => setIsImageExpanded(true)}
-              onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
-            />
+              onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
             <div className="modal-img-hint">Click to enlarge</div>
           </div>
           <div className="modal-thumb-mobile">
-            <img
-              src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
+            <img src={resolveImageFile(selectedReport.ImageFile || selectedReport.image)}
               alt="Report" className="report-img report-img-clickable"
               onClick={() => setIsImageExpanded(true)}
-              onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
-            />
+              onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
           </div>
 
           <div className="modal-info">
@@ -879,7 +998,6 @@ prevReportCountRef.current = list.length;
               </p>
             </div>
 
-            {/* Status panel — dynamic */}
             <div className="status-panel" style={{ borderLeft: `3px solid ${getStatusColor(statusValue)}` }}>
               <div className="status-panel-header">
                 <span className="status-panel-title">Status</span>
@@ -887,21 +1005,16 @@ prevReportCountRef.current = list.length;
               </div>
               <div className="status-row status-row-inline">
                 <label htmlFor="status-select" className="status-row-label">Update</label>
-                <select
-                  id="status-select" className="status-select"
+                <select id="status-select" className="status-select"
                   value={statusValue}
                   onChange={e => setStatusValue(e.target.value)}
-                  disabled={selectedReport.status === "Archived"}
-                >
-                  {metaStatuses
-                    .filter(s => s.name.toLowerCase() !== "archived")
-                    .map(s => <option key={s.id} value={s.name}>{s.name}</option>)
-                  }
+                  disabled={selectedReport.status === "Archived"}>
+                  {metaStatuses.filter(s => s.name.toLowerCase() !== "archived")
+                    .map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
             </div>
 
-            {/* Comments */}
             <div className="comments-section">
               <h3>
                 Comments
@@ -940,19 +1053,15 @@ prevReportCountRef.current = list.length;
                   ))}
                 </ul>
               ) : <p className="no-comments">No comments yet.</p>}
-
               <textarea className="comment-input" rows={3} value={commentText}
                 onChange={e => setCommentText(e.target.value)} placeholder="Type your comment here…" />
-
               <div className="modal-actions">
                 <button className="add-comment-btn" onClick={addIndividualComment}
                   disabled={saving || !commentText.trim()} type="button">
                   {saving ? "Adding…" : "Add Comment"}
                 </button>
                 {selectedReport.status !== "Archived" && (
-                  <button className="archive-btn" onClick={handleArchive} disabled={saving} type="button">
-                    Archive report
-                  </button>
+                  <button className="archive-btn" onClick={handleArchive} disabled={saving} type="button">Archive report</button>
                 )}
                 <button className="save-comment-btn" onClick={handleSaveChanges}
                   disabled={saving || selectedReport.status === "Archived"} type="button">
@@ -993,7 +1102,8 @@ prevReportCountRef.current = list.length;
           <div className="task-modal-left">
             <div className="task-field-group">
               <label className="task-label">Task Name <span className="task-required">*</span></label>
-              <input type="text" className="task-input" value={taskName} placeholder="Describe the task…" onChange={e => setTaskName(e.target.value)} />
+              <input type="text" className="task-input" value={taskName} placeholder="Describe the task…"
+                onChange={e => setTaskName(e.target.value)} />
             </div>
             <div className="task-report-info">
               <span className="task-report-info-label">Linked Report</span>
@@ -1016,7 +1126,8 @@ prevReportCountRef.current = list.length;
             </div>
             <div className="task-field-group">
               <label className="task-label">Notes</label>
-              <textarea className="task-input task-textarea" rows={3} value={taskNotes} placeholder="Additional notes…" onChange={e => setTaskNotes(e.target.value)} />
+              <textarea className="task-input task-textarea" rows={3} value={taskNotes}
+                placeholder="Additional notes…" onChange={e => setTaskNotes(e.target.value)} />
             </div>
           </div>
           <div className="task-modal-right">
@@ -1035,21 +1146,18 @@ prevReportCountRef.current = list.length;
               )}
               <div className="task-staff-input-row">
                 {metaStaff.length > 0 ? (
-  <select className="task-input" value={taskStaffInput} onChange={e => setTaskStaffInput(e.target.value)}>
-    <option value="">-- Select staff --</option>
-    {metaStaff
-      .filter(s =>
-        !taskStaff.includes(s.name) &&
-        (s.disciplines.length === 0 ||
-         s.disciplines.some(d =>
-           d.toLowerCase() === (taskReport?.concern || "").toLowerCase()
-         ))
-      )
-      .map(s => <option key={s.name} value={s.name}>{s.name}</option>)
-    }
-  </select>
-) : (
-                  <input type="text" className="task-input" value={taskStaffInput} placeholder="Staff name or email…"
+                  <select className="task-input" value={taskStaffInput} onChange={e => setTaskStaffInput(e.target.value)}>
+                    <option value="">-- Select staff --</option>
+                    {metaStaff
+                      .filter(s => !taskStaff.includes(s.name) && (
+                        s.disciplines.length === 0 ||
+                        s.disciplines.some(d => d.toLowerCase() === (taskReport?.concern || "").toLowerCase())
+                      ))
+                      .map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" className="task-input" value={taskStaffInput}
+                    placeholder="Staff name or email…"
                     onChange={e => setTaskStaffInput(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTaskStaff(); } }} />
                 )}
@@ -1060,7 +1168,7 @@ prevReportCountRef.current = list.length;
               <label className="task-label">
                 Progress Checklist
                 {taskChecklist.length > 0 && (
-                  <span className="task-checklist-count">{taskChecklist.filter(i => i.done).length}/{taskChecklist.length}</span>
+                  <span className="task-checklist-count">{taskChecklist.filter(i=>i.done).length}/{taskChecklist.length}</span>
                 )}
               </label>
               {taskChecklist.length > 0 && (
@@ -1071,7 +1179,8 @@ prevReportCountRef.current = list.length;
               <div className="task-checklist-list">
                 {taskChecklist.map(item => (
                   <div key={item.id} className="task-checklist-item">
-                    <button type="button" className={`task-check-btn${item.done?" task-check-btn--done":""}`} onClick={() => toggleChecklistItem(item.id)}>
+                    <button type="button" className={`task-check-btn${item.done?" task-check-btn--done":""}`}
+                      onClick={() => toggleChecklistItem(item.id)}>
                       {item.done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                     </button>
                     <span className={`task-checklist-text${item.done?" task-checklist-text--done":""}`}>{item.text}</span>
@@ -1081,7 +1190,8 @@ prevReportCountRef.current = list.length;
                 {taskChecklist.length === 0 && <p className="task-checklist-empty">No items yet.</p>}
               </div>
               <div className="task-staff-input-row">
-                <input type="text" className="task-input" value={taskCheckInput} placeholder="Add a checklist step…"
+                <input type="text" className="task-input" value={taskCheckInput}
+                  placeholder="Add a checklist step…"
                   onChange={e => setTaskCheckInput(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addChecklistItem(); } }} />
                 <button type="button" className="task-add-btn" onClick={addChecklistItem} disabled={!taskCheckInput.trim()}>Add</button>
@@ -1091,13 +1201,121 @@ prevReportCountRef.current = list.length;
         </div>
         <div className="task-modal-footer">
           <button type="button" className="task-cancel-btn" onClick={closeTaskModal} disabled={taskSaving}>Cancel</button>
-          <button type="button" className="task-submit-btn" onClick={handleCreateTask} disabled={taskSaving || !taskName.trim()}>
+          <button type="button" className="task-submit-btn" onClick={handleCreateTask}
+            disabled={taskSaving || !taskName.trim()}>
             {taskSaving ? "Creating…" : "Create Task"}
           </button>
         </div>
       </div>
     </div>
   ) : null;
+
+  /* ══════════════════════════════════════════════════════════
+     REPORT CARD (card view)
+  ══════════════════════════════════════════════════════════ */
+  const renderReportCard = (report: Report, showDupLink = false) => {
+    const key        = getGroupKey(report);
+    const duplicates = showDupLink ? (duplicateCounts[key] || 1) - 1 : 0;
+    const statusKey  = getStatusClassKey(report.status);
+    const existing   = getExistingTask(report);
+
+    return (
+      <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
+        {/* Task exists indicator strip */}
+        {existing && (
+          <div style={{
+            height: 3, background: metaPriorities.find(p=>p.name===existing.priority)?.color || "#22c55e",
+          }}/>
+        )}
+        <div className="report-img-container">
+          <img src={resolveImageFile(report.image || report.ImageFile)} alt="Report" className="report-img"
+            onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
+        </div>
+        <div className="report-body">
+          <div className="report-header-row">
+            {report.reportId && <p className="report-id-badge">#{report.reportId}</p>}
+            <h3>{report.heading || "Untitled report"}</h3>
+          </div>
+          <div className={`status-focus-row status-focus-${statusKey}`}>
+            <span className="status-focus-label">Status</span>
+            {renderStatusPill(report.status)}
+          </div>
+          <p className="report-description">{report.description || "No description provided."}</p>
+          <div className="report-info">
+            <p><strong>Building:</strong> {formatBuilding(report)}</p>
+            <p><strong>Concern:</strong>  {formatConcern(report)}</p>
+            <p><strong>College:</strong>  {report.college || "Unspecified"}</p>
+          </div>
+          <p className="submitted-date">
+            {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
+            {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+          </p>
+          {showDupLink && !showDuplicates && duplicates > 0 && (
+            <p className="duplicate-msg" onClick={e => { e.stopPropagation(); setSelectedGroup(key); }}>
+              +{duplicates} similar {duplicates === 1 ? "report" : "reports"}
+            </p>
+          )}
+          <div className="report-card-actions" onClick={e => e.stopPropagation()}>
+            <button type="button" className="card-progress-btn" onClick={e => openProgress(report, e)}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Progress
+            </button>
+            {renderTaskButton(report, "card")}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* ══════════════════════════════════════════════════════════
+     REPORT ROW (list view)
+  ══════════════════════════════════════════════════════════ */
+  const renderReportRow = (report: Report) => {
+    const sColor   = getStatusColor(report.status);
+    const existing = getExistingTask(report);
+
+    return (
+      <div key={report._id} className="report-list-row" onClick={() => handleCardClick(report)}>
+        {existing && <span className="report-list-task-bar" style={{ backgroundColor: metaPriorities.find(p=>p.name===existing.priority)?.color || "#22c55e" }} />}
+
+        {/* Title */}
+        <div className="report-list-title-cell">
+          {report.reportId && <span className="report-id-badge" style={{ marginLeft: 0, marginRight: 6 }}>#{report.reportId}</span>}
+          <span className="report-list-heading">{report.heading || "Untitled report"}</span>
+        </div>
+
+        {/* Status */}
+        <span>
+          <span className="status-pill" style={{ backgroundColor: sColor, color: "#fff", textShadow: "0 1px 2px rgba(0,0,0,0.2)" }}>
+            {report.status || "Pending"}
+          </span>
+        </span>
+
+        {/* Building */}
+        <span className="report-list-cell">{formatBuilding(report)}</span>
+
+        {/* Concern */}
+        <span className="report-list-cell">{formatConcern(report)}</span>
+
+        {/* College */}
+        <span className="report-list-cell">{report.college || "—"}</span>
+
+        {/* Date */}
+        <span className="report-list-time">
+          {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "—"}
+          {report.createdAt && <span style={{ display: "block", fontSize: "0.68rem", opacity: 0.6 }}>{getRelativeTime(report.createdAt)}</span>}
+        </span>
+
+        {/* Actions */}
+        <div className="report-list-actions" onClick={e => e.stopPropagation()}>
+          <button type="button" className="card-progress-btn" style={{ fontSize: "0.68rem" }} onClick={e => openProgress(report, e)}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </button>
+          {renderTaskButton(report, "list")}
+        </div>
+      </div>
+    );
+  };
 
   /* ══════════════════════════════════════════════════════════
      MAIN RENDER
@@ -1112,7 +1330,30 @@ prevReportCountRef.current = list.length;
             <p className="header-subtitle">Review, update, and archive facility reports in one place.</p>
           </div>
           <div className="header-actions">
-            <button className="refresh-btn" type="button" onClick={fetchReports} disabled={isLoading} title="Refresh">
+            {/* View toggle */}
+            <div className="view-toggle-group">
+              <button type="button"
+                className={`view-toggle-btn${viewMode === "card" ? " view-toggle-btn--active" : ""}`}
+                onClick={() => setViewMode("card")} title="Card view">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+                </svg>
+              </button>
+              <button type="button"
+                className={`view-toggle-btn${viewMode === "list" ? " view-toggle-btn--active" : ""}`}
+                onClick={() => setViewMode("list")} title="List view">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6"  x2="21" y2="6"/>
+                  <line x1="8" y1="12" x2="21" y2="12"/>
+                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  <line x1="3" y1="6"  x2="3.01" y2="6"/>
+                  <line x1="3" y1="12" x2="3.01" y2="12"/>
+                  <line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <button className="refresh-btn" type="button" onClick={() => { fetchReports(); fetchTasks(); }} disabled={isLoading} title="Refresh">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
                 <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -1169,6 +1410,29 @@ prevReportCountRef.current = list.length;
               Show duplicates
             </label>
           </div>
+
+          {/* ── Date filter row ── */}
+          <div className="date-filter-row">
+            <span className="date-filter-label">Date</span>
+            <div className="date-filter-tabs">
+              {(["all", "today", "week", "month", "custom"] as DateFilter[]).map(f => (
+                <button key={f} type="button"
+                  className={`date-filter-tab${dateFilter === f ? " date-filter-tab--active" : ""}`}
+                  onClick={() => setDateFilter(f)}>
+                  {f === "all" ? "All time" : f === "today" ? "Today" : f === "week" ? "Last 7 days" : f === "month" ? "Last 30 days" : "Custom"}
+                </button>
+              ))}
+            </div>
+            {dateFilter === "custom" && (
+              <div className="date-custom-inputs">
+                <input type="date" className="date-custom-input" value={customDateFrom}
+                  onChange={e => setCustomDateFrom(e.target.value)} />
+                <span style={{ color: "#9ca3af", fontSize: 13 }}>to</span>
+                <input type="date" className="date-custom-input" value={customDateTo}
+                  onChange={e => setCustomDateTo(e.target.value)} />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Search */}
@@ -1179,7 +1443,7 @@ prevReportCountRef.current = list.length;
           <input id="report-id-search" className="search" type="text"
             placeholder="Search by report ID, title, or description…"
             value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-          {searchQuery && <button className="search-clear-btn" type="button" onClick={() => setSearchQuery("")} aria-label="Clear search">✕</button>}
+          {searchQuery && <button className="search-clear-btn" type="button" onClick={() => setSearchQuery("")}>✕</button>}
         </div>
 
         {isLoading && (
@@ -1202,99 +1466,47 @@ prevReportCountRef.current = list.length;
         {!isLoading && filteredReports.length > 0 && (
           <>
             {selectedGroup ? (
-              <div className="reports-list">
-                <div className="group-header">
+              /* ── Group view ── */
+              <div className={viewMode === "list" ? "reports-list-view" : "reports-list"}>
+                <div className="group-header" style={{ gridColumn: "1 / -1" }}>
                   <h2>Similar reports for <em>{selectedGroup.replace(/\|/g, " › ")}</em></h2>
                   <button onClick={() => setSelectedGroup(null)} className="back-btn" type="button">← Back</button>
                 </div>
-                {getReportsByGroup(selectedGroup).map(report => {
-                  const statusKey = getStatusClassKey(report.status);
-                  return (
-                    <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
-                      <div className="report-img-container">
-                        <img src={resolveImageFile(report.image || report.ImageFile)} alt="Report" className="report-img"
-                          onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
-                      </div>
-                      <div className="report-body">
-                        <div className="report-header-row">
-                          {report.reportId && <p className="report-id-badge">#{report.reportId}</p>}
-                          <h3>{report.heading || "Untitled report"}</h3>
-                        </div>
-                        <div className={`status-focus-row status-focus-${statusKey}`}>
-                          <span className="status-focus-label">Status</span>
-                          {renderStatusPill(report.status)}
-                        </div>
-                        <p className="report-description">{report.description || "No description provided."}</p>
-                        <div className="report-info">
-                          <p><strong>Building:</strong> {formatBuilding(report)}</p>
-                          <p><strong>Concern:</strong>  {formatConcern(report)}</p>
-                          <p><strong>College:</strong>  {report.college || "Unspecified"}</p>
-                        </div>
-                        <p className="submitted-date">
-                          {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
-                          {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
-                        </p>
-                        {/* Card progress button */}
-                        <div className="report-card-actions" onClick={e => e.stopPropagation()}>
-                          <button type="button" className="card-progress-btn" onClick={e => openProgress(report, e)}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                            Progress
-                          </button>
-                        </div>
-                      </div>
+                {viewMode === "list" ? (
+                  <>
+                    <div className="report-list-header">
+                      <span>Report</span><span>Status</span><span>Building</span>
+                      <span>Concern</span><span>College</span><span>Date</span><span>Actions</span>
                     </div>
-                  );
-                })}
+                    {getReportsByGroup(selectedGroup).map(r => renderReportRow(r))}
+                  </>
+                ) : (
+                  getReportsByGroup(selectedGroup).map(r => renderReportCard(r, false))
+                )}
               </div>
             ) : (
               <>
-                <div className="reports-list">
-                  {paginatedReports.map(report => {
-                    const key        = getGroupKey(report);
-                    const duplicates = (duplicateCounts[key] || 1) - 1;
-                    const statusKey  = getStatusClassKey(report.status);
-                    return (
-                      <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
-                        <div className="report-img-container">
-                          <img src={resolveImageFile(report.image || report.ImageFile)} alt="Report" className="report-img"
-                            onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
-                        </div>
-                        <div className="report-body">
-                          <div className="report-header-row">
-                            {report.reportId && <p className="report-id-badge">#{report.reportId}</p>}
-                            <h3>{report.heading || "Untitled report"}</h3>
-                          </div>
-                          <div className={`status-focus-row status-focus-${statusKey}`}>
-                            <span className="status-focus-label">Status</span>
-                            {renderStatusPill(report.status)}
-                          </div>
-                          <p className="report-description">{report.description || "No description provided."}</p>
-                          <div className="report-info">
-                            <p><strong>Building:</strong> {formatBuilding(report)}</p>
-                            <p><strong>Concern:</strong>  {formatConcern(report)}</p>
-                            <p><strong>College:</strong>  {report.college || "Unspecified"}</p>
-                          </div>
-                          <p className="submitted-date">
-                            {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
-                            {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
-                          </p>
-                          {!showDuplicates && duplicates > 0 && (
-                            <p className="duplicate-msg" onClick={e => { e.stopPropagation(); setSelectedGroup(key); }}>
-                              +{duplicates} similar {duplicates === 1 ? "report" : "reports"}
-                            </p>
-                          )}
-                          {/* Card progress button */}
-                          <div className="report-card-actions" onClick={e => e.stopPropagation()}>
-                            <button type="button" className="card-progress-btn" onClick={e => openProgress(report, e)}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                              Progress
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                {/* ── Results count ── */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+                    {filteredReports.length} report{filteredReports.length !== 1 ? "s" : ""}
+                    {dateFilter !== "all" && ` · ${dateFilter === "today" ? "Today" : dateFilter === "week" ? "Last 7 days" : dateFilter === "month" ? "Last 30 days" : "Custom range"}`}
+                  </span>
                 </div>
+
+                {viewMode === "list" ? (
+                  <div className="reports-list-view">
+                    <div className="report-list-header">
+                      <span>Report</span><span>Status</span><span>Building</span>
+                      <span>Concern</span><span>College</span><span>Date</span><span>Actions</span>
+                    </div>
+                    {paginatedReports.map(r => renderReportRow(r))}
+                  </div>
+                ) : (
+                  <div className="reports-list">
+                    {paginatedReports.map(r => renderReportCard(r, true))}
+                  </div>
+                )}
 
                 {totalPages > 1 && (
                   <div className="pagination">
@@ -1323,8 +1535,8 @@ prevReportCountRef.current = list.length;
         )}
       </div>
 
-      {mounted && modalContent     && createPortal(modalContent,      document.body)}
-      {mounted && taskModalContent && createPortal(taskModalContent,   document.body)}
+      {mounted && modalContent         && createPortal(modalContent,         document.body)}
+      {mounted && taskModalContent     && createPortal(taskModalContent,     document.body)}
       {mounted && progressModalContent && createPortal(progressModalContent, document.body)}
 
       {mounted && createPortal(
@@ -1339,19 +1551,12 @@ prevReportCountRef.current = list.length;
       )}
 
       {mounted && confirmDialog.open && createPortal(
-        <div className="confirm-backdrop" onClick={() => setConfirmDialog(d => ({ ...d, open: false }))}>
+        <div className="confirm-backdrop" onClick={closeConfirm}>
           <div className="confirm-dialog" onClick={e => e.stopPropagation()}>
             <p>{confirmDialog.message}</p>
             <div className="confirm-actions">
-              <button type="button" className="confirm-cancel-btn"
-                onClick={() => setConfirmDialog(d => ({ ...d, open: false }))}>Cancel</button>
-              <button type="button" className="confirm-ok-btn"
-                onClick={async () => {
-                  const action = confirmDialog.onConfirm;
-                  setConfirmDialog(d => ({ ...d, open: false }));
-                  try { await Promise.resolve(action()); }
-                  catch { showToast("Action failed. Please try again.", "error"); }
-                }}>Confirm</button>
+              <button type="button" className="confirm-cancel-btn" onClick={closeConfirm}>Cancel</button>
+              <button type="button" className="confirm-ok-btn" onClick={runConfirm}>Confirm</button>
             </div>
           </div>
         </div>, document.body
