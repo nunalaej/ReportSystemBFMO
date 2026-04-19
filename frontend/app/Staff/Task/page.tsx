@@ -44,28 +44,34 @@ type StaffRecord = {
 type MetaStatus   = { id: string; name: string; color: string; };
 type MetaPriority = { id: string; name: string; color: string; };
 
-/* ── Permission matrix by position ────────────────────────────
-   Head Engineer  → canCreate, canEdit, canAssign, canComment, canStatus
-   Staff Engineer → canComment, canStatus
-   Supervisor     → view only (canStatus: false for own tasks)
-   Technician     → view only
+/* ── Dynamic permission helpers ─────────────────────────────────
+   Permissions are loaded from the DB (api/meta → positionPerms).
+   Each position has an array of permission strings like:
+     ["Create tasks","Edit tasks","Assign staff","Update status","Comment"]
+   We map those to a Perms struct for easy use in the UI.
 ─────────────────────────────────────────────────────────────── */
 type Perms = {
-  canCreate:  boolean; // can create new tasks
-  canEdit:    boolean; // can edit task name/priority/checklist/notes
-  canAssign:  boolean; // can change assignedStaff
-  canStatus:  boolean; // can update status
-  canComment: boolean; // can add comments
+  canCreate:  boolean;
+  canEdit:    boolean;
+  canAssign:  boolean;
+  canStatus:  boolean;
+  canComment: boolean;
 };
 
-function getPerms(position: string): Perms {
-  const pos = position.toLowerCase();
-  if (pos.includes("head engineer"))  return { canCreate: true,  canEdit: true,  canAssign: true,  canStatus: true,  canComment: true  };
-  if (pos.includes("staff engineer")) return { canCreate: false, canEdit: false, canAssign: false, canStatus: true,  canComment: true  };
-  if (pos.includes("supervisor"))     return { canCreate: false, canEdit: false, canAssign: true, canStatus: false, canComment: false };
-  if (pos.includes("technician"))     return { canCreate: false, canEdit: false, canAssign: false, canStatus: false, canComment: false };
-  // fallback
-  return { canCreate: false, canEdit: false, canAssign: false, canStatus: false, canComment: false };
+const EMPTY_PERMS: Perms = {
+  canCreate: false, canEdit: false, canAssign: false,
+  canStatus: false, canComment: false,
+};
+
+function buildPerms(permList: string[]): Perms {
+  const set = new Set(permList.map(p => p.toLowerCase().trim()));
+  return {
+    canCreate:  set.has("create tasks"),
+    canEdit:    set.has("edit tasks"),
+    canAssign:  set.has("assign staff"),
+    canStatus:  set.has("update status"),
+    canComment: set.has("comment"),
+  };
 }
 
 /* ── Toast ── */
@@ -141,6 +147,10 @@ export default function StaffTasksPage() {
   const [metaStatuses,   setMetaStatuses]   = useState<MetaStatus[]>(FALLBACK_STATUSES);
   const [metaPriorities, setMetaPriorities] = useState<MetaPriority[]>(FALLBACK_PRIORITIES);
 
+  /* ── positionPerms loaded from DB ── */
+  const [positionPerms, setPositionPerms] = useState<Record<string, string[]>>({});
+  const [permsLoaded,   setPermsLoaded]   = useState(false);
+
   /* ── Filters ── */
   const [searchQuery,    setSearchQuery]    = useState("");
   const [statusFilter,   setStatusFilter]   = useState("All");
@@ -154,11 +164,11 @@ export default function StaffTasksPage() {
   const [showNoteEdit,   setShowNoteEdit]   = useState(false);
   const [newNote,        setNewNote]        = useState("");
 
-  /* ── Create task (Head Engineer only) ── */
+  /* ── Create task ── */
   const [showCreate,     setShowCreate]     = useState(false);
   const [createDraft,    setCreateDraft]    = useState({ name: "", priority: "", concernType: "", reportId: "", notes: "", assignedStaff: [] as string[], staffInput: "" });
 
-  /* ── Edit task (Head Engineer only) ── */
+  /* ── Edit task ── */
   const [isEditing,      setIsEditing]      = useState(false);
   const [editDraft,      setEditDraft]      = useState<Task | null>(null);
   const [staffInput,     setStaffInput]     = useState("");
@@ -179,7 +189,7 @@ export default function StaffTasksPage() {
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
-  /* ── Fetch staff record (to get position) ── */
+  /* ── Fetch staff record ── */
   const fetchStaffRecord = useCallback(async () => {
     if (!user?.id) return;
     try {
@@ -189,14 +199,20 @@ export default function StaffTasksPage() {
     } catch {}
   }, [user?.id]);
 
-  /* ── Fetch meta ── */
+  /* ── Fetch meta + positionPerms from DB ── */
   const fetchMeta = useCallback(async () => {
     try {
       const res  = await fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
       if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
+      /* ── Load positionPerms from DB ── */
+      if (data?.positionPerms && typeof data.positionPerms === "object") {
+        setPositionPerms(data.positionPerms);
+      }
     } catch {}
+    finally { setPermsLoaded(true); }
+
     try {
       const res  = await fetch(`${API_BASE}/api/staff`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
@@ -230,7 +246,19 @@ export default function StaffTasksPage() {
   const staffName        = staffRecord?.name     || "";
   const staffPosition    = staffRecord?.position || "";
   const staffDisciplines = staffRecord?.disciplines || [];
-  const perms            = useMemo(() => getPerms(staffPosition), [staffPosition]);
+
+  /* ── Build perms dynamically from DB positionPerms ── */
+  const perms: Perms = useMemo(() => {
+    if (!permsLoaded || !staffPosition) return EMPTY_PERMS;
+    /* Try exact match first, then case-insensitive */
+    const permList =
+      positionPerms[staffPosition] ??
+      Object.entries(positionPerms).find(
+        ([k]) => k.toLowerCase() === staffPosition.toLowerCase()
+      )?.[1] ??
+      [];
+    return buildPerms(permList);
+  }, [positionPerms, staffPosition, permsLoaded]);
 
   /* ── My tasks: assigned to me + matching discipline ── */
   const myTasks = useMemo(() => tasks.filter(t => {
@@ -324,7 +352,7 @@ export default function StaffTasksPage() {
     finally { setSaving(false); }
   };
 
-  /* ── Save note (Head Engineer only) ── */
+  /* ── Save note ── */
   const saveNote = async () => {
     if (!selectedTask) return;
     try {
@@ -343,7 +371,7 @@ export default function StaffTasksPage() {
     finally { setSaving(false); }
   };
 
-  /* ── Save full edit (Head Engineer only) ── */
+  /* ── Save full edit ── */
   const saveEdit = async () => {
     if (!editDraft || !selectedTask) return;
     try {
@@ -362,7 +390,7 @@ export default function StaffTasksPage() {
     finally { setSaving(false); }
   };
 
-  /* ── Create task (Head Engineer only) ── */
+  /* ── Create task ── */
   const createTask = async () => {
     if (!createDraft.name.trim()) { showToast("Task name is required.", "error"); return; }
     try {
@@ -415,8 +443,8 @@ export default function StaffTasksPage() {
     const byPri: Record<string,number>  = {};
     const byDisc: Record<string,number> = {};
     myTasks.forEach(t => {
-      if (t.priority)    byPri[t.priority]         = (byPri[t.priority]         || 0) + 1;
-      if (t.concernType) byDisc[t.concernType]      = (byDisc[t.concernType]     || 0) + 1;
+      if (t.priority)    byPri[t.priority]    = (byPri[t.priority]    || 0) + 1;
+      if (t.concernType) byDisc[t.concernType] = (byDisc[t.concernType]|| 0) + 1;
     });
     return { total, resolved, rate, byPri, byDisc };
   }, [myTasks]);
@@ -429,15 +457,25 @@ export default function StaffTasksPage() {
   const statusColor   = getStatusColor(selectedTask?.status);
   const progress      = calcProgress(selectedTask?.checklist);
 
-  /* ── Permission-based role badge ── */
-  const roleBadgeColor = () => {
+  /* ── Role badge color ── */
+  const getRoleBadgeStyle = () => {
     const pos = staffPosition.toLowerCase();
-    if (pos.includes("head"))   return { bg: "#fef3c7", color: "#92400e" };
-    if (pos.includes("staff"))  return { bg: "#dbeafe", color: "#1e40af" };
-    if (pos.includes("super"))  return { bg: "#f3e8ff", color: "#6b21a8" };
-    return { bg: "#dcfce7", color: "#166534" };
+    if (pos.includes("head"))        return { bg: "#fef3c7", color: "#92400e" };
+    if (pos.includes("staff"))       return { bg: "#dbeafe", color: "#1e40af" };
+    if (pos.includes("super"))       return { bg: "#f3e8ff", color: "#6b21a8" };
+    if (pos.includes("technician"))  return { bg: "#dcfce7", color: "#166534" };
+    return { bg: "#f1f5f9", color: "#475569" };
   };
-  const rb = roleBadgeColor();
+  const rb = getRoleBadgeStyle();
+
+  /* ── Permission summary label ── */
+  const permSummary = () => {
+    if (!permsLoaded) return "Loading permissions…";
+    const list = positionPerms[staffPosition] ??
+      Object.entries(positionPerms).find(([k]) => k.toLowerCase() === staffPosition.toLowerCase())?.[1] ?? [];
+    if (!list.length) return "View only";
+    return list.join(" · ");
+  };
 
   /* ══════════════════════════════════════════════════════════ */
   return (
@@ -450,17 +488,24 @@ export default function StaffTasksPage() {
             <div>
               <h1 className="tasks-page-title">My Tasks</h1>
               <p className="tasks-page-subtitle" style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                {staffRecord
-                  ? <><span>{staffName}</span>
-                    <span style={{ background: rb.bg, color: rb.color, fontSize:"0.68rem", fontWeight:700, padding:"2px 9px", borderRadius:999 }}>{staffPosition}</span>
-                    {perms.canCreate  && <span style={{ fontSize:"0.68rem", color:"#16a34a" }}>✓ Can create tasks</span>}
-                    {!perms.canEdit && !perms.canCreate && <span style={{ fontSize:"0.68rem", color:"#9ca3af" }}>View &amp; status updates only</span>}
+                {staffRecord ? (
+                  <>
+                    <span>{staffName}</span>
+                    <span style={{ background: rb.bg, color: rb.color, fontSize:"0.68rem", fontWeight:700, padding:"2px 9px", borderRadius:999 }}>
+                      {staffPosition}
+                    </span>
+                    {/* Show permission summary from DB */}
+                    {permsLoaded && (
+                      <span style={{ fontSize:"0.65rem", color:"#6b7280", fontStyle:"italic" }}>
+                        {permSummary()}
+                      </span>
+                    )}
                   </>
-                  : "Loading your profile…"}
+                ) : "Loading your profile…"}
               </p>
             </div>
             <div className="tasks-header-actions">
-              {/* Create task — Head Engineer only */}
+              {/* ── Create task: only if canCreate ── */}
               {perms.canCreate && (
                 <button type="button"
                   onClick={() => setShowCreate(true)}
@@ -471,7 +516,6 @@ export default function StaffTasksPage() {
                   New Task
                 </button>
               )}
-              {/* View toggle */}
               {(["board","list","analytics"] as const).map(v => (
                 <button key={v} type="button"
                   className={`tasks-view-btn${viewMode === v ? " tasks-view-btn--active" : ""}`}
@@ -588,7 +632,6 @@ export default function StaffTasksPage() {
                   </div>
                 ))}
               </div>
-              {/* By priority */}
               <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:20, border:"1px solid var(--tasks-border)" }}>
                 <div style={{ fontWeight:600, fontSize:14, marginBottom:14, color:"var(--tasks-text-1)" }}>Tasks by Priority</div>
                 {metaPriorities.map(p => {
@@ -603,6 +646,41 @@ export default function StaffTasksPage() {
                       <div style={{ height:6, background:"var(--tasks-border)", borderRadius:999 }}>
                         <div style={{ height:"100%", width:`${pct}%`, background:p.color, borderRadius:999, transition:"width 0.4s" }}/>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Position permissions panel ── */}
+              <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:20, border:"1px solid var(--tasks-border)" }}>
+                <div style={{ fontWeight:600, fontSize:14, marginBottom:14, color:"var(--tasks-text-1)" }}>Your Role Permissions</div>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+                  <span style={{ background:rb.bg, color:rb.color, fontSize:"0.75rem", fontWeight:700, padding:"3px 12px", borderRadius:999 }}>
+                    {staffPosition || "No position assigned"}
+                  </span>
+                </div>
+                {[
+                  { key:"canCreate",  label:"Create Tasks",   icon:"✚" },
+                  { key:"canEdit",    label:"Edit Tasks",     icon:"✏️" },
+                  { key:"canAssign",  label:"Assign Staff",   icon:"👤" },
+                  { key:"canStatus",  label:"Update Status",  icon:"🔄" },
+                  { key:"canComment", label:"Add Comments",   icon:"💬" },
+                ].map(({ key, label, icon }) => {
+                  const allowed = perms[key as keyof Perms];
+                  return (
+                    <div key={key} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", borderBottom:"1px solid var(--tasks-border,#f1f5f9)" }}>
+                      <div style={{ width:20, height:20, borderRadius:4, background: allowed ? "#22c55e" : "#e5e7eb", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                        {allowed
+                          ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        }
+                      </div>
+                      <span style={{ fontSize:13, color: allowed ? "var(--tasks-text-1)" : "var(--tasks-text-4,#b8c4ce)", fontWeight: allowed ? 600 : 400 }}>
+                        {icon} {label}
+                      </span>
+                      <span style={{ marginLeft:"auto", fontSize:"0.68rem", fontWeight:700, color: allowed ? "#22c55e" : "#9ca3af" }}>
+                        {allowed ? "Allowed" : "Restricted"}
+                      </span>
                     </div>
                   );
                 })}
@@ -682,7 +760,7 @@ export default function StaffTasksPage() {
         </div>
       </div>
 
-      {/* ══ CREATE TASK MODAL (Head Engineer only) ══ */}
+      {/* ══ CREATE TASK MODAL ══ */}
       {mounted && showCreate && perms.canCreate && createPortal(
         <div className="tasks-modal-backdrop" onClick={() => setShowCreate(false)}>
           <div className="tasks-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
@@ -691,19 +769,16 @@ export default function StaffTasksPage() {
               <button type="button" className="tasks-modal-close" onClick={() => setShowCreate(false)}>✕</button>
             </div>
             <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:14 }}>
-              {/* Name */}
               <div>
                 <label className="tasks-modal-label">Task Name *</label>
                 <input className="tasks-modal-input" style={{ marginTop:6 }} placeholder="e.g. Replace aircon unit"
                   value={createDraft.name} onChange={e => setCreateDraft(d=>({...d,name:e.target.value}))}/>
               </div>
-              {/* Priority */}
               <div>
                 <label className="tasks-modal-label">Priority</label>
                 <div className="tasks-modal-status-grid" style={{ marginTop:6 }}>
                   {metaPriorities.map(p => (
-                    <button key={p.id} type="button"
-                      className="tasks-modal-status-btn"
+                    <button key={p.id} type="button" className="tasks-modal-status-btn"
                       style={{ borderColor: p.color+"60", color: p.color, backgroundColor: createDraft.priority === p.name ? p.color+"20" : "transparent", fontWeight: createDraft.priority === p.name ? 700 : 500 }}
                       onClick={() => setCreateDraft(d=>({...d,priority:d.priority===p.name?"":p.name}))}>
                       {createDraft.priority === p.name ? "✓ " : ""}{p.name}
@@ -711,46 +786,46 @@ export default function StaffTasksPage() {
                   ))}
                 </div>
               </div>
-              {/* Assign staff */}
-              <div>
-                <label className="tasks-modal-label">Assign Staff</label>
-                <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                  <input list="create-staff-list" className="tasks-modal-input" placeholder="Staff name…" style={{ flex:1 }}
-                    value={createDraft.staffInput}
-                    onChange={e => setCreateDraft(d=>({...d,staffInput:e.target.value}))}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
+              {/* Assign staff — only if canAssign */}
+              {perms.canAssign && (
+                <div>
+                  <label className="tasks-modal-label">Assign Staff</label>
+                  <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                    <input list="create-staff-list" className="tasks-modal-input" placeholder="Staff name…" style={{ flex:1 }}
+                      value={createDraft.staffInput}
+                      onChange={e => setCreateDraft(d=>({...d,staffInput:e.target.value}))}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          const v = createDraft.staffInput.trim();
+                          if (v && !createDraft.assignedStaff.includes(v))
+                            setCreateDraft(d=>({...d,assignedStaff:[...d.assignedStaff,v],staffInput:""}));
+                        }
+                      }}/>
+                    <datalist id="create-staff-list">{allStaff.map(s=><option key={s} value={s}/>)}</datalist>
+                    <button type="button" className="tasks-modal-save-btn" style={{ backgroundColor:"#2563eb", padding:"0 14px" }}
+                      onClick={() => {
                         const v = createDraft.staffInput.trim();
                         if (v && !createDraft.assignedStaff.includes(v))
                           setCreateDraft(d=>({...d,assignedStaff:[...d.assignedStaff,v],staffInput:""}));
-                      }
-                    }}/>
-                  <datalist id="create-staff-list">{allStaff.map(s=><option key={s} value={s}/>)}</datalist>
-                  <button type="button" className="tasks-modal-save-btn" style={{ backgroundColor:"#2563eb", padding:"0 14px" }}
-                    onClick={() => {
-                      const v = createDraft.staffInput.trim();
-                      if (v && !createDraft.assignedStaff.includes(v))
-                        setCreateDraft(d=>({...d,assignedStaff:[...d.assignedStaff,v],staffInput:""}));
-                    }}>Add</button>
+                      }}>Add</button>
+                  </div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:8 }}>
+                    {createDraft.assignedStaff.map(s => (
+                      <span key={s} style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", borderRadius:999, padding:"2px 10px", fontSize:"0.75rem", display:"flex", alignItems:"center", gap:4 }}>
+                        {s}
+                        <button type="button" onClick={() => setCreateDraft(d=>({...d,assignedStaff:d.assignedStaff.filter(x=>x!==s)}))}
+                          style={{ border:"none", background:"none", cursor:"pointer", color:"#93c5fd", fontWeight:700 }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginTop:8 }}>
-                  {createDraft.assignedStaff.map(s => (
-                    <span key={s} style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", borderRadius:999, padding:"2px 10px", fontSize:"0.75rem", display:"flex", alignItems:"center", gap:4 }}>
-                      {s}
-                      <button type="button" onClick={() => setCreateDraft(d=>({...d,assignedStaff:d.assignedStaff.filter(x=>x!==s)}))}
-                        style={{ border:"none", background:"none", cursor:"pointer", color:"#93c5fd", fontWeight:700 }}>✕</button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-              {/* Notes */}
+              )}
               <div>
                 <label className="tasks-modal-label">Notes</label>
                 <textarea className="tasks-modal-input tasks-modal-textarea" rows={2} style={{ marginTop:6 }}
                   placeholder="Optional notes…"
                   value={createDraft.notes} onChange={e => setCreateDraft(d=>({...d,notes:e.target.value}))}/>
               </div>
-              {/* Actions */}
               <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                 <button type="button" onClick={() => setShowCreate(false)}
                   style={{ padding:"8px 18px", borderRadius:8, border:"1px solid var(--tasks-border,#e8ecf0)", background:"var(--tasks-surface,#fff)", cursor:"pointer", fontSize:"0.82rem" }}>
@@ -777,13 +852,12 @@ export default function StaffTasksPage() {
               <div className="tasks-modal-header-left">
                 <h2 className="tasks-modal-title">{selectedTask.name}</h2>
                 {selectedTask.reportId && <span className="tasks-modal-report-badge">#{selectedTask.reportId}</span>}
-                {/* Permission badge */}
                 <span style={{ fontSize:"0.62rem", fontWeight:700, padding:"2px 8px", borderRadius:999, background: rb.bg, color: rb.color, textTransform:"uppercase", letterSpacing:"0.05em" }}>
                   {staffPosition}
                 </span>
               </div>
               <div style={{ display:"flex", gap:8 }}>
-                {/* Edit button — Head Engineer only */}
+                {/* Edit button — only if canEdit */}
                 {perms.canEdit && !isEditing && (
                   <button type="button" onClick={() => { setIsEditing(true); setEditDraft({ ...selectedTask, checklist:(selectedTask.checklist||[]).map(i=>({...i})), assignedStaff:[...(selectedTask.assignedStaff||[])] }); }}
                     style={{ padding:"5px 12px", borderRadius:7, border:"1px solid #e5e7eb", background:"#fff", fontSize:"0.75rem", fontWeight:600, cursor:"pointer" }}>
@@ -808,8 +882,6 @@ export default function StaffTasksPage() {
 
             {/* Body */}
             <div className="tasks-modal-body">
-
-              {/* LEFT */}
               <div className="tasks-modal-left">
 
                 {/* Status / priority pills */}
@@ -819,7 +891,7 @@ export default function StaffTasksPage() {
                   {selectedTask.concernType && <span className="tasks-meta-pill tasks-meta-pill--neutral">{selectedTask.concernType}</span>}
                 </div>
 
-                {/* ── UPDATE STATUS (Staff Engineer + Head Engineer) ── */}
+                {/* ── UPDATE STATUS — only if canStatus ── */}
                 {perms.canStatus && !isEditing && (
                   <div className="tasks-modal-section">
                     <span className="tasks-modal-label">Update Status</span>
@@ -837,18 +909,20 @@ export default function StaffTasksPage() {
                   </div>
                 )}
 
-                {/* ── VIEW-ONLY STATUS (Supervisor / Technician) ── */}
-                {!perms.canStatus && (
+                {/* ── VIEW ONLY STATUS ── */}
+                {!perms.canStatus && !isEditing && (
                   <div className="tasks-modal-section">
                     <span className="tasks-modal-label">Status</span>
                     <span className="tasks-meta-pill" style={{ marginTop:6, display:"inline-block", backgroundColor:statusColor+"20", color:statusColor, border:`1px solid ${statusColor}40` }}>
                       {selectedTask.status||"Pending"}
                     </span>
-                    <p style={{ fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:6 }}>Your role is view-only for status changes.</p>
+                    <p style={{ fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:6 }}>
+                      Your role ({staffPosition}) cannot update status.
+                    </p>
                   </div>
                 )}
 
-                {/* ── EDIT FIELDS (Head Engineer only, when isEditing) ── */}
+                {/* ── EDIT FIELDS — only if canEdit ── */}
                 {isEditing && editDraft && (
                   <>
                     <div className="tasks-modal-section">
@@ -868,39 +942,41 @@ export default function StaffTasksPage() {
                         ))}
                       </div>
                     </div>
-                    {/* Assign staff (Head Engineer) */}
-                    <div className="tasks-modal-section">
-                      <label className="tasks-modal-label">Assigned Staff</label>
-                      <div style={{ display:"flex", gap:6, marginTop:6 }}>
-                        <input list="edit-staff-list" className="tasks-modal-input" placeholder="Add staff…" style={{ flex:1 }}
-                          value={staffInput} onChange={e => setStaffInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") {
+                    {/* Assign staff — only if canAssign */}
+                    {perms.canAssign && (
+                      <div className="tasks-modal-section">
+                        <label className="tasks-modal-label">Assigned Staff</label>
+                        <div style={{ display:"flex", gap:6, marginTop:6 }}>
+                          <input list="edit-staff-list" className="tasks-modal-input" placeholder="Add staff…" style={{ flex:1 }}
+                            value={staffInput} onChange={e => setStaffInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                const v = staffInput.trim();
+                                if (v && !(editDraft.assignedStaff||[]).includes(v))
+                                  setEditDraft(d => d ? {...d,assignedStaff:[...(d.assignedStaff||[]),v]} : d);
+                                setStaffInput("");
+                              }
+                            }}/>
+                          <datalist id="edit-staff-list">{allStaff.map(s=><option key={s} value={s}/>)}</datalist>
+                          <button type="button" style={{ padding:"0 12px", background:"#2563eb", color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:"0.8rem" }}
+                            onClick={() => {
                               const v = staffInput.trim();
                               if (v && !(editDraft.assignedStaff||[]).includes(v))
                                 setEditDraft(d => d ? {...d,assignedStaff:[...(d.assignedStaff||[]),v]} : d);
                               setStaffInput("");
-                            }
-                          }}/>
-                        <datalist id="edit-staff-list">{allStaff.map(s=><option key={s} value={s}/>)}</datalist>
-                        <button type="button" style={{ padding:"0 12px", background:"#2563eb", color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:"0.8rem" }}
-                          onClick={() => {
-                            const v = staffInput.trim();
-                            if (v && !(editDraft.assignedStaff||[]).includes(v))
-                              setEditDraft(d => d ? {...d,assignedStaff:[...(d.assignedStaff||[]),v]} : d);
-                            setStaffInput("");
-                          }}>Add</button>
+                            }}>Add</button>
+                        </div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
+                          {(editDraft.assignedStaff||[]).map(s => (
+                            <span key={s} style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", borderRadius:999, padding:"2px 10px", fontSize:"0.75rem", display:"flex", alignItems:"center", gap:4 }}>
+                              {s}
+                              <button type="button" onClick={() => setEditDraft(d => d ? {...d,assignedStaff:(d.assignedStaff||[]).filter(x=>x!==s)} : d)}
+                                style={{ border:"none",background:"none",cursor:"pointer",color:"#93c5fd",fontWeight:700 }}>✕</button>
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
-                        {(editDraft.assignedStaff||[]).map(s => (
-                          <span key={s} style={{ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1d4ed8", borderRadius:999, padding:"2px 10px", fontSize:"0.75rem", display:"flex", alignItems:"center", gap:4 }}>
-                            {s}
-                            <button type="button" onClick={() => setEditDraft(d => d ? {...d,assignedStaff:(d.assignedStaff||[]).filter(x=>x!==s)} : d)}
-                              style={{ border:"none",background:"none",cursor:"pointer",color:"#93c5fd",fontWeight:700 }}>✕</button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                    )}
                   </>
                 )}
 
@@ -937,10 +1013,15 @@ export default function StaffTasksPage() {
                             {item.done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                           </button>
                           <span className={`tasks-check-text${item.done?" tasks-check-text--done":""}`}>{item.text}</span>
+                          {/* Remove item only if editing */}
+                          {isEditing && editDraft && (
+                            <button type="button" className="tasks-check-remove"
+                              onClick={() => setEditDraft(d => d ? {...d, checklist:(d.checklist||[]).filter(c=>(c.id||c._id)!==id)} : d)}>✕</button>
+                          )}
                         </div>
                       );
                     })}
-                    {/* Add checklist item — Head Engineer only */}
+                    {/* Add checklist item — only if canEdit and isEditing */}
                     {isEditing && editDraft && (
                       <div style={{ display:"flex", gap:6, marginTop:8 }}>
                         <input className="tasks-modal-input" placeholder="Add item…" style={{ flex:1 }} value={checkInput} onChange={e => setCheckInput(e.target.value)}
@@ -970,7 +1051,7 @@ export default function StaffTasksPage() {
                     </>
                   ) : (
                     <p className="tasks-modal-notes" style={{ marginTop:6 }}>
-                      {selectedTask.notes || <span className="tasks-modal-empty-hint">{perms.canEdit ? "No notes yet. Click Edit to add one." : "No notes."}</span>}
+                      {selectedTask.notes || <span className="tasks-modal-empty-hint">{perms.canEdit ? "No notes yet. Click Edit to add." : "No notes."}</span>}
                     </p>
                   )}
                 </div>
@@ -978,8 +1059,6 @@ export default function StaffTasksPage() {
 
               {/* RIGHT */}
               <div className="tasks-modal-right">
-
-                {/* Task info */}
                 <div className="tasks-modal-section tasks-modal-info-box">
                   <span className="tasks-modal-label">Task Info</span>
                   <div className="tasks-modal-info-grid">
@@ -991,7 +1070,6 @@ export default function StaffTasksPage() {
                   </div>
                 </div>
 
-                {/* Assigned staff */}
                 <div className="tasks-modal-section tasks-modal-info-box">
                   <span className="tasks-modal-label">Assigned Staff</span>
                   <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginTop:6 }}>
@@ -1017,7 +1095,7 @@ export default function StaffTasksPage() {
                     ))}
                   </div>
 
-                  {/* Add comment — Staff Engineer + Head Engineer */}
+                  {/* Add comment — only if canComment */}
                   {perms.canComment && (
                     <div style={{ marginTop:10, display:"flex", flexDirection:"column", gap:6 }}>
                       <textarea className="tasks-modal-input tasks-modal-textarea" rows={2}
@@ -1029,7 +1107,9 @@ export default function StaffTasksPage() {
                     </div>
                   )}
                   {!perms.canComment && (
-                    <p style={{ fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:8 }}>Comments are read-only for your role.</p>
+                    <p style={{ fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:8 }}>
+                      Comments are read-only for your role ({staffPosition}).
+                    </p>
                   )}
                 </div>
 
