@@ -77,6 +77,7 @@ const FALLBACK_STATUSES: MetaStatus[] = [
   { id: "4", name: "Resolved",        color: "#28A745" },
   { id: "5", name: "Archived",        color: "#6C757D" },
 ];
+
 const FALLBACK_PRIORITIES: MetaPriority[] = [
   { id: "1", name: "Low",    color: "#28A745" },
   { id: "2", name: "Medium", color: "#FFC107" },
@@ -177,7 +178,6 @@ function printTasks(tasks: Task[], filters: Record<string, string>, metaStatuses
       </tr>`;
   }).join("");
 
-  // Analytics summary for print
   const total    = tasks.length;
   const resolved = tasks.filter(t => (t.status||"").toLowerCase() === "resolved").length;
   const rate     = total > 0 ? Math.round((resolved/total)*100) : 0;
@@ -341,6 +341,9 @@ export default function TasksPage() {
   const [checkInput,     setCheckInput]     = useState("");
   const [staffInput,     setStaffInput]     = useState("");
 
+  /* ── highlight param ── */
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
   const { addNotification } = useNotifications();
 
   const confirmCallbackRef = React.useRef<(() => void | Promise<void>) | null>(null);
@@ -361,6 +364,14 @@ export default function TasksPage() {
     setSelectedTask(null);
   }, [isEditing]);
   useEscapeKey(escapeHandler, !!selectedTask);
+
+  /* ── Read highlight param from URL ── */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("highlight");
+    if (id) setHighlightId(id);
+  }, []);
 
   /* ── Auth ── */
   useEffect(() => {
@@ -408,6 +419,16 @@ export default function TasksPage() {
     if (!canView) return;
     fetchTasks(); fetchMeta();
   }, [canView, fetchTasks, fetchMeta]);
+
+  /* ── Auto-open highlighted task once tasks are loaded ── */
+  useEffect(() => {
+    if (!highlightId || tasks.length === 0) return;
+    const found = tasks.find(t => t._id === highlightId || t.reportId === highlightId);
+    if (found) {
+      setSelectedTask(found);
+      setHighlightId(null); // only open once
+    }
+  }, [highlightId, tasks]);
 
   /* ── Color helpers ── */
   const getPriorityColor = useCallback((name?: string) =>
@@ -648,7 +669,6 @@ export default function TasksPage() {
               <p className="tasks-page-subtitle">Track all maintenance tasks created from facility reports.</p>
             </div>
             <div className="tasks-header-actions">
-              {/* View toggles */}
               {(["board","list","analytics"] as const).map(mode => (
                 <button key={mode} type="button"
                   className={`tasks-view-btn${viewMode === mode ? " tasks-view-btn--active" : ""}`}
@@ -659,7 +679,6 @@ export default function TasksPage() {
                 </button>
               ))}
 
-              {/* Print button */}
               <button type="button" className="tasks-view-btn" onClick={handlePrint} title="Print report"
                 style={{ gap: 5, paddingInline: 10, width: "auto", fontSize: "0.75rem", fontWeight: 600 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -741,8 +760,6 @@ export default function TasksPage() {
 
           {/* ── Filters row ── */}
           <div className="tasks-filters">
-
-            {/* Debounced search */}
             <div className="tasks-search-wrap">
               {isTyping ? (
                 <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", display:"flex", gap:2, alignItems:"center" }}>
@@ -763,20 +780,17 @@ export default function TasksPage() {
 
             <div className="tasks-filters-divider" />
 
-            {/* Status */}
             <select className="tasks-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="All">All Statuses</option>
               {metaStatuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
 
-            {/* Priority */}
             <select className="tasks-filter-select" value={priorityFilter === "__none__" ? "__none__" : priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
               <option value="All">All Priorities</option>
               {metaPriorities.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
               <option value="__none__">No Priority</option>
             </select>
 
-            {/* Discipline */}
             {disciplineOptions.length > 0 && (
               <select className="tasks-filter-select" value={disciplineFilter} onChange={e => setDisciplineFilter(e.target.value)}>
                 <option value="All">All Disciplines</option>
@@ -784,7 +798,6 @@ export default function TasksPage() {
               </select>
             )}
 
-            {/* Staff */}
             {staffOptions.length > 0 && (
               <select className="tasks-filter-select" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
                 <option value="All">All Staff</option>
@@ -824,7 +837,6 @@ export default function TasksPage() {
                   background: "var(--tasks-surface,#fff)", border: "1px solid var(--tasks-border-2,#d1d9e0)",
                   borderRadius: 12, boxShadow: "var(--tasks-shadow-lg)", padding: 14, minWidth: 240,
                 }}>
-                  {/* Preset pills */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                     {DATE_PRESETS.filter(p => p.value !== "custom").map(p => (
                       <button key={p.value} type="button"
@@ -841,8 +853,6 @@ export default function TasksPage() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Custom range inputs */}
                   <div style={{ borderTop: "1px solid var(--tasks-border,#e8ecf0)", paddingTop: 10 }}>
                     <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--tasks-text-3,#8a97a8)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
                       Custom Range
@@ -862,7 +872,6 @@ export default function TasksPage() {
                       </button>
                     )}
                   </div>
-
                   {datePreset !== "all" && (
                     <button type="button"
                       onClick={() => { setDatePreset("all"); setDateFrom(""); setDateTo(""); setShowDatePicker(false); }}
@@ -927,7 +936,6 @@ export default function TasksPage() {
           {/* ══ ANALYTICS VIEW ══ */}
           {viewMode === "analytics" && (
             <div style={{ paddingTop: 8 }}>
-              {/* Summary cards */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:14, marginBottom:20 }}>
                 {[
                   { label:"Total Tasks",     value:analytics.total,             color:"#2563eb" },
@@ -945,7 +953,6 @@ export default function TasksPage() {
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:14 }}>
-                {/* By Priority */}
                 <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:18, boxShadow:"var(--tasks-shadow-sm)", border:"1px solid var(--tasks-border)" }}>
                   <div style={{ fontWeight:700, fontSize:13, marginBottom:14, color:"var(--tasks-text-1)", textTransform:"uppercase", letterSpacing:"0.05em" }}>By Priority</div>
                   {metaPriorities.map(p => {
@@ -965,7 +972,6 @@ export default function TasksPage() {
                   })}
                 </div>
 
-                {/* By Status */}
                 <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:18, boxShadow:"var(--tasks-shadow-sm)", border:"1px solid var(--tasks-border)" }}>
                   <div style={{ fontWeight:700, fontSize:13, marginBottom:14, color:"var(--tasks-text-1)", textTransform:"uppercase", letterSpacing:"0.05em" }}>By Status</div>
                   {metaStatuses.filter(s=>s.name.toLowerCase()!=="archived").map(s => {
@@ -987,7 +993,6 @@ export default function TasksPage() {
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
-                {/* By Discipline */}
                 <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:18, boxShadow:"var(--tasks-shadow-sm)", border:"1px solid var(--tasks-border)" }}>
                   <div style={{ fontWeight:700, fontSize:13, marginBottom:14, color:"var(--tasks-text-1)", textTransform:"uppercase", letterSpacing:"0.05em" }}>By Discipline</div>
                   {Object.entries(analytics.byDisc).length === 0 && <p style={{ color:"var(--tasks-text-4)", fontSize:13 }}>No data yet.</p>}
@@ -1004,7 +1009,6 @@ export default function TasksPage() {
                   ))}
                 </div>
 
-                {/* By Staff (top 8) */}
                 <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:18, boxShadow:"var(--tasks-shadow-sm)", border:"1px solid var(--tasks-border)" }}>
                   <div style={{ fontWeight:700, fontSize:13, marginBottom:14, color:"var(--tasks-text-1)", textTransform:"uppercase", letterSpacing:"0.05em" }}>By Staff</div>
                   {Object.entries(analytics.byStaff).length === 0 && <p style={{ color:"var(--tasks-text-4)", fontSize:13 }}>No data yet.</p>}
@@ -1022,7 +1026,6 @@ export default function TasksPage() {
                 </div>
               </div>
 
-              {/* Completion rate bar */}
               <div style={{ background:"var(--tasks-surface)", borderRadius:12, padding:18, boxShadow:"var(--tasks-shadow-sm)", border:"1px solid var(--tasks-border)", marginTop:14 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
                   <span style={{ fontWeight:700, fontSize:13, color:"var(--tasks-text-1)" }}>Overall Completion Rate</span>
@@ -1054,8 +1057,9 @@ export default function TasksPage() {
                     {col.tasks.map(task => {
                       const prog   = calcProgress(task.checklist);
                       const pColor = getPriorityColor(task.priority);
+                      const isHighlighted = task._id === highlightId;
                       return (
-                        <div key={task._id} className="tasks-card" onClick={() => openTask(task)}>
+                        <div key={task._id} className={`tasks-card${isHighlighted ? " tasks-card--highlighted" : ""}`} onClick={() => openTask(task)}>
                           <div className="tasks-card-stripe" style={{ backgroundColor: pColor }} />
                           <div className="tasks-card-body">
                             <div className="tasks-card-top">
@@ -1231,6 +1235,10 @@ export default function TasksPage() {
         @keyframes tasks-bounce {
           0%,100%{transform:translateY(0);opacity:0.4;}
           50%{transform:translateY(-3px);opacity:1;}
+        }
+        .tasks-card--highlighted {
+          outline: 2px solid #2563eb;
+          outline-offset: 2px;
         }
       `}</style>
     </>
