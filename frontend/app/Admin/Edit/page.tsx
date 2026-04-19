@@ -512,12 +512,12 @@ export default function AdminEditPage() {
      RENDER
   ══════════════════════════════════════════════════════════ */
   return (
-    <div style={{ display:"flex", height:"calc(100vh - 64px)", overflow:"hidden", fontFamily:"system-ui,-apple-system,sans-serif", background:"var(--tasks-bg,#f4f6f9)" }}>
+    <div className="admin-edit admin-edit__wrapper" style={{ display:"flex", height:"calc(100vh - 64px)", overflow:"hidden", fontFamily:"system-ui,-apple-system,sans-serif", background:"var(--color-bg-primary,#f4f6f9)", padding:0 }}>
 
       {/* ══ SIDEBAR ══ */}
       <aside style={{
-        width: sidebarOpen ? 220 : 56,
-        minWidth: sidebarOpen ? 220 : 56,
+        width: sidebarOpen ? 220 : 60,
+        minWidth: sidebarOpen ? 220 : 60,
         background: "#0f172a",
         display: "flex",
         flexDirection: "column",
@@ -527,24 +527,31 @@ export default function AdminEditPage() {
         boxShadow: "2px 0 12px rgba(0,0,0,0.15)",
       }}>
 
-        {/* Logo / toggle */}
+        {/* Toggle button — no logo */}
         <button
           type="button"
           onClick={() => setSidebarOpen(v=>!v)}
+          title={sidebarOpen ? "Collapse menu" : "Expand menu"}
           style={{
-            display:"flex", alignItems:"center", gap:10,
-            padding:"16px 14px",
+            display:"flex", alignItems:"center", justifyContent: sidebarOpen ? "space-between" : "center",
+            gap:10, padding:"15px 16px",
             background:"none", border:"none", cursor:"pointer",
-            borderBottom:"1px solid rgba(255,255,255,0.06)",
-            width:"100%", textAlign:"left",
+            borderBottom:"1px solid rgba(255,255,255,0.08)",
+            width:"100%", textAlign:"left", flexShrink:0,
           }}
         >
-          <img src="/logo-dlsud.png" alt="BFMO" style={{ width:28, height:28, objectFit:"contain", flexShrink:0 }}/>
           {sidebarOpen && (
-            <span style={{ color:"#f1f5f9", fontSize:"0.82rem", fontWeight:700, letterSpacing:"0.04em", whiteSpace:"nowrap", overflow:"hidden" }}>
+            <span style={{ color:"#cbd5e1", fontSize:"0.72rem", fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase", whiteSpace:"nowrap" }}>
               System Config
             </span>
           )}
+          {/* Hamburger / close icon */}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+            {sidebarOpen
+              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+            }
+          </svg>
         </button>
 
         {/* Nav items */}
@@ -559,8 +566,8 @@ export default function AdminEditPage() {
                 onClick={() => { setActiveTab(tab.id); }}
                 title={!sidebarOpen ? tab.label : undefined}
                 style={{
-                  display:"flex", alignItems:"center", gap:12,
-                  width:"100%", padding:"10px 14px",
+                  display:"flex", alignItems:"center", gap:14,
+                  width:"100%", padding:"12px 18px",
                   background: isActive ? "rgba(37,99,235,0.18)" : "none",
                   border:"none",
                   borderLeft: isActive ? "3px solid #3b82f6" : "3px solid transparent",
@@ -570,7 +577,7 @@ export default function AdminEditPage() {
                   textAlign:"left",
                 }}
               >
-                <span style={{ flexShrink:0, opacity: isActive ? 1 : 0.7 }}>{tab.icon}</span>
+                <span style={{ flexShrink:0, opacity: isActive ? 1 : 0.75, display:"flex", alignItems:"center" }}>{tab.icon}</span>
                 {sidebarOpen && (
                   <span style={{ flex:1, fontSize:"0.8rem", fontWeight: isActive ? 700 : 500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                     {tab.label}
