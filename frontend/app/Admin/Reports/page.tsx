@@ -694,7 +694,7 @@ export default function ReportPage() {
   /* ── Navigate to task ── */
   const viewExistingTask = (task: ExistingTask, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    router.push(`/Admin/tasks?highlight=${task._id}`);
+    router.push(`/Admin/Tasks?highlight=${task._id}`);
   };
 
   const addTaskStaff = () => {
