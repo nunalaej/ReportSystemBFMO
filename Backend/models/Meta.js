@@ -1,4 +1,3 @@
-// models/Meta.js  (or MetaCollection model)
 const mongoose = require("mongoose");
 
 const COLLECTION = process.env.MONGODB_META_COLLECTION || "MetaCollection";
@@ -47,26 +46,44 @@ const PrioritySchema = new mongoose.Schema(
   { _id: false }
 );
 
-/* ── Notification rule schedule step ─────────────────────── */
-const NotifScheduleStepSchema = new mongoose.Schema(
-  {
-    phase:    { type: String, default: "" },
-    interval: { type: String, default: "" },
-  },
-  { _id: false }
-);
-
-/* ── Notification rule subdocument ───────────────────────── */
-const NotifRuleSchema = new mongoose.Schema(
-  {
-    name:           { type: String, required: true },
-    color:          { type: String, default: "#6C757D" },
-    maxDuration:    { type: String, default: "7 days" },
-    schedule:       { type: [NotifScheduleStepSchema], default: [] },
-    unfinishedNote: { type: String, default: "" },
-  },
-  { _id: false }
-);
+/* ── Default position permissions ────────────────────────── */
+// Valid permission strings (must match what the frontend checks):
+//   "Create tasks"    → perms.canCreate
+//   "Edit tasks"      → perms.canEdit
+//   "Assign staff"    → perms.canAssign
+//   "Update status"   → perms.canStatus / canUpdateReport / canArchive
+//   "Comment"         → perms.canComment
+//   "Archive Reports" → stored alongside "Update status" (canArchive also checks "Update status")
+//   "View Tasks"      → perms.canViewReports (also implied by "View only")
+//   "View only"       → isViewOnly = true (no mutations)
+const DEFAULT_POSITION_PERMS = {
+  "Head Engineer":  [
+    "Create tasks",
+    "Edit tasks",
+    "Assign staff",
+    "Update status",
+    "Comment",
+    "Archive Reports",
+    "View Tasks",
+  ],
+  "Staff Engineer": [
+    "Update status",
+    "Comment",
+    "View Tasks",
+  ],
+  "Supervisor": [
+    "View Tasks",
+    "View only",
+  ],
+  "Technician": [
+    "View Tasks",
+    "View only",
+  ],
+  "Other": [
+    "View Tasks",
+    "View only",
+  ],
+};
 
 /* ── Root meta document ───────────────────────────────────── */
 const MetaSchema = new mongoose.Schema(
@@ -94,7 +111,7 @@ const MetaSchema = new mongoose.Schema(
       ],
     },
 
-    /* ── Student report settings ── */
+    /* ── Student Report Settings ──────────────────────────── */
     colleges: {
       type:    [String],
       default: ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"],
@@ -104,35 +121,40 @@ const MetaSchema = new mongoose.Schema(
       default: ["1st Year","2nd Year","3rd Year","4th Year"],
     },
 
-    /* ✅ FIX 1: Notification rules — was missing, Mongoose was stripping it */
-    notifRules: {
-      type:    [NotifRuleSchema],
-      default: [],
-    },
-
-    /* ✅ FIX 2: Position names list — was missing */
+    /* ── Staff Settings ───────────────────────────────────── */
     positionOptions: {
       type:    [String],
       default: ["Head Engineer","Staff Engineer","Supervisor","Technician","Other"],
     },
-
-    /* ✅ FIX 3: Discipline names list — was missing */
     disciplineOptions: {
       type:    [String],
       default: ["Electrical","Civil","Mechanical","Safety Hazard"],
     },
 
-    /* ✅ FIX 4: Position permissions map — THIS IS THE ONE CAUSING "View only"
-       Mongoose was stripping this field entirely on every GET because it
-       wasn't declared in the schema. Staff pages got {} → empty permList
-       → buildPerms([]) → BASE_PERMS → "View only" for everyone.
-       
-       Using Mixed type so any shape like:
-         { "Head Engineer": ["Create tasks", "Update status", ...] }
-       is stored and returned without restriction. */
+    /* ── Position-based Permissions ──────────────────────────
+       Stored as a plain object: { [positionName]: string[] }
+       The frontend (useStaffPerms.ts) reads this and maps the
+       permission strings to boolean flags via buildPerms().
+
+       Valid permission strings:
+         "Create tasks"    - can create new tasks
+         "Edit tasks"      - can edit existing tasks
+         "Assign staff"    - can assign staff to tasks
+         "Update status"   - can update task/report status + archive
+         "Comment"         - can add/edit/delete comments
+         "Archive Reports" - explicit archive permission (UI checks "Update status" too)
+         "View Tasks"      - can see the tasks list
+         "View only"       - read-only; no mutations at all
+    ─────────────────────────────────────────────────────────── */
     positionPerms: {
       type:    mongoose.Schema.Types.Mixed,
-      default: {},
+      default: DEFAULT_POSITION_PERMS,
+    },
+
+    /* ── Notification Rules ───────────────────────────────── */
+    notifRules: {
+      type:    mongoose.Schema.Types.Mixed,
+      default: [],
     },
   },
   {

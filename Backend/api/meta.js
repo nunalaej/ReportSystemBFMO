@@ -40,9 +40,43 @@ const DEFAULT_PRIORITIES = [
   { id: "4", name: "Urgent", color: "#a40010", notifyInterval: "1h" },
 ];
 
-// ✅ NEW defaults
-const DEFAULT_COLLEGES    = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
-const DEFAULT_YEAR_LEVELS = ["1st Year","2nd Year","3rd Year","4th Year"];
+const DEFAULT_COLLEGES          = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
+const DEFAULT_YEAR_LEVELS       = ["1st Year","2nd Year","3rd Year","4th Year"];
+const DEFAULT_POSITION_OPTIONS  = ["Head Engineer","Staff Engineer","Supervisor","Technician","Other"];
+const DEFAULT_DISCIPLINE_OPTIONS = ["Electrical","Civil","Mechanical","Safety Hazard"];
+
+/* ── Valid permission strings ─────────────────────────────── *
+ *  These map to boolean flags in useStaffPerms.ts → buildPerms():
+ *
+ *  "Create tasks"    → canCreate
+ *  "Edit tasks"      → canEdit
+ *  "Assign staff"    → canAssign
+ *  "Update status"   → canStatus + canUpdateReport + canArchive
+ *  "Comment"         → canComment
+ *  "Archive Reports" → stored alongside "Update status"; both
+ *                       grant canArchive in buildPerms()
+ *  "View Tasks"      → canViewReports (along with "View only",
+ *                       "Update status", "Comment")
+ *  "View only"       → isViewOnly = true (no mutations)
+ * ──────────────────────────────────────────────────────────── */
+const VALID_PERMISSIONS = [
+  "Create tasks",
+  "Edit tasks",
+  "Assign staff",
+  "Update status",
+  "Comment",
+  "Archive Reports",
+  "View Tasks",
+  "View only",
+];
+
+const DEFAULT_POSITION_PERMS = {
+  "Head Engineer":  ["Create tasks","Edit tasks","Assign staff","Update status","Comment","Archive Reports","View Tasks"],
+  "Staff Engineer": ["Update status","Comment","View Tasks"],
+  "Supervisor":     ["View Tasks","View only"],
+  "Technician":     ["View Tasks","View only"],
+  "Other":          ["View Tasks","View only"],
+};
 
 /* ── Helpers ──────────────────────────────────────────────── */
 const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
@@ -105,7 +139,6 @@ function sanitiseStatus(s, idx) {
 function sanitisePriority(p, idx) {
   const name = String(p?.name || "").trim();
   if (!name) return null;
-  // Accept any interval string: "1h","3d","5d","1d","daily","1week","1month","3months"
   const ni = String(p?.notifyInterval || "").trim();
   const validIntervals = ["hourly","daily","1h","1d","2d","3d","4d","5d","6d","7d","1week","2weeks","1month","3months"];
   const notifyInterval = (ni && /^(\d+)(h|d|w)?$/.test(ni)) || validIntervals.includes(ni) ? ni : "1d";
@@ -115,6 +148,28 @@ function sanitisePriority(p, idx) {
     color:          String(p?.color || "#6C757D").trim(),
     notifyInterval,
   };
+}
+
+/**
+ * Sanitise positionPerms from the request body.
+ * Expects: { [positionName: string]: string[] }
+ * - Drops any permission strings not in VALID_PERMISSIONS
+ * - Drops positions with non-array values
+ * - Returns null if input is not a plain object
+ */
+function sanitisePositionPerms(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const result = {};
+  for (const [position, perms] of Object.entries(raw)) {
+    const posName = String(position || "").trim();
+    if (!posName) continue;
+    if (!Array.isArray(perms)) continue;
+    const cleaned = perms
+      .map((p) => String(p || "").trim())
+      .filter((p) => VALID_PERMISSIONS.includes(p));
+    result[posName] = cleaned;
+  }
+  return Object.keys(result).length > 0 ? result : null;
 }
 
 /* ── GET /api/meta ────────────────────────────────────────── */
@@ -127,12 +182,16 @@ router.get("/", async (req, res) => {
         { key: "main" },
         {
           $setOnInsert: {
-            buildings:  DEFAULT_BUILDINGS,
-            concerns:   DEFAULT_CONCERNS,
-            statuses:   DEFAULT_STATUSES,
-            priorities: DEFAULT_PRIORITIES,
-            colleges:   DEFAULT_COLLEGES,      // ✅
-            yearLevels: DEFAULT_YEAR_LEVELS,   // ✅
+            buildings:         DEFAULT_BUILDINGS,
+            concerns:          DEFAULT_CONCERNS,
+            statuses:          DEFAULT_STATUSES,
+            priorities:        DEFAULT_PRIORITIES,
+            colleges:          DEFAULT_COLLEGES,
+            yearLevels:        DEFAULT_YEAR_LEVELS,
+            positionOptions:   DEFAULT_POSITION_OPTIONS,
+            disciplineOptions: DEFAULT_DISCIPLINE_OPTIONS,
+            positionPerms:     DEFAULT_POSITION_PERMS,
+            notifRules:        [],
           },
         },
         { upsert: true, returnDocument: "after" }
@@ -140,14 +199,20 @@ router.get("/", async (req, res) => {
     }
 
     return res.json({
-      success:    true,
-      buildings:  doc.buildings  || DEFAULT_BUILDINGS,
-      concerns:   doc.concerns   || DEFAULT_CONCERNS,
-      statuses:   doc.statuses   || DEFAULT_STATUSES,
-      priorities: doc.priorities || DEFAULT_PRIORITIES,
-      // ✅ Always return with fallback to defaults
-      colleges:   doc.colleges   && doc.colleges.length   ? doc.colleges   : DEFAULT_COLLEGES,
-      yearLevels: doc.yearLevels && doc.yearLevels.length ? doc.yearLevels : DEFAULT_YEAR_LEVELS,
+      success:           true,
+      buildings:         doc.buildings         || DEFAULT_BUILDINGS,
+      concerns:          doc.concerns          || DEFAULT_CONCERNS,
+      statuses:          doc.statuses          || DEFAULT_STATUSES,
+      priorities:        doc.priorities        || DEFAULT_PRIORITIES,
+      colleges:          doc.colleges?.length          ? doc.colleges          : DEFAULT_COLLEGES,
+      yearLevels:        doc.yearLevels?.length        ? doc.yearLevels        : DEFAULT_YEAR_LEVELS,
+      positionOptions:   doc.positionOptions?.length   ? doc.positionOptions   : DEFAULT_POSITION_OPTIONS,
+      disciplineOptions: doc.disciplineOptions?.length ? doc.disciplineOptions : DEFAULT_DISCIPLINE_OPTIONS,
+      // positionPerms: always return the stored object, fall back to defaults
+      positionPerms:     (doc.positionPerms && Object.keys(doc.positionPerms).length)
+                           ? doc.positionPerms
+                           : DEFAULT_POSITION_PERMS,
+      notifRules:        Array.isArray(doc.notifRules) ? doc.notifRules : [],
     });
   } catch (err) {
     console.error("GET /meta error:", err);
@@ -158,27 +223,27 @@ router.get("/", async (req, res) => {
 /* ── PUT /api/meta ────────────────────────────────────────── */
 router.put("/", async (req, res) => {
   try {
-    const rawBuildings  = Array.isArray(req.body?.buildings)  ? req.body.buildings  : [];
-    const rawConcerns   = Array.isArray(req.body?.concerns)   ? req.body.concerns   : [];
-    const rawStatuses   = Array.isArray(req.body?.statuses)   ? req.body.statuses   : [];
-    const rawPriorities = Array.isArray(req.body?.priorities) ? req.body.priorities : [];
-    // ✅ NEW: read colleges and yearLevels from body
-    const rawColleges   = Array.isArray(req.body?.colleges)   ? req.body.colleges   : [];
-    const rawYearLevels = Array.isArray(req.body?.yearLevels) ? req.body.yearLevels : [];
+    const rawBuildings         = Array.isArray(req.body?.buildings)         ? req.body.buildings         : [];
+    const rawConcerns          = Array.isArray(req.body?.concerns)          ? req.body.concerns          : [];
+    const rawStatuses          = Array.isArray(req.body?.statuses)          ? req.body.statuses          : [];
+    const rawPriorities        = Array.isArray(req.body?.priorities)        ? req.body.priorities        : [];
+    const rawColleges          = Array.isArray(req.body?.colleges)          ? req.body.colleges          : [];
+    const rawYearLevels        = Array.isArray(req.body?.yearLevels)        ? req.body.yearLevels        : [];
+    const rawPositionOptions   = Array.isArray(req.body?.positionOptions)   ? req.body.positionOptions   : [];
+    const rawDisciplineOptions = Array.isArray(req.body?.disciplineOptions) ? req.body.disciplineOptions : [];
+    const rawNotifRules        = Array.isArray(req.body?.notifRules)        ? req.body.notifRules        : null;
+    const rawPositionPerms     = req.body?.positionPerms ?? null;
 
-    /* Sanitise buildings */
+    /* ── Sanitise buildings ── */
     let buildings = rawBuildings.map((b, i) => sanitiseBuilding(b, i)).filter(Boolean);
     const otherBuildings  = buildings.filter((b) => norm(b.name) === "other");
     const normalBuildings = buildings.filter((b) => norm(b.name) !== "other");
     if (otherBuildings.length === 0) {
-      normalBuildings.push({
-        id: "other", name: "Other", floors: 1,
-        roomsPerFloor: [1], hasRooms: false, singleLocationLabel: "",
-      });
+      normalBuildings.push({ id: "other", name: "Other", floors: 1, roomsPerFloor: [1], hasRooms: false, singleLocationLabel: "" });
     }
     buildings = [...normalBuildings, ...otherBuildings.slice(0, 1)];
 
-    /* Sanitise concerns */
+    /* ── Sanitise concerns ── */
     let concerns = rawConcerns.map((c, i) => sanitiseConcern(c, i)).filter(Boolean);
     const otherConcerns  = concerns.filter((c) => norm(c.label) === "other");
     const normalConcerns = concerns.filter((c) => norm(c.label) !== "other");
@@ -187,25 +252,33 @@ router.put("/", async (req, res) => {
     }
     concerns = [...normalConcerns, ...otherConcerns.slice(0, 1)];
 
-    /* Sanitise statuses */
+    /* ── Sanitise statuses ── */
     let statuses = rawStatuses.map((s, i) => sanitiseStatus(s, i)).filter(Boolean);
     if (statuses.length === 0) statuses = DEFAULT_STATUSES;
 
-    /* Sanitise priorities */
+    /* ── Sanitise priorities ── */
     let priorities = rawPriorities.map((p, i) => sanitisePriority(p, i)).filter(Boolean);
     if (priorities.length === 0) priorities = DEFAULT_PRIORITIES;
 
-    // ✅ Sanitise colleges — clean strings, fallback to defaults if empty
-    const colleges = rawColleges.map(c => String(c || "").trim()).filter(Boolean);
-    // ✅ Sanitise yearLevels — clean strings, fallback to defaults if empty
-    const yearLevels = rawYearLevels.map(y => String(y || "").trim()).filter(Boolean);
+    /* ── Sanitise string arrays ── */
+    const colleges          = rawColleges.map(c => String(c || "").trim()).filter(Boolean);
+    const yearLevels        = rawYearLevels.map(y => String(y || "").trim()).filter(Boolean);
+    const positionOptions   = rawPositionOptions.map(p => String(p || "").trim()).filter(Boolean);
+    const disciplineOptions = rawDisciplineOptions.map(d => String(d || "").trim()).filter(Boolean);
 
-    /* Build update object */
+    /* ── Sanitise positionPerms ── */
+    const positionPerms = sanitisePositionPerms(rawPositionPerms);
+
+    /* ── Build $set payload ── */
     const setFields = { buildings, concerns, statuses, priorities };
-    if (colleges.length)   setFields.colleges   = colleges;
-    if (yearLevels.length) setFields.yearLevels = yearLevels;
+    if (colleges.length)          setFields.colleges          = colleges;
+    if (yearLevels.length)        setFields.yearLevels        = yearLevels;
+    if (positionOptions.length)   setFields.positionOptions   = positionOptions;
+    if (disciplineOptions.length) setFields.disciplineOptions = disciplineOptions;
+    if (positionPerms)            setFields.positionPerms     = positionPerms;
+    if (rawNotifRules !== null)   setFields.notifRules        = rawNotifRules;
 
-    /* Upsert */
+    /* ── Upsert ── */
     const updated = await Meta.findOneAndUpdate(
       { key: "main" },
       { $set: setFields },
@@ -213,13 +286,19 @@ router.put("/", async (req, res) => {
     ).lean();
 
     return res.json({
-      success:    true,
-      buildings:  updated.buildings,
-      concerns:   updated.concerns,
-      statuses:   updated.statuses,
-      priorities: updated.priorities,
-      colleges:   updated.colleges   && updated.colleges.length   ? updated.colleges   : DEFAULT_COLLEGES,
-      yearLevels: updated.yearLevels && updated.yearLevels.length ? updated.yearLevels : DEFAULT_YEAR_LEVELS,
+      success:           true,
+      buildings:         updated.buildings,
+      concerns:          updated.concerns,
+      statuses:          updated.statuses,
+      priorities:        updated.priorities,
+      colleges:          updated.colleges?.length          ? updated.colleges          : DEFAULT_COLLEGES,
+      yearLevels:        updated.yearLevels?.length        ? updated.yearLevels        : DEFAULT_YEAR_LEVELS,
+      positionOptions:   updated.positionOptions?.length   ? updated.positionOptions   : DEFAULT_POSITION_OPTIONS,
+      disciplineOptions: updated.disciplineOptions?.length ? updated.disciplineOptions : DEFAULT_DISCIPLINE_OPTIONS,
+      positionPerms:     (updated.positionPerms && Object.keys(updated.positionPerms).length)
+                           ? updated.positionPerms
+                           : DEFAULT_POSITION_PERMS,
+      notifRules:        Array.isArray(updated.notifRules) ? updated.notifRules : [],
     });
   } catch (err) {
     console.error("PUT /meta error:", err);
