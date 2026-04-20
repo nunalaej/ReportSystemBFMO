@@ -1005,18 +1005,7 @@ export default function Create() {
                 />
               </div>
 
-              {/* Subject */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
-                  <input
-                    id="heading" type="text" name="heading"
-                    placeholder="Short title of the issue"
-                    value={formData.heading} onChange={handleChange} required
-                  />
-                </div>
-
-                {/* ✅ College & Year — only shown for students */}
+              <div>
                 {isStudent ? (
                   <div className="create-scope__group">
                     <label>College &amp; Year <RequiredStar value={formData.college&&formData.year ? "filled" : ""} /></label>
@@ -1035,10 +1024,20 @@ export default function Create() {
                 )}
               </div>
 
-              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
-              <div className="create-scope__group">
-                <label htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
-                {isStudent ? (
+              {/* Subject */}
+              <div className="create-scope__row-two">
+                <div className="create-scope__group">
+                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
+                  <input
+                    id="heading" type="text" name="heading"
+                    placeholder="Short title of the issue"
+                    value={formData.heading} onChange={handleChange} required
+                  />
+                </div>
+
+                <div className="create-scope__group">
+                  <label htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
+                  {isStudent ? (
                   <>
                     <div className="usertype-auto-badge">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1047,9 +1046,6 @@ export default function Create() {
                       </svg>
                       Student
                     </div>
-                    <p className="create-scope__hint" style={{ marginTop: 4 }}>
-                      Automatically detected from your institutional email.
-                    </p>
                   </>
                 ) : (
                   // ✅ Staff and Faculty only — no Student option
@@ -1060,6 +1056,11 @@ export default function Create() {
                   </select>
                 )}
               </div>
+              
+              </div>
+
+              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
+              
 
               {/* Description */}
               <div className="create-scope__group">
