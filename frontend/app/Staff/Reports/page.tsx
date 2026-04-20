@@ -34,6 +34,14 @@ type Report = {
   comments?: Comment[];
 };
 
+/* ── Minimal Task shape we need for the header buttons ── */
+type LinkedTask = {
+  _id: string;
+  name: string;
+  reportId?: string;
+  status?: string;
+};
+
 /* ── Helpers ── */
 const formatConcern = (r: Report) => {
   const base = r.concern || "Unspecified";
@@ -136,13 +144,28 @@ export default function StaffReportsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
 
+  /* ── All tasks — fetched once, used to check if a report has a linked task ── */
+  const [allTasks,      setAllTasks]      = useState<LinkedTask[]>([]);
+  const [tasksLoading,  setTasksLoading]  = useState(false);
+
+  /* ── Create-task modal state ── */
+  const [showCreateTask,  setShowCreateTask]  = useState(false);
+  const [createTaskDraft, setCreateTaskDraft] = useState({ name: "", priority: "", notes: "" });
+  const [creatingTask,    setCreatingTask]    = useState(false);
+
   /* ── Status options from DB meta ── */
-  const [metaStatuses, setMetaStatuses] = useState<{ id: string; name: string; color: string }[]>([
+  const [metaStatuses,   setMetaStatuses]   = useState<{ id: string; name: string; color: string }[]>([
     { id: "1", name: "Pending",         color: "#FFA500" },
     { id: "2", name: "Pending Inspect", color: "#FFD700" },
     { id: "3", name: "In Progress",     color: "#4169E1" },
     { id: "4", name: "Resolved",        color: "#28A745" },
     { id: "5", name: "Archived",        color: "#6C757D" },
+  ]);
+  const [metaPriorities, setMetaPriorities] = useState<{ id: string; name: string; color: string }[]>([
+    { id: "1", name: "Low",    color: "#28A745" },
+    { id: "2", name: "Medium", color: "#FFC107" },
+    { id: "3", name: "High",   color: "#ce4f01" },
+    { id: "4", name: "Urgent", color: "#a40010" },
   ]);
 
   /* ── Filters ── */
@@ -184,12 +207,13 @@ export default function StaffReportsPage() {
     setCanView(true);
   }, [isLoaded, isSignedIn, user, router]);
 
-  /* ── Fetch meta statuses ── */
+  /* ── Fetch meta statuses + priorities ── */
   useEffect(() => {
     fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
       .then(r => r.json()).catch(() => null)
       .then(data => {
-        if (data?.statuses?.length > 0) setMetaStatuses(data.statuses);
+        if (data?.statuses?.length   > 0) setMetaStatuses(data.statuses);
+        if (data?.priorities?.length > 0) setMetaPriorities(data.priorities);
       });
   }, []);
 
@@ -210,7 +234,24 @@ export default function StaffReportsPage() {
     finally { setIsLoading(false); }
   }, []);
 
-  useEffect(() => { if (canView) fetchReports(); }, [canView]);
+  /* ── Fetch all tasks (lightweight — just enough to check linkage) ── */
+  const fetchTasks = useCallback(async () => {
+    try {
+      setTasksLoading(true);
+      const res  = await fetch(`${API_BASE}/api/tasks?ts=${Date.now()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) return;
+      const list: LinkedTask[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data.tasks) ? data.tasks : [];
+      setAllTasks(list);
+    } catch {}
+    finally { setTasksLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (canView) { fetchReports(); fetchTasks(); }
+  }, [canView]);
 
   /* ── Lock body scroll ── */
   useEffect(() => {
@@ -220,18 +261,24 @@ export default function StaffReportsPage() {
 
   useEscapeKey(
     useCallback(() => {
+      if (showCreateTask) { setShowCreateTask(false); return; }
       if (isImageExpanded) { setIsImageExpanded(false); return; }
       if (selectedReport) closeDetails();
-    }, [isImageExpanded, selectedReport]),
-    !!(selectedReport || isImageExpanded)
+    }, [showCreateTask, isImageExpanded, selectedReport]),
+    !!(selectedReport || isImageExpanded || showCreateTask)
   );
+
+  /* ── Task linked to selected report ── */
+  const linkedTask: LinkedTask | null = selectedReport?.reportId
+    ? allTasks.find(t => t.reportId === selectedReport.reportId) ?? null
+    : null;
 
   /* ── Helpers ── */
   const getStatusColor = (name?: string) =>
     metaStatuses.find(s => s.name === (name || "Pending"))?.color || "#6C757D";
 
   const statusMatchesFilter = (reportStatus: string | undefined, filter: string) => {
-    const current     = reportStatus || "Pending";
+    const current      = reportStatus || "Pending";
     const archivedName = metaStatuses.find(s => s.name.toLowerCase() === "archived")?.name || "Archived";
     const resolvedName = metaStatuses.find(s => s.name.toLowerCase() === "resolved")?.name  || "Resolved";
     if (filter === "All Statuses") return current !== archivedName && current !== resolvedName;
@@ -305,11 +352,13 @@ export default function StaffReportsPage() {
   const handleCardClick = (report: Report) => {
     setSelectedReport(report); setStatusValue(report.status || "Pending");
     setCommentText(""); setEditingIndex(null); setEditingText(""); setIsImageExpanded(false);
+    setShowCreateTask(false);
   };
 
   const closeDetails = useCallback(() => {
     setSelectedReport(null); setStatusValue("Pending"); setCommentText("");
     setEditingIndex(null); setEditingText(""); setIsImageExpanded(false);
+    setShowCreateTask(false);
   }, []);
 
   const handleClearFilters = () => {
@@ -457,6 +506,46 @@ export default function StaffReportsPage() {
     });
   };
 
+  /* ── Create task from report modal ── */
+  const handleCreateTask = async () => {
+    if (!selectedReport || !perms.canCreate) return;
+    const name = createTaskDraft.name.trim() || selectedReport.heading || `Report #${selectedReport.reportId}`;
+    try {
+      setCreatingTask(true);
+      const res = await fetch(`${API_BASE}/api/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          concernType: selectedReport.concern || "Other",
+          reportId:    selectedReport.reportId || null,
+          priority:    createTaskDraft.priority || undefined,
+          notes:       createTaskDraft.notes || "",
+          assignedStaff: staffRecord?.name ? [staffRecord.name] : [],
+          status:      "Pending",
+          createdBy:   staffRecord?.name || "Staff",
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed to create task.");
+      // Add to local tasks list so the button flips to "View Task" immediately
+      setAllTasks(prev => [data.task, ...prev]);
+      setShowCreateTask(false);
+      setCreateTaskDraft({ name: "", priority: "", notes: "" });
+      showToast(`Task "${name}" created.`, "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed.", "error");
+    } finally {
+      setCreatingTask(false);
+    }
+  };
+
+  /* ── Navigate to task ── */
+  const handleViewTask = () => {
+    if (!linkedTask) return;
+    router.push(`/Staff/Task`);
+  };
+
   /* ── Print ── */
   const handlePrint = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -490,6 +579,10 @@ export default function StaffReportsPage() {
 
   const commentsToShow: Comment[] = selectedReport?.comments || [];
 
+  /* ── Derived: priority color for "Create Task" button ── */
+  const getPriorityColor = (name?: string) =>
+    metaPriorities.find(p => p.name === name)?.color || "#2563eb";
+
   /* ══════════════════════════════════════════════════════════
      MODAL
   ══════════════════════════════════════════════════════════ */
@@ -497,7 +590,7 @@ export default function StaffReportsPage() {
     <div className="report-modal-backdrop" onClick={closeDetails} role="dialog" aria-modal="true">
       <div className="report-modal" onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <div className="modal-header">
           <div className="modal-header-main">
             <h2>{selectedReport.heading || "Report details"}</h2>
@@ -509,10 +602,138 @@ export default function StaffReportsPage() {
               </span>
             )}
           </div>
-          <button className="modal-close-btn" onClick={closeDetails} type="button" aria-label="Close">✕</button>
+
+          {/* ── RIGHT side: Progress pill + Create/View Task + Close ── */}
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+
+            {/* Quick status pill — always visible */}
+            <span style={{
+              display:"inline-flex", alignItems:"center", gap:5,
+              padding:"4px 12px", borderRadius:999, fontSize:"0.72rem", fontWeight:700,
+              background: getStatusColor(selectedReport.status) + "22",
+              color: getStatusColor(selectedReport.status),
+              border: `1px solid ${getStatusColor(selectedReport.status)}55`,
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              {selectedReport.status || "Pending"}
+            </span>
+
+            {/* Create Task — only if canCreate AND no linked task yet */}
+            {perms.canCreate && !linkedTask && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setShowCreateTask(v => !v); }}
+                style={{
+                  display:"inline-flex", alignItems:"center", gap:5,
+                  padding:"5px 12px", borderRadius:8,
+                  background:"#2563eb", color:"#fff",
+                  border:"none", fontSize:"0.75rem", fontWeight:700,
+                  cursor:"pointer", whiteSpace:"nowrap",
+                  opacity: creatingTask ? 0.7 : 1,
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                {showCreateTask ? "Cancel" : "Create Task"}
+              </button>
+            )}
+
+            {/* View Task — shown if a linked task exists */}
+            {linkedTask && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); handleViewTask(); }}
+                style={{
+                  display:"inline-flex", alignItems:"center", gap:5,
+                  padding:"5px 12px", borderRadius:8,
+                  background:"rgba(34,197,94,0.12)", color:"#16a34a",
+                  border:"1px solid rgba(34,197,94,0.35)", fontSize:"0.75rem", fontWeight:700,
+                  cursor:"pointer", whiteSpace:"nowrap",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                View Task
+              </button>
+            )}
+
+            <button className="modal-close-btn" onClick={closeDetails} type="button" aria-label="Close">✕</button>
+          </div>
         </div>
 
-        {/* Body */}
+        {/* ── Inline Create Task Form (expands below header) ── */}
+        {showCreateTask && perms.canCreate && !linkedTask && (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              margin:"0 0 0 0", padding:"14px 20px",
+              background:"rgba(37,99,235,0.05)",
+              borderBottom:"1px solid rgba(37,99,235,0.15)",
+              display:"flex", flexDirection:"column", gap:10,
+            }}
+          >
+            <p style={{ margin:0, fontSize:"0.78rem", fontWeight:700, color:"#1d4ed8" }}>
+              New Task for Report #{selectedReport.reportId}
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8, alignItems:"end" }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <input
+                  type="text"
+                  placeholder={`Task name (default: ${selectedReport.heading || "Report #" + selectedReport.reportId})`}
+                  value={createTaskDraft.name}
+                  onChange={e => setCreateTaskDraft(d => ({ ...d, name: e.target.value }))}
+                  style={{ padding:"7px 10px", borderRadius:7, border:"1px solid #bfdbfe", fontSize:"0.82rem", background:"#fff", color:"#0d1b2a", outline:"none", fontFamily:"inherit" }}
+                />
+                <div style={{ display:"flex", gap:6 }}>
+                  {/* Priority picker */}
+                  <div style={{ display:"flex", gap:4 }}>
+                    {metaPriorities.map(p => (
+                      <button
+                        key={p.id} type="button"
+                        onClick={() => setCreateTaskDraft(d => ({ ...d, priority: d.priority === p.name ? "" : p.name }))}
+                        style={{
+                          padding:"3px 10px", borderRadius:999, fontSize:"0.68rem", fontWeight:700,
+                          border:`1px solid ${p.color}60`,
+                          background: createTaskDraft.priority === p.name ? p.color : "transparent",
+                          color: createTaskDraft.priority === p.name ? "#fff" : p.color,
+                          cursor:"pointer",
+                        }}
+                      >{p.name}</button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Notes (optional)"
+                    value={createTaskDraft.notes}
+                    onChange={e => setCreateTaskDraft(d => ({ ...d, notes: e.target.value }))}
+                    style={{ flex:1, padding:"3px 8px", borderRadius:6, border:"1px solid #bfdbfe", fontSize:"0.75rem", background:"#fff", color:"#0d1b2a", outline:"none", fontFamily:"inherit" }}
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateTask}
+                disabled={creatingTask}
+                style={{
+                  padding:"8px 18px", borderRadius:8, border:"none",
+                  background: createTaskDraft.priority ? getPriorityColor(createTaskDraft.priority) : "#2563eb",
+                  color:"#fff", fontWeight:700, fontSize:"0.8rem",
+                  cursor: creatingTask ? "not-allowed" : "pointer",
+                  opacity: creatingTask ? 0.7 : 1, whiteSpace:"nowrap",
+                }}
+              >
+                {creatingTask ? "Creating…" : "Save Task"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Body ── */}
         <div className="modal-content">
           <div className="modal-img-wrapper">
             <img src={resolveImage(selectedReport.ImageFile || selectedReport.image)} alt="Report"
@@ -544,7 +765,6 @@ export default function StaffReportsPage() {
                 {renderStatusPill(statusValue)}
               </div>
 
-              {/* Only show update controls if canUpdateReport */}
               {perms.canUpdateReport ? (
                 <div className="status-row status-row-inline">
                   <label htmlFor="status-select" className="status-row-label">Update</label>
@@ -592,7 +812,6 @@ export default function StaffReportsPage() {
                               {c.at && <span className="comment-date">{new Date(c.at).toLocaleString()}&nbsp;</span>}
                               {c.by && <span className="comment-date">by {c.by}</span>}
                             </div>
-                            {/* Edit/delete comment only if canComment */}
                             {perms.canComment && (
                               <div className="comment-actions">
                                 <button type="button" className="comment-btn-edit"   onClick={() => startEditComment(idx)} disabled={saving}>Edit</button>
@@ -607,7 +826,6 @@ export default function StaffReportsPage() {
                 </ul>
               ) : <p className="no-comments">No comments yet.</p>}
 
-              {/* Add comment — only if canComment */}
               {perms.canComment ? (
                 <>
                   <textarea className="comment-input" rows={3} value={commentText}
@@ -618,14 +836,12 @@ export default function StaffReportsPage() {
                       {saving ? "Adding…" : "Add Comment"}
                     </button>
 
-                    {/* Archive — only if canArchive */}
                     {perms.canArchive && selectedReport.status !== "Archived" && (
                       <button className="archive-btn" onClick={handleArchive} disabled={saving} type="button">
                         Archive report
                       </button>
                     )}
 
-                    {/* Update status — only if canUpdateReport */}
                     {perms.canUpdateReport && (
                       <button className="save-comment-btn" onClick={handleSaveChanges}
                         disabled={saving || selectedReport.status === "Archived"} type="button">
@@ -639,7 +855,6 @@ export default function StaffReportsPage() {
                   <p style={{ fontSize:"0.78rem", color:"var(--tasks-text-4,#b8c4ce)", margin:0 }}>
                     💬 Comments are read-only for your role ({staffRecord?.position}).
                   </p>
-                  {/* Still show Update Status / Archive if those perms exist */}
                   {(perms.canUpdateReport || perms.canArchive) && (
                     <div className="modal-actions" style={{ marginTop:10 }}>
                       {perms.canArchive && selectedReport.status !== "Archived" && (
@@ -702,7 +917,7 @@ export default function StaffReportsPage() {
             </p>
           </div>
           <div className="header-actions">
-            <button className="refresh-btn" type="button" onClick={fetchReports} disabled={isLoading} title="Refresh">
+            <button className="refresh-btn" type="button" onClick={() => { fetchReports(); fetchTasks(); }} disabled={isLoading} title="Refresh">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
                 <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -832,11 +1047,18 @@ export default function StaffReportsPage() {
                   {paginatedReports.map(report => {
                     const key        = getGroupKey(report);
                     const duplicates = (duplicateCounts[key] || 1) - 1;
+                    const hasTask    = allTasks.some(t => t.reportId === report.reportId);
                     return (
                       <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
                         <div className="report-img-container">
                           <img src={resolveImage(report.image || report.ImageFile)} alt="Report" className="report-img"
                             onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
+                          {/* Small task indicator on card */}
+                          {hasTask && (
+                            <span style={{ position:"absolute", top:6, right:6, background:"#16a34a", color:"#fff", fontSize:"0.6rem", fontWeight:700, padding:"2px 6px", borderRadius:999 }}>
+                              ✓ Task
+                            </span>
+                          )}
                         </div>
                         <div className="report-body">
                           <div className="report-header-row">
