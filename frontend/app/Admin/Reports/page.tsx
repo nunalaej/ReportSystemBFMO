@@ -553,7 +553,7 @@ export default function ReportPage() {
   /* ── Task helpers ── */
   const viewExistingTask = (task: ExistingTask, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    router.push(`/Admin/tasks?highlight=${task._id}`);
+    router.push(`/Admin/Task?highlight=${task._id}`);
   };
   const openCreateTask = (r: Report) => {
     setTaskReport(r); setTaskName(r.heading || "");
