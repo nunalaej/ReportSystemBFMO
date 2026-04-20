@@ -633,6 +633,22 @@ export default function Create() {
     [showMsg]
   );
 
+  useEffect(() => {
+  if (!isStudent) {
+    setFormData((prev) => ({
+      ...prev,
+      college: "Staff/Faculty",
+      year: "Staff/Faculty",
+    }));
+  } else {
+    setFormData((prev) => ({
+      ...prev,
+      college: "",
+      year: "",
+    }));
+  }
+}, [isStudent]);
+
   const onDrop = useCallback((e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("is-dragover");
     const file = e.dataTransfer.files?.[0]; if (!file) return;
@@ -1004,26 +1020,53 @@ export default function Create() {
                   readOnly={Boolean(currentUserEmail)}
                 />
               </div>
+<div className="create-scope__group">
+  <label>
+    College &amp; Year{" "}
+    <RequiredStar
+      value={
+        isStudent
+          ? formData.college && formData.year
+            ? "filled"
+            : ""
+          : "filled"
+      }
+    />
+  </label>
 
-              <div>
-                {isStudent ? (
-                  <div className="create-scope__group">
-                    <label>College &amp; Year <RequiredStar value={formData.college&&formData.year ? "filled" : ""} /></label>
-                    <select name="college" value={formData.college} onChange={handleChange} required>
-                      <option value="">Select college</option>
-                      {collegeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <select name="year" value={formData.year} onChange={handleChange} required style={{ marginTop: 8 }}>
-                      <option value="">Select year</option>
-                      {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
-                  </div>
-                ) : (
-                  // ✅ Empty placeholder column to keep grid alignment
-                  <div />
-                )}
-              </div>
+  {isStudent ? (
+    <>
+      <select
+        name="college"
+        value={formData.college}
+        onChange={handleChange}
+        required
+      >
+        <option value="">Select college</option>
+        {collegeOptions.map((c) => (
+          <option key={c} value={c}>{c}</option>
+        ))}
+      </select>
 
+      <select
+        name="year"
+        value={formData.year}
+        onChange={handleChange}
+        required
+        style={{ marginTop: 8 }}
+      >
+        <option value="">Select year</option>
+        {yearOptions.map((y) => (
+          <option key={y} value={y}>{y}</option>
+        ))}
+      </select>
+    </>
+  ) : (
+    <p style={{ marginTop: 8, fontWeight: 500 }}>
+      Staff / Faculty
+    </p>
+  )}
+</div>
               {/* Subject */}
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
