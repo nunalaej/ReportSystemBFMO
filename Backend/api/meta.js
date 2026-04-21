@@ -75,8 +75,15 @@ const DEFAULT_POSITION_PERMS = {
   "Staff Engineer": ["Update status","Comment","View Tasks"],
   "Supervisor":     ["View Tasks","View only"],
   "Technician":     ["View Tasks","View only"],
-  "Other":          ["View Tasks","View only"],
+  "Other":          ["2View Tasks","View only"],
 };
+
+// Default signatories
+const DEFAULT_SIGNATORIES = [
+  { name: "", role: "Prepared by" },
+  { name: "", role: "Reviewed by" },
+  { name: "", role: "Approved by" },
+];
 
 /* ── Helpers ──────────────────────────────────────────────── */
 const norm = (v) => (v == null ? "" : String(v).trim().toLowerCase());
@@ -127,34 +134,34 @@ function sanitiseConcern(c, idx) {
 }
 
 function sanitiseStatus(s, idx) {
-  const name2 = String(s?.name || "").trim();
-  if (!name2) return null;
+  const name = String(s?.name || "").trim();
+  if (!name) return null;
   return {
     id:    String(s?.id || String(idx + 1)).trim(),
-    name: name2,
+    name,
     color: String(s?.color || "#6C757D").trim(),
   };
 }
 
 function sanitisePriority(p, idx) {
-  const name3 = String(p?.name || "").trim();
-  if (!name3) return null;
+  const name = String(p?.name || "").trim();
+  if (!name) return null;
   const ni = String(p?.notifyInterval || "").trim();
   const validIntervals = ["hourly","daily","1h","1d","2d","3d","4d","5d","6d","7d","1week","2weeks","1month","3months"];
   const notifyInterval = (ni && /^(\d+)(h|d|w)?$/.test(ni)) || validIntervals.includes(ni) ? ni : "1d";
   return {
     id:             String(p?.id || String(idx + 1)).trim(),
-    name: name3,
+    name,
     color:          String(p?.color || "#6C757D").trim(),
     notifyInterval,
   };
 }
 
-// Sanitise signatories
+// Helper to sanitise signatories
 function sanitiseSignatory(s, idx) {
   const name = String(s?.name || "").trim();
   const role = String(s?.role || "").trim();
-  if (!name && !role) return null;
+  // Allow signatories with empty name but role
   return { name, role };
 }
 
@@ -200,7 +207,7 @@ router.get("/", async (req, res) => {
             disciplineOptions: DEFAULT_DISCIPLINE_OPTIONS,
             positionPerms:     DEFAULT_POSITION_PERMS,
             notifRules:        [],
-            signatories:       [], // Add signatories to default
+            signatories:       DEFAULT_SIGNATORIES,
           },
         },
         { upsert: true, returnDocument: "after" }
@@ -221,7 +228,7 @@ router.get("/", async (req, res) => {
                            ? doc.positionPerms
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(doc.notifRules) ? doc.notifRules : [],
-      signatories:       Array.isArray(doc.signatories) ? doc.signatories : [], // Add signatories response
+      signatories:       Array.isArray(doc.signatories) ? doc.signatories : DEFAULT_SIGNATORIES,
     });
   } catch (err) {
     console.error("GET /meta error:", err);
@@ -272,7 +279,7 @@ router.put("/", async (req, res) => {
 
     /* ── Sanitise string arrays ── */
     const colleges          = rawColleges.map(c => String(c || "").trim()).filter(Boolean);
-    const yearLevels        = rawYearLevels2.map(y => String(y || "").trim()).filter(Boolean);
+    const yearLevels        = rawYearLevels.map(y => String(y || "").trim()).filter(Boolean);
     const positionOptions   = rawPositionOptions.map(p => String(p || "").trim()).filter(Boolean);
     const disciplineOptions = rawDisciplineOptions.map(d => String(d || "").trim()).filter(Boolean);
 
@@ -280,7 +287,7 @@ router.put("/", async (req, res) => {
     const positionPerms = sanitisePositionPerms(rawPositionPerms);
 
     /* ── Sanitise signatories ── */
-    const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i)).filter(Boolean);
+    const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i));
 
     /* ── Build $set payload ── */
     const setFields = { buildings, concerns, statuses, priorities };
@@ -290,7 +297,8 @@ router.put("/", async (req, res) => {
     if (disciplineOptions.length) setFields.disciplineOptions = disciplineOptions;
     if (positionPerms)            setFields.positionPerms     = positionPerms;
     if (rawNotifRules !== null)   setFields.notifRules        = rawNotifRules;
-    if (signatories.length)       setFields.signatories       = signatories;
+    // Always include signatories, even if empty
+    setFields.signatories = signatories;
 
     /* ── Upsert ── */
     const updated = await Meta.findOneAndUpdate(
@@ -313,7 +321,7 @@ router.put("/", async (req, res) => {
                            ? updated.positionPerms
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(updated.notifRules) ? updated.notifRules : [],
-      signatories:       Array.isArray(updated.signatories) ? updated.signatories : [],
+      signatories:       Array.isArray(updated.signatories) ? updated.signatories : DEFAULT_SIGNATORIES,
     });
   } catch (err) {
     console.error("PUT /meta error:", err);
