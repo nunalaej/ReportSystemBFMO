@@ -36,7 +36,7 @@ interface Task {
 interface MetaStatus   { id: string; name: string; color: string; }
 interface MetaPriority { id: string; name: string; color: string; }
 interface Signatory    { name: string; role: string; }
-type StatusKey = "Pending" | "Inspecting" | "Unfinished" | "In Progress" | "Resolved" | "Archived";interface TimeSeriesPoint { label: string; value: number; }
+type StatusKey = "Pending" | "Inspecting" |  "In Progress" | "Resolved" | "Unfinished"  | "Archived";interface TimeSeriesPoint { label: string; value: number; }
 type TimeMode = "day" | "week" | "month" | "year";
 
 /* ===== Colors & Helpers ===== */
@@ -65,10 +65,10 @@ const formatConcernLabel = (report: Report) => {
 };
 const DEFAULT_STATUSES: MetaStatus[] = [
   { id: "pending",  name: "Pending",               color: "#f59e0b" },
-  { id: "Unfinished",  name: "Unfinished", color: "#510000" },
   { id: "inspecting", name: "Inspecting",           color: "#0083db" },
   { id: "progress", name: "In Progress",           color: "#a78bfa" },
   { id: "resolved", name: "Resolved",              color: "#34d399" },
+  { id: "Unfinished",  name: "Unfinished", color: "#510000" },
   { id: "archived", name: "Archived",              color: "#64748b" },
 ];
 
@@ -113,14 +113,16 @@ const normalizeStatus = (status: string | undefined, statuses: MetaStatus[]) => 
     if (inspectingStatus) return inspectingStatus.name;
   }
   
-  // Special handling for "Waiting for Materials" or similar
-  if (s.includes("unfinished")) {
-    const unfinishedStatus = statuses.find(st => /unfinished/i.test(st.name));
-    if (unfinishedStatus) return unfinishedStatus.name;
-  }
+ 
   if (s.includes("in progress") || s.includes("inprogress")) {
     const progressStatus = statuses.find(st => /progress/i.test(st.name));
     if (progressStatus) return progressStatus.name;
+  }
+
+   // Special handling for "Unfinished" or similar
+  if (s.includes("unfinished")) {
+    const unfinishedStatus = statuses.find(st => /unfinished/i.test(st.name));
+    if (unfinishedStatus) return unfinishedStatus.name;
   }
   
   // Default fallback to "Pending"
@@ -281,9 +283,9 @@ const STATUS_LABELS = useMemo(() => {
   const labels: Record<StatusKey, string> = {
     "Pending": "Pending",
     "Inspecting": "Inspecting",
-    "Unfinished": "Unfinished",
     "In Progress": "In Progress",
     "Resolved": "Resolved",
+    "Unfinished": "Unfinished",
     "Archived": "Archived"
   };
   
@@ -422,7 +424,7 @@ const [metaConcernTypes,setMetaConcernTypes]= useState<string[]>(FALLBACK_CONCER
   }, [canView, fetchReports]);
 
   /* ── FILTERS ── */
-const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set(["Pending", "Unfinished", "In Progress", "Resolved", "Inspecting"]));  const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(() => new Set());
+const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(() => new Set(["Pending", "Inspecting", "In Progress", "Resolved",  "Unfinished"]));  const [selectedBuildings, setSelectedBuildings] = useState<Set<string>>(() => new Set());
   const [selectedConcerns,  setSelectedConcerns]  = useState<Set<string>>(() => new Set());
   const [selectedColleges,  setSelectedColleges]  = useState<Set<string>>(() => new Set());
   const [dateFrom, setDateFrom] = useState<string>("");
@@ -478,9 +480,9 @@ const normalizedStatus = normalizeStatus(r.status, statuses);
   const map: Record<StatusKey, number> = {
     "Pending": 0,
     "Inspecting": 0,
-    "Unfinished": 0,
     "In Progress": 0,
     "Resolved": 0,
+    "Unfinished": 0,
     "Archived": 0
   };
   
@@ -493,9 +495,9 @@ const normalizedStatus = normalizeStatus(r.status, statuses);
     
     if (normalizedStatus === "Pending") map["Pending"]++;
     else if (normalizedStatus === "Inspecting") map["Inspecting"]++;
-    else if (normalizedStatus === "Unfinished") map["Unfinished"]++;
     else if (normalizedStatus === "In Progress") map["In Progress"]++;
     else if (normalizedStatus === "Resolved") map["Resolved"]++;
+    else if (normalizedStatus === "Unfinished") map["Unfinished"]++;
     else if (normalizedStatus === "Archived") map["Archived"]++;
   });
   
@@ -605,7 +607,7 @@ interface ConcernChartDatum {
       const bk = (r.building||"Unspecified").trim()||"Unspecified"; buildingCounts.set(bk,(buildingCounts.get(bk)||0)+1);
     });
     const total = filtered.length;
-const statusSummaryHtml = ([["Pending",statusCounts["Pending"]],["Inspecting",statusCounts["Inspecting"]],["Unfinished",statusCounts["Unfinished"]],["In Progress",statusCounts["In Progress"]],["Resolved",statusCounts["Resolved"]],["Archived",statusCounts["Archived"]]] as [string,number][])      
+const statusSummaryHtml = ([["Pending",statusCounts["Pending"]],["Inspecting",statusCounts["Inspecting"]],["In Progress",statusCounts["In Progress"]],["Resolved",statusCounts["Resolved"]],["Unfinished",statusCounts["Unfinished"]],["Archived",statusCounts["Archived"]]] as [string,number][])      
   .filter(([,c])=>c>0).map(([l,c])=>`<li>${l}: ${c} (${total>0?Math.round((c/total)*100):0}%)</li>`).join("")||"<li>No data.</li>";
       const safe = (v?: string) => v ? String(v) : "";
     const rowsHtml = filtered.map((r,i)=>`<tr><td>${i+1}</td><td>${safe(r.reportId)}</td><td>${r.createdAt?new Date(r.createdAt).toLocaleString():""}</td><td>${safe(r.status)}</td><td>${safe(r.building)}</td><td>${safe(formatConcernLabel(r))}</td><td>${safe(r.college)}</td><td>${safe(r.floor)}</td><td>${safe(r.room)}</td><td>${safe(r.email)}</td><td>${safe(r.userType)}</td></tr>`).join("");
@@ -821,7 +823,7 @@ const resolvedPct = useMemo(() => filtered.length > 0 ? Math.round((statusCounts
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               Refresh
             </button>
-            <button className="action-btn action-btn-primary" onClick={handlePrint}>
+            <button className="action-btn action-btn-primary" onClick={() => executePrint(signatories)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
               Print Report
             </button>
