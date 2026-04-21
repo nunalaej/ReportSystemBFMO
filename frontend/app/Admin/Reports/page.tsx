@@ -322,10 +322,28 @@
       metaStatuses.find(s => s.name === (name || "Pending"))?.color || "#6C757D", [metaStatuses]);
 
     const renderStatusPill = useCallback((statusRaw?: string) => {
-      const status = statusRaw || "Pending";
-      const color  = getStatusColor(status);
-      return <span className="status-pill" style={{ backgroundColor:color, color:"#fff", textShadow:"0 1px 2px rgba(0,0,0,0.2)" }}>{status}</span>;
-    }, [getStatusColor]);
+  const status = statusRaw || "Pending";
+  const color = getStatusColor(status);
+  
+  return (
+    <span 
+      className="status-pill" 
+      style={{ 
+        backgroundColor: color, 
+        color: "#fff", 
+        textShadow: "0 1px 2px rgba(0,0,0,0.2)",
+        padding: "4px 8px",
+        borderRadius: "12px",
+        fontSize: "0.75rem",
+        fontWeight: "500",
+        display: "inline-block",
+        lineHeight: "1"
+      }}
+    >
+      {status}
+    </span>
+  );
+}, [getStatusColor]);
 
     const statusMatchesFilter = useCallback((rs: string|undefined, filter: string) => {
       const current      = rs || "Pending";
@@ -693,9 +711,9 @@
                       </div>
                       <div className="stepper-content">
                         <div className="stepper-title">{step.name}</div>
-                        <span className="stepper-status" style={state!=="pending"?{backgroundColor:step.color+"22",color:step.color}:{}}>
-                          {state==="completed"?"Completed":state==="active"?"Current":"Pending"}
-                        </span>
+                        <span className="stepper-status" style={state !== "pending" ? { backgroundColor: step.color + "22", color: step.color } : {}}>
+  {state === "completed" ? "Completed" : state === "active" ? "Current" : "Pending"}
+</span>
                       </div>
                     </div>
                   );
@@ -720,8 +738,9 @@
                           </div>
                           <div className="progress-timeline-content">
                             <div className="progress-timeline-top">
-                              <span className="progress-timeline-status" style={{ color, backgroundColor:color+"18", border:`1px solid ${color}40` }}>{entry.status}</span>
-                              <span className="progress-timeline-time">{getRelativeTime(entry.at)}</span>
+<span className="progress-timeline-status" style={{ color: color, backgroundColor: color + "18", border: `1px solid ${color}40` }}>
+  {entry.status}
+</span>                              <span className="progress-timeline-time">{getRelativeTime(entry.at)}</span>
                             </div>
                             {entry.note && <p className="progress-timeline-note">{entry.note}</p>}
                             <div className="progress-timeline-meta">
@@ -783,20 +802,20 @@
                 <p><strong>Email:</strong>    {selectedReport.email || "Unspecified"}</p>
                 <p><strong>Submitted:</strong>{" "}{selectedReport.createdAt && new Date(selectedReport.createdAt).toLocaleString()}{" "}{selectedReport.createdAt && `(${getRelativeTime(selectedReport.createdAt)})`}</p>
               </div>
-              <div className="status-panel" style={{ borderLeft:`3px solid ${getStatusColor(statusValue)}` }}>
-                <div className="status-panel-header">
-                  <span className="status-panel-title">Status</span>
-                  {renderStatusPill(statusValue)}
-                </div>
-                <div className="status-row status-row-inline">
-                  <label htmlFor="status-select" className="status-row-label">Update</label>
-                  <select id="status-select" className="status-select" value={statusValue}
-                    onChange={e => setStatusValue(e.target.value)} disabled={selectedReport.status === "Archived"}>
-                    {metaStatuses.filter(s => s.name.toLowerCase() !== "archived")
-                      .map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-              </div>
+              <div className="status-panel" style={{ borderLeft: `3px solid ${getStatusColor(statusValue)}` }}>
+  <div className="status-panel-header">
+    <span className="status-panel-title">Status</span>
+    {renderStatusPill(statusValue)}
+  </div>
+  <div className="status-row status-row-inline">
+    <label htmlFor="status-select" className="status-row-label">Update</label>
+    <select id="status-select" className="status-select" value={statusValue}
+      onChange={e => setStatusValue(e.target.value)} disabled={selectedReport.status === "Archived"}>
+      {metaStatuses.filter(s => s.name.toLowerCase() !== "archived")
+        .map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+    </select>
+  </div>
+</div>
               <div className="comments-section">
                 <h3>Comments {commentsToShow.length > 0 && <span className="comments-count">{commentsToShow.length}</span>}</h3>
                 {commentsToShow.length > 0 ? (
@@ -973,52 +992,60 @@
       CARD + ROW RENDERERS
     ══════════════════════════════════════════════════════════ */
     const renderReportCard = (report: Report, showDupLink = false) => {
-      const key        = getGroupKey(report);
-      const duplicates = showDupLink ? (duplicateCounts[key]||1) - 1 : 0;
-      const statusKey  = getStatusClassKey(report.status);
-      const existing   = getExistingTask(report);
-      return (
-        <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
-          {existing && <div style={{ height:3, background:metaPriorities.find(p=>p.name===existing.priority)?.color || "#22c55e" }}/>}
-          <div className="report-img-container">
-            <img src={resolveImg(report.image || report.ImageFile)} alt="Report" className="report-img"
-              onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}/>
-          </div>
-          <div className="report-body">
-            <div className="report-header-row">
-              {report.reportId && <p className="report-id-badge">#{report.reportId}</p>}
-              <h3>{report.heading || "Untitled report"}</h3>
-            </div>
-            <div className={`status-focus-row status-focus-${statusKey}`}>
-              <span className="status-focus-label">Status</span>
-              {renderStatusPill(report.status)}
-            </div>
-            <p className="report-description">{report.description || "No description provided."}</p>
-            <div className="report-info">
-              <p><strong>Building:</strong> {formatBuilding(report)}</p>
-              <p><strong>Concern:</strong>  {formatConcern(report)}</p>
-              <p><strong>College:</strong>  {report.college || "Unspecified"}</p>
-            </div>
-            <p className="submitted-date">
-              {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
-              {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
-            </p>
-            {showDupLink && !showDuplicates && duplicates > 0 && (
-              <p className="duplicate-msg" onClick={e => { e.stopPropagation(); setSelectedGroup(key); }}>
-                +{duplicates} similar {duplicates === 1 ? "report" : "reports"}
-              </p>
-            )}
-            <div className="report-card-actions" onClick={e => e.stopPropagation()}>
-              <button type="button" className="card-progress-btn" onClick={e => openProgress(report, e)}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-                Progress
-              </button>
-              {renderTaskButton(report, "card")}
-            </div>
-          </div>
+  const key = getGroupKey(report);
+  const duplicates = showDupLink ? (duplicateCounts[key] || 1) - 1 : 0;
+  const existing = getExistingTask(report);
+  const statusColor = getStatusColor(report.status);
+  
+  return (
+    <div key={report._id} className="report" onClick={() => handleCardClick(report)}>
+      {existing && <div style={{ height: 3, background: metaPriorities.find(p => p.name === existing.priority)?.color || "#22c55e" }} />}
+      <div className="report-img-container">
+        <img src={resolveImg(report.image || report.ImageFile)} alt="Report" className="report-img"
+          onError={e => { (e.target as HTMLImageElement).src = defaultImg; }} />
+      </div>
+      <div className="report-body">
+        <div className="report-header-row">
+          {report.reportId && <p className="report-id-badge">#{report.reportId}</p>}
+          <h3>{report.heading || "Untitled report"}</h3>
         </div>
-      );
-    };
+        {/* Use inline style for dynamic color */}
+        <div className="status-focus-row" style={{ 
+          backgroundColor: `${statusColor}10`, 
+          borderLeft: `3px solid ${statusColor}`,
+          padding: "6px 8px",
+          borderRadius: "4px",
+          marginBottom: "8px"
+        }}>
+          <span className="status-focus-label">Status</span>
+          {renderStatusPill(report.status)}
+        </div>
+        <p className="report-description">{report.description || "No description provided."}</p>
+        <div className="report-info">
+          <p><strong>Building:</strong> {formatBuilding(report)}</p>
+          <p><strong>Concern:</strong> {formatConcern(report)}</p>
+          <p><strong>College:</strong> {report.college || "Unspecified"}</p>
+        </div>
+        <p className="submitted-date">
+          {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : ""}
+          {report.createdAt && ` (${getRelativeTime(report.createdAt)})`}
+        </p>
+        {showDupLink && !showDuplicates && duplicates > 0 && (
+          <p className="duplicate-msg" onClick={e => { e.stopPropagation(); setSelectedGroup(key); }}>
+            +{duplicates} similar {duplicates === 1 ? "report" : "reports"}
+          </p>
+        )}
+        <div className="report-card-actions" onClick={e => e.stopPropagation()}>
+          <button type="button" className="card-progress-btn" onClick={e => openProgress(report, e)}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Progress
+          </button>
+          {renderTaskButton(report, "card")}
+        </div>
+      </div>
+    </div>
+  );
+};
 
     const renderReportRow = (report: Report) => {
       const sColor   = getStatusColor(report.status);

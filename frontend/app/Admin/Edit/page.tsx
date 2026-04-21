@@ -648,7 +648,7 @@ export default function AdminEditPage() {
               {activeTab==="buildings" && (
                 <div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:24 }}>
-                    <div><h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800, color:"var(--tasks-text-1,#0d1b2a)" }}>Buildings</h2><p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Add, edit, or remove campus buildings</p></div>
+                    <div><h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800, color:"var(--tasks-text-1,#0d1b2a)" }}>Buildings & Facilities</h2><p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Add, edit, or remove campus buildings</p></div>
                     <button type="button" className="btn btn-primary btn-sm" onClick={addBuilding}>+ Add Building</button>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"240px 1fr", gap:20, alignItems:"start" }}>
