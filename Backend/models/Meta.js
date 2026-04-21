@@ -104,35 +104,43 @@ const MetaSchema = new mongoose.Schema(
       default: ["1st Year","2nd Year","3rd Year","4th Year"],
     },
 
-    /* ✅ FIX 1: Notification rules — was missing, Mongoose was stripping it */
+    /* ✅ Notification rules */
     notifRules: {
       type:    [NotifRuleSchema],
       default: [],
     },
 
-    /* ✅ FIX 2: Position names list — was missing */
+    /* ✅ Position names list */
     positionOptions: {
       type:    [String],
       default: ["Head Engineer","Staff Engineer","Supervisor","Technician","Other"],
     },
 
-    /* ✅ FIX 3: Discipline names list — was missing */
+    /* ✅ Discipline names list */
     disciplineOptions: {
       type:    [String],
       default: ["Electrical","Civil","Mechanical","Safety Hazard"],
     },
 
-    /* ✅ FIX 4: Position permissions map — THIS IS THE ONE CAUSING "View only"
-       Mongoose was stripping this field entirely on every GET because it
-       wasn't declared in the schema. Staff pages got {} → empty permList
-       → buildPerms([]) → BASE_PERMS → "View only" for everyone.
-       
-       Using Mixed type so any shape like:
-         { "Head Engineer": ["Create tasks", "Update status", ...] }
-       is stored and returned without restriction. */
+    /* ✅ Position permissions map */
     positionPerms: {
       type:    mongoose.Schema.Types.Mixed,
       default: {},
+    },
+
+    /* ✅ Signatories for printed reports */
+    signatories: {
+      type: [
+        {
+          name: { type: String, default: "" },
+          role: { type: String, default: "" },
+        }
+      ],
+      default: [
+        { name: "", role: "Prepared by" },
+        { name: "", role: "Reviewed by" },
+        { name: "", role: "Approved by" },
+      ],
     },
   },
   {

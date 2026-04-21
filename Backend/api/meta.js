@@ -220,6 +220,25 @@ router.get("/", async (req, res) => {
   }
 });
 
+// In your PUT /api/meta route
+const rawSignatories = Array.isArray(req.body?.signatories) ? req.body.signatories : [];
+
+// Sanitise signatories
+function sanitiseSignatory(s, idx) {
+  const name = String(s?.name || "").trim();
+  const role = String(s?.role || "").trim();
+  if (!name && !role) return null;
+  return { name, role };
+}
+
+const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i)).filter(Boolean);
+
+// Add to $set payload
+if (signatories.length) setFields.signatories = signatories;
+
+// In GET /api/meta response
+signatories: doc.signatories?.length ? doc.signatories : [],
+
 /* ── PUT /api/meta ────────────────────────────────────────── */
 router.put("/", async (req, res) => {
   try {

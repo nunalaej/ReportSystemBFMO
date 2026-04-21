@@ -106,6 +106,8 @@ type StaffMember   = {
   notes?: string; clerkUsername?: string; clerkId?: string;
 };
 
+
+
 /* ─────────────────────────── Position colors ───────────────── */
 const POSITION_COLOR_DEFAULTS: Record<string, { bg: string; text: string }> = {
   "Head Engineer":  { bg: "#fef3c7", text: "#92400e" },
@@ -198,7 +200,22 @@ const NOTIFY_INTERVAL_LABELS: Record<string,string> = {
 };
 const FLOOR_ORDINALS = ["1st","2nd","3rd","4th","5th","6th","7th","8th","9th","10th"].map(n=>`${n} Floor`);
 
-type TabId = "buildings" | "concerns" | "statuses" | "priorities" | "notifications" | "students" | "staff";
+// In your AdminEditPage component, add to TabId type
+type TabId = "buildings" | "concerns" | "statuses" | "priorities" | "notifications" | "students" | "staff" | "printconfig";
+
+
+
+// Add IconPrinter component
+// Add IconPrinter component
+const IconPrinter = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9"/>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+    <rect x="6" y="14" width="12" height="8"/>
+  </svg>
+);
+
+// Add to NAV_TABS array
 const NAV_TABS: { id: TabId; label: string; icon: React.ReactNode; badge?: (s: any) => number }[] = [
   { id:"buildings",  label:"Buildings",         icon:<IconBuilding/>,  badge:s=>s.buildings.length  },
   { id:"concerns",   label:"Concerns",          icon:<IconTag/>,       badge:s=>s.concerns.length   },
@@ -206,8 +223,12 @@ const NAV_TABS: { id: TabId; label: string; icon: React.ReactNode; badge?: (s: a
   { id:"priorities", label:"Priorities & Rules",icon:<IconBell/>,      badge:s=>s.priorities.length },
   { id:"students",   label:"Student Settings",  icon:<IconGraduate/>,  badge:s=>s.colleges.length+s.yearLevels.length },
   { id:"staff",      label:"Staff Management",  icon:<IconUsers/>,     badge:s=>s.staffList.length  },
+  { id:"printconfig", label:"Print Signatories", icon:<IconPrinter/>, badge:s=>s.signatories.length }, // NEW
 ];
 
+
+// Add Signatory type
+type Signatory = { name: string; role: string; };
 /* ─────────────────────────── Color palette ─────────────────── */
 const THEME_COLORS = [
   ["#FFFFFF","#000000","#E7E6E6","#44546A","#4472C4","#ED7D31","#A9A9A9","#FFC000","#70AD47","#FF0000"],
@@ -360,6 +381,14 @@ export default function AdminEditPage() {
   const [newClerkPw,     setNewClerkPw]     = useState("");
   const [showClerkForm,  setShowClerkForm]  = useState<string|null>(null);
 
+  const [signatories, setSignatories] = useState<Signatory[]>([
+  { name: "", role: "Prepared by" },
+  { name: "", role: "Reviewed by" },
+  { name: "", role: "Approved by" },
+]);
+const [newSignatoryName, setNewSignatoryName] = useState("");
+const [newSignatoryRole, setNewSignatoryRole] = useState("");
+
   /* ── Auth ── */
   const role = useMemo(() => {
     if (!isLoaded||!isSignedIn||!user) return "guest";
@@ -378,53 +407,67 @@ export default function AdminEditPage() {
 
   /* ── Load meta ── */
   const loadMeta = useCallback(async (mode:"preferDefaults"|"dbOnly"="preferDefaults") => {
-    try {
-      setLoading(true);setError("");setSaveMsg("");setPermsMsg("");
-      const res=await fetch(`${META_URL}?ts=${Date.now()}`,{cache:"no-store"});
-      if(!res.ok) throw new Error("Failed to load.");
-      const data=await res.json().catch(()=>null);
-      if(!data) throw new Error("Empty response.");
-      const rawB=Array.isArray(data.buildings)?data.buildings:[];
-      const rawC=Array.isArray(data.concerns)?data.concerns:[];
-      const rawS=Array.isArray(data.statuses)?data.statuses:[];
-      const rawP=Array.isArray(data.priorities)?data.priorities:[];
-      const iB=(mode==="preferDefaults"&&rawB.length===0)?DEFAULT_BUILDINGS:normBuildings(rawB);
-      const iC=(mode==="preferDefaults"&&rawC.length===0)?DEFAULT_CONCERNS:normConcerns(rawC);
-      const iS=(mode==="preferDefaults"&&rawS.length===0)?DEFAULT_STATUSES:normStatuses(rawS);
-      const iP=(mode==="preferDefaults"&&rawP.length===0)?DEFAULT_PRIORITIES:normPriorities(rawP);
-      setBuildings(iB);setConcerns(iC);setStatuses(iS);setPriorities(iP);
-      if(iB.length>0&&!selBuildingId) setSelBuildingId(iB[0].id);
-      if(iC.length>0&&!selConcernId)  setSelConcernId(iC[0].id);
-      if(iS.length>0&&!selStatusId)   setSelStatusId(iS[0].id);
-      if(Array.isArray(data.colleges)          &&data.colleges.length)          setColleges(data.colleges);
-      if(Array.isArray(data.yearLevels)         &&data.yearLevels.length)        setYearLevels(data.yearLevels);
-      if(Array.isArray(data.notifRules)         &&data.notifRules.length)        setNotifRules(normNotifRules(data.notifRules));
-      if(Array.isArray(data.positionOptions)    &&data.positionOptions.length)   setPositionOptions(data.positionOptions);
-      if(Array.isArray(data.disciplineOptions)  &&data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
-
-      /* ── KEY FIX: if positionPerms exists in DB, load it and mark synced ── */
-      if(data.positionPerms && typeof data.positionPerms==="object" && Object.keys(data.positionPerms).length > 0) {
-        setPositionPerms(data.positionPerms);
-        setPermsSynced(true);  // ← DB has real data
-      } else {
-        /* DB has no positionPerms yet — load defaults but mark as NOT synced */
-        setPositionPerms(DEFAULT_PERMISSIONS);
-        setPermsSynced(false); // ← needs to be saved to DB
-      }
-    } catch(err:any){
-      setError(err?.message||"Could not load.");
-      if(mode==="preferDefaults"){
-        setBuildings(DEFAULT_BUILDINGS);setConcerns(DEFAULT_CONCERNS);
-        setStatuses(DEFAULT_STATUSES);setPriorities(DEFAULT_PRIORITIES);
-        setColleges(DEFAULT_COLLEGES);setYearLevels(DEFAULT_YEAR_LEVELS);
-        setNotifRules(DEFAULT_NOTIF_RULES);
-        setPositionOptions(DEFAULT_POSITION_OPTIONS);
-        setDisciplineOptions(DEFAULT_DISCIPLINE_OPTIONS);
-        setPositionPerms(DEFAULT_PERMISSIONS);
-        setPermsSynced(false);
-      }
-    } finally {setLoading(false);}
-  },[selBuildingId,selConcernId,selStatusId]);
+  try {
+    setLoading(true);setError("");setSaveMsg("");setPermsMsg("");
+    const res=await fetch(`${META_URL}?ts=${Date.now()}`,{cache:"no-store"});
+    if(!res.ok) throw new Error("Failed to load.");
+    const data=await res.json().catch(()=>null);
+    if(!data) throw new Error("Empty response.");
+    
+    const rawB=Array.isArray(data.buildings)?data.buildings:[];
+    const rawC=Array.isArray(data.concerns)?data.concerns:[];
+    const rawS=Array.isArray(data.statuses)?data.statuses:[];
+    const rawP=Array.isArray(data.priorities)?data.priorities:[];
+    
+    const iB=(mode==="preferDefaults"&&rawB.length===0)?DEFAULT_BUILDINGS:normBuildings(rawB);
+    const iC=(mode==="preferDefaults"&&rawC.length===0)?DEFAULT_CONCERNS:normConcerns(rawC);
+    const iS=(mode==="preferDefaults"&&rawS.length===0)?DEFAULT_STATUSES:normStatuses(rawS);
+    const iP=(mode==="preferDefaults"&&rawP.length===0)?DEFAULT_PRIORITIES:normPriorities(rawP);
+    
+    setBuildings(iB);setConcerns(iC);setStatuses(iS);setPriorities(iP);
+    
+    if(iB.length>0&&!selBuildingId) setSelBuildingId(iB[0].id);
+    if(iC.length>0&&!selConcernId)  setSelConcernId(iC[0].id);
+    if(iS.length>0&&!selStatusId)   setSelStatusId(iS[0].id);
+    
+    if(Array.isArray(data.colleges) && data.colleges.length) setColleges(data.colleges);
+    if(Array.isArray(data.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
+    if(Array.isArray(data.notifRules) && data.notifRules.length) setNotifRules(normNotifRules(data.notifRules));
+    if(Array.isArray(data.positionOptions) && data.positionOptions.length) setPositionOptions(data.positionOptions);
+    if(Array.isArray(data.disciplineOptions) && data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
+    
+    // ✅ Load signatories
+    if(Array.isArray(data.signatories) && data.signatories.length) {
+      setSignatories(data.signatories);
+    }
+    
+    /* ── KEY FIX: if positionPerms exists in DB, load it and mark synced ── */
+    if(data.positionPerms && typeof data.positionPerms==="object" && Object.keys(data.positionPerms).length > 0) {
+      setPositionPerms(data.positionPerms);
+      setPermsSynced(true);
+    } else {
+      setPositionPerms(DEFAULT_PERMISSIONS);
+      setPermsSynced(false);
+    }
+  } catch(err:any){
+    setError(err?.message||"Could not load.");
+    if(mode==="preferDefaults"){
+      setBuildings(DEFAULT_BUILDINGS);setConcerns(DEFAULT_CONCERNS);
+      setStatuses(DEFAULT_STATUSES);setPriorities(DEFAULT_PRIORITIES);
+      setColleges(DEFAULT_COLLEGES);setYearLevels(DEFAULT_YEAR_LEVELS);
+      setNotifRules(DEFAULT_NOTIF_RULES);
+      setPositionOptions(DEFAULT_POSITION_OPTIONS);
+      setDisciplineOptions(DEFAULT_DISCIPLINE_OPTIONS);
+      setPositionPerms(DEFAULT_PERMISSIONS);
+      setPermsSynced(false);
+      setSignatories([
+        { name: "", role: "Prepared by" },
+        { name: "", role: "Reviewed by" },
+        { name: "", role: "Approved by" },
+      ]);
+    }
+  } finally {setLoading(false);}
+},[selBuildingId,selConcernId,selStatusId]);
 
   const loadStaff = useCallback(async()=>{
     try{
@@ -488,36 +531,127 @@ export default function AdminEditPage() {
       setPermsSaving(false);
     }
   };
-
-  /* ── Main save (all fields) ── */
-  const handleSave = async()=>{
-    setSaving(true);setError("");setSaveMsg("");setPermsMsg("");
-    let cleanB=buildings.map((b,idx)=>{const name=String(b.name||"").trim();if(!name)return null;const id=String(b.id||"").trim()||norm(name).replace(/\s+/g,"-")||`b-${idx}`;const floors=typeof b.floors==="number"&&b.floors>0?Math.round(b.floors):1;return{id,name,floors,roomsPerFloor:normaliseRPF(b.roomsPerFloor,floors),hasRooms:b.hasRooms!==false,singleLocationLabel:String(b.singleLocationLabel||"").trim()};}).filter(Boolean) as BuildingMeta[];
-    if(!cleanB.some(b=>norm(b.name)==="other")) cleanB.push({id:"other",name:"Other",floors:1,roomsPerFloor:[1],hasRooms:false,singleLocationLabel:""});
-    cleanB=[...cleanB.filter(b=>norm(b.name)!=="other"),...cleanB.filter(b=>norm(b.name)==="other")];
-    let cleanC=concerns.map((c,idx)=>{const label=String(c.label||"").trim();if(!label)return null;const id=String(c.id||"").trim()||norm(label).replace(/\s+/g,"-")||`c-${idx}`;let subs=(Array.isArray(c.subconcerns)?c.subconcerns:[]).map(s=>String(s||"").trim()).filter(s=>s);subs=[...subs.filter(s=>norm(s)!=="other"),"Other"];return{id,label,subconcerns:subs};}).filter(Boolean) as ConcernMeta[];
-    if(!cleanC.some(c=>norm(c.label)==="other")) cleanC.push({id:"other",label:"Other",subconcerns:["Other"]});
-    cleanC=[...cleanC.filter(c=>norm(c.label)!=="other"),...cleanC.filter(c=>norm(c.label)==="other")];
-    const cleanS=statuses.map((s,idx)=>{const name=String(s.name||"").trim();if(!name)return null;return{id:String(s.id||idx+1).trim(),name,color:String(s.color||"#6C757D").trim()};}).filter(Boolean) as StatusMeta[];
-    const cleanP=priorities.map((p,idx)=>{const name=String(p.name||"").trim();if(!name)return null;return{id:String(p.id||idx+1).trim(),name,color:String(p.color||"#6C757D").trim(),notifyInterval:String(p.notifyInterval||"1month")};}).filter(Boolean) as PriorityMeta[];
-    try{
-      const res=await fetch(META_URL,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({buildings:cleanB,concerns:cleanC,statuses:cleanS,priorities:cleanP,colleges:colleges.map(c=>String(c).trim()).filter(Boolean),yearLevels:yearLevels.map(y=>String(y).trim()).filter(Boolean),notifRules,positionOptions:positionOptions.map(p=>String(p).trim()).filter(Boolean),disciplineOptions:disciplineOptions.map(d=>String(d).trim()).filter(Boolean),positionPerms})});
-      if(!res.ok) throw new Error((await res.text().catch(()=>""))||"Failed to save.");
-      const data=await res.json().catch(()=>null);
-      if(data?.buildings)         setBuildings(normBuildings(data.buildings));
-      if(data?.concerns)          setConcerns(normConcerns(data.concerns));
-      if(data?.statuses)          setStatuses(normStatuses(data.statuses));
-      if(data?.priorities)        setPriorities(normPriorities(data.priorities));
-      if(Array.isArray(data?.colleges)&&data.colleges.length)          setColleges(data.colleges);
-      if(Array.isArray(data?.yearLevels)&&data.yearLevels.length)      setYearLevels(data.yearLevels);
-      if(Array.isArray(data?.notifRules)&&data.notifRules.length)      setNotifRules(normNotifRules(data.notifRules));
-      if(Array.isArray(data?.positionOptions)&&data.positionOptions.length)   setPositionOptions(data.positionOptions);
-      if(Array.isArray(data?.disciplineOptions)&&data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
-      if(data?.positionPerms && typeof data.positionPerms==="object")   { setPositionPerms(data.positionPerms); setPermsSynced(true); }
-      setSaveMsg("All changes saved successfully.");
-    }catch(err:any){setError(err?.message||"Failed to save.");}
-    finally{setSaving(false);}
-  };
+/* ── Main save (all fields) ── */
+const handleSave = async () => {
+  setSaving(true); setError(""); setSaveMsg(""); setPermsMsg("");
+  
+  // Clean buildings
+  let cleanB = buildings.map((b, idx) => {
+    const name = String(b.name || "").trim();
+    if (!name) return null;
+    const id = String(b.id || "").trim() || norm(name).replace(/\s+/g, "-") || `b-${idx}`;
+    const floors = typeof b.floors === "number" && b.floors > 0 ? Math.round(b.floors) : 1;
+    return {
+      id,
+      name,
+      floors,
+      roomsPerFloor: normaliseRPF(b.roomsPerFloor, floors),
+      hasRooms: b.hasRooms !== false,
+      singleLocationLabel: String(b.singleLocationLabel || "").trim()
+    };
+  }).filter(Boolean) as BuildingMeta[];
+  
+  if (!cleanB.some(b => norm(b.name) === "other")) {
+    cleanB.push({ id: "other", name: "Other", floors: 1, roomsPerFloor: [1], hasRooms: false, singleLocationLabel: "" });
+  }
+  cleanB = [...cleanB.filter(b => norm(b.name) !== "other"), ...cleanB.filter(b => norm(b.name) === "other")];
+  
+  // Clean concerns
+  let cleanC = concerns.map((c, idx) => {
+    const label = String(c.label || "").trim();
+    if (!label) return null;
+    const id = String(c.id || "").trim() || norm(label).replace(/\s+/g, "-") || `c-${idx}`;
+    let subs = (Array.isArray(c.subconcerns) ? c.subconcerns : []).map(s => String(s || "").trim()).filter(s => s);
+    subs = [...subs.filter(s => norm(s) !== "other"), "Other"];
+    return { id, label, subconcerns: subs };
+  }).filter(Boolean) as ConcernMeta[];
+  
+  if (!cleanC.some(c => norm(c.label) === "other")) {
+    cleanC.push({ id: "other", label: "Other", subconcerns: ["Other"] });
+  }
+  cleanC = [...cleanC.filter(c => norm(c.label) !== "other"), ...cleanC.filter(c => norm(c.label) === "other")];
+  
+  // Clean statuses
+  const cleanS = statuses.map((s, idx) => {
+    const name = String(s.name || "").trim();
+    if (!name) return null;
+    return {
+      id: String(s.id || idx + 1).trim(),
+      name,
+      color: String(s.color || "#6C757D").trim()
+    };
+  }).filter(Boolean) as StatusMeta[];
+  
+  // Clean priorities
+  const cleanP = priorities.map((p, idx) => {
+    const name = String(p.name || "").trim();
+    if (!name) return null;
+    return {
+      id: String(p.id || idx + 1).trim(),
+      name,
+      color: String(p.color || "#6C757D").trim(),
+      notifyInterval: String(p.notifyInterval || "1month")
+    };
+  }).filter(Boolean) as PriorityMeta[];
+  
+  // Clean signatories
+  const cleanSignatories = signatories.map(sig => ({
+    name: String(sig.name || "").trim(),
+    role: String(sig.role || "").trim()
+  })).filter(sig => sig.name || sig.role);
+  
+  try {
+    const res = await fetch(META_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        buildings: cleanB,
+        concerns: cleanC,
+        statuses: cleanS,
+        priorities: cleanP,
+        colleges: colleges.map(c => String(c).trim()).filter(Boolean),
+        yearLevels: yearLevels.map(y => String(y).trim()).filter(Boolean),
+        notifRules,
+        positionOptions: positionOptions.map(p => String(p).trim()).filter(Boolean),
+        disciplineOptions: disciplineOptions.map(d => String(d).trim()).filter(Boolean),
+        positionPerms,
+        signatories: cleanSignatories // ✅ Added signatories
+      })
+    });
+    
+    if (!res.ok) throw new Error((await res.text().catch(() => "")) || "Failed to save.");
+    
+    const data = await res.json().catch(() => null);
+    
+    // Update all state variables from response
+    if (data?.buildings) setBuildings(normBuildings(data.buildings));
+    if (data?.concerns) setConcerns(normConcerns(data.concerns));
+    if (data?.statuses) setStatuses(normStatuses(data.statuses));
+    if (data?.priorities) setPriorities(normPriorities(data.priorities));
+    
+    if (Array.isArray(data?.colleges) && data.colleges.length) setColleges(data.colleges);
+    if (Array.isArray(data?.yearLevels) && data.yearLevels.length) setYearLevels(data.yearLevels);
+    if (Array.isArray(data?.notifRules) && data.notifRules.length) setNotifRules(normNotifRules(data.notifRules));
+    if (Array.isArray(data?.positionOptions) && data.positionOptions.length) setPositionOptions(data.positionOptions);
+    if (Array.isArray(data?.disciplineOptions) && data.disciplineOptions.length) setDisciplineOptions(data.disciplineOptions);
+    
+    if (data?.positionPerms && typeof data.positionPerms === "object") {
+      setPositionPerms(data.positionPerms);
+      setPermsSynced(true);
+    }
+    
+    // ✅ Load signatories from response
+    if (Array.isArray(data?.signatories)) {
+      setSignatories(data.signatories);
+    }
+    
+    setSaveMsg("All changes saved successfully.");
+  } catch (err: any) {
+    setError(err?.message || "Failed to save.");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const selBuilding = useMemo(()=>buildings.find(b=>b.id===selBuildingId),[buildings,selBuildingId]);
   const selConcern  = useMemo(()=>concerns.find(c=>c.id===selConcernId),[concerns,selConcernId]);
@@ -568,7 +702,17 @@ export default function AdminEditPage() {
   const createClerkAccount=async(member:StaffMember)=>{if(!member.clerkUsername?.trim()||!newClerkPw.trim()){setClerkResult({success:false,message:"Username and password are required."});return;}try{setClerkCreating(true);setClerkResult(null);const res=await fetch(`${API_BASE}/api/staff/create-clerk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({staffId:member._id,username:member.clerkUsername.trim(),password:newClerkPw.trim(),name:member.name})});const data=await res.json().catch(()=>null);if(!res.ok||!data?.success)throw new Error(data?.message||"Failed.");setClerkResult({success:true,message:`Account "${member.clerkUsername}" created!`});setNewClerkPw("");setShowClerkForm(null);loadStaff();}catch(err:any){setClerkResult({success:false,message:err.message||"Failed."});}finally{setClerkCreating(false);}};
 
   const filteredStaff = staffList.filter(s=>discFilter==="All"||s.disciplines.includes(discFilter));
-  const badgeCounts = { buildings:buildings.length, concerns:concerns.length, statuses:statuses.length, priorities:priorities.length, notifRules:notifRules.length, colleges:colleges.length, yearLevels:yearLevels.length, staffList:staffList.length };
+const badgeCounts = { 
+  buildings:buildings.length, 
+  concerns:concerns.length, 
+  statuses:statuses.length, 
+  priorities:priorities.length, 
+  notifRules:notifRules.length, 
+  colleges:colleges.length, 
+  yearLevels:yearLevels.length, 
+  staffList:staffList.length, 
+  signatories:signatories.length // Add this
+};
 
   if(!isLoaded||!isSignedIn) return <div style={{padding:40,textAlign:"center",color:"#9ca3af"}}>Checking permissions…</div>;
   if(role!=="admin")         return <div style={{padding:40,textAlign:"center",color:"#ef4444"}}>Access denied.</div>;
@@ -796,7 +940,170 @@ export default function AdminEditPage() {
                   </div>
                 </div>
               )}
+{activeTab === "printconfig" && (
+  <div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div>
+        <h2 style={{ margin: "0 0 4px", fontSize: "1.2rem", fontWeight: 800 }}>Print Signatories</h2>
+        <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--tasks-text-3,#8a97a8)" }}>
+          Configure names and roles that appear on printed reports
+        </p>
+      </div>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        onClick={() =>
+          setSignatories([
+            { name: "", role: "Prepared by" },
+            { name: "", role: "Reviewed by" },
+            { name: "", role: "Approved by" },
+          ])
+        }
+      >
+        Reset to Defaults
+      </button>
+    </div>
 
+    {/* Duplicate role warning */}
+    {(() => {
+      const duplicateRole = signatories
+        .filter(s => s.role.trim())
+        .some(s => signatories.filter(x => x.role.trim() === s.role.trim()).length > 1);
+      return duplicateRole && (
+        <div style={{
+          background: "#fffbeb",
+          border: "1px solid #fcd34d",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 16,
+          fontSize: 12,
+          color: "#92400e",
+          display: "flex",
+          alignItems: "center",
+          gap: 8
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>Warning: Some roles are duplicated. Each role should be unique.</span>
+        </div>
+      );
+    })()}
+
+    <div style={{ background: "var(--tasks-surface,#fff)", border: "1px solid var(--tasks-border,#e8ecf0)", borderRadius: 12, padding: 24 }}>
+      <div style={{ marginBottom: 16 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--tasks-text-2,#4a5568)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Signatory List ({signatories.length})
+        </p>
+        <p style={{ fontSize: 11, color: "var(--tasks-text-4,#b8c4ce)", marginTop: 4 }}>
+          These will appear at the bottom of printed analytics reports
+        </p>
+      </div>
+
+      {signatories.length === 0 && (
+        <div style={{ padding: "20px", textAlign: "center", color: "var(--tasks-text-4,#b8c4ce)", fontSize: 13 }}>
+          No signatories configured yet.
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {signatories.map((sig, idx) => (
+          <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
+            <div className="admin-edit__field-group">
+              <label className="admin-edit__label">Name</label>
+              <input
+                type="text"
+                className="admin-edit__input"
+                value={sig.name}
+                placeholder="e.g. Juan dela Cruz"
+                onChange={e => setSignatories(prev => prev.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
+              />
+            </div>
+            <div className="admin-edit__field-group">
+              <label className="admin-edit__label">Role</label>
+              <input
+                type="text"
+                className="admin-edit__input"
+                value={sig.role}
+                placeholder="e.g. Head Engineer"
+                onChange={e => setSignatories(prev => prev.map((s, i) => i === idx ? { ...s, role: e.target.value } : s))}
+              />
+            </div>
+            <button
+              type="button"
+              className="admin-edit__icon-btn admin-edit__icon-btn--delete"
+              onClick={() => setSignatories(prev => prev.filter((_, i) => i !== idx))}
+              title="Remove signatory"
+            >
+              <IconTrash />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Add new signatory */}
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--tasks-border,#e8ecf0)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">New Name</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value={newSignatoryName}
+              placeholder="Enter name"
+              onChange={e => setNewSignatoryName(e.target.value)}
+            />
+          </div>
+          <div className="admin-edit__field-group">
+            <label className="admin-edit__label">New Role</label>
+            <input
+              type="text"
+              className="admin-edit__input"
+              value={newSignatoryRole}
+              placeholder="Enter role"
+              onChange={e => setNewSignatoryRole(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              if (!newSignatoryName.trim() || !newSignatoryRole.trim()) return;
+              setSignatories(prev => [...prev, { name: newSignatoryName.trim(), role: newSignatoryRole.trim() }]);
+              setNewSignatoryName("");
+              setNewSignatoryRole("");
+addNotification(`Signatory "${newSignatoryName.trim()}" added.`); // Option 2
+                  }}
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+
+      {/* Preview */}
+      {signatories.length > 0 && (
+        <div style={{ marginTop: 24, padding: "16px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8 }}>
+          <p style={{ margin: "0 0 12px", fontSize: 12, fontWeight: 700, color: "#0369a1" }}>Preview</p>
+          <div style={{ display: "flex", gap: 20, justifyContent: "space-around", flexWrap: "wrap" }}>
+            {signatories.map((sig, idx) => (
+              <div key={idx} style={{ textAlign: "center", minWidth: 120 }}>
+                <div style={{ height: 30, borderBottom: "1px solid #0369a1", marginBottom: 8 }} />
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#0c4a6e" }}>
+                  {sig.name || <span style={{ fontStyle: "italic", color: "#64748b" }}>Signature over Printed Name</span>}
+                </p>
+                <p style={{ margin: "3px 0 0", fontSize: 11, color: "#475569" }}>
+                  {sig.role || <span style={{ fontStyle: "italic" }}>Role</span>}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
               {/* ══ STAFF ══ */}
               {activeTab==="staff" && (
                 <div>
