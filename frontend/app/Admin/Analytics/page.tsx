@@ -252,7 +252,8 @@ const Analytics: FC = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const loadAnalyticsMeta = async () => {
+    // In your fetchMeta function or loadAnalyticsMeta function
+const loadAnalyticsMeta = async () => {
   try {
     const res = await fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" });
     const data = await res.json().catch(() => null);
@@ -260,6 +261,11 @@ const Analytics: FC = () => {
       if (data.statuses?.length > 0) setStatuses(data.statuses);
       if (data.priorities?.length > 0) setMetaPriorities(data.priorities);
       if (data.concerns?.length > 0) setMetaConcernTypes([...data.concerns.map((c: any) => c.label), "Other"]);
+      
+      // ✅ Load signatories from meta
+      if (Array.isArray(data.signatories) && data.signatories.length) {
+        setSignatories(data.signatories);
+      }
     }
   } catch (err) {
     console.warn("[Analytics] Meta fetch failed, using defaults:", err);

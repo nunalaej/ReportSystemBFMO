@@ -127,27 +127,35 @@ function sanitiseConcern(c, idx) {
 }
 
 function sanitiseStatus(s, idx) {
-  const name = String(s?.name || "").trim();
-  if (!name) return null;
+  const name2 = String(s?.name || "").trim();
+  if (!name2) return null;
   return {
     id:    String(s?.id || String(idx + 1)).trim(),
-    name,
+    name: name2,
     color: String(s?.color || "#6C757D").trim(),
   };
 }
 
 function sanitisePriority(p, idx) {
-  const name = String(p?.name || "").trim();
-  if (!name) return null;
+  const name3 = String(p?.name || "").trim();
+  if (!name3) return null;
   const ni = String(p?.notifyInterval || "").trim();
   const validIntervals = ["hourly","daily","1h","1d","2d","3d","4d","5d","6d","7d","1week","2weeks","1month","3months"];
   const notifyInterval = (ni && /^(\d+)(h|d|w)?$/.test(ni)) || validIntervals.includes(ni) ? ni : "1d";
   return {
     id:             String(p?.id || String(idx + 1)).trim(),
-    name,
+    name: name3,
     color:          String(p?.color || "#6C757D").trim(),
     notifyInterval,
   };
+}
+
+// Sanitise signatories
+function sanitiseSignatory(s, idx) {
+  const name = String(s?.name || "").trim();
+  const role = String(s?.role || "").trim();
+  if (!name && !role) return null;
+  return { name, role };
 }
 
 /**
@@ -192,6 +200,7 @@ router.get("/", async (req, res) => {
             disciplineOptions: DEFAULT_DISCIPLINE_OPTIONS,
             positionPerms:     DEFAULT_POSITION_PERMS,
             notifRules:        [],
+            signatories:       [], // Add signatories to default
           },
         },
         { upsert: true, returnDocument: "after" }
@@ -208,36 +217,17 @@ router.get("/", async (req, res) => {
       yearLevels:        doc.yearLevels?.length        ? doc.yearLevels        : DEFAULT_YEAR_LEVELS,
       positionOptions:   doc.positionOptions?.length   ? doc.positionOptions   : DEFAULT_POSITION_OPTIONS,
       disciplineOptions: doc.disciplineOptions?.length ? doc.disciplineOptions : DEFAULT_DISCIPLINE_OPTIONS,
-      // positionPerms: always return the stored object, fall back to defaults
       positionPerms:     (doc.positionPerms && Object.keys(doc.positionPerms).length)
                            ? doc.positionPerms
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(doc.notifRules) ? doc.notifRules : [],
+      signatories:       Array.isArray(doc.signatories) ? doc.signatories : [], // Add signatories response
     });
   } catch (err) {
     console.error("GET /meta error:", err);
     return res.status(500).json({ success: false, message: "Failed to load meta." });
   }
 });
-
-// In your PUT /api/meta route
-const rawSignatories = Array.isArray(req.body?.signatories) ? req.body.signatories : [];
-
-// Sanitise signatories
-function sanitiseSignatory(s, idx) {
-  const name = String(s?.name || "").trim();
-  const role = String(s?.role || "").trim();
-  if (!name && !role) return null;
-  return { name, role };
-}
-
-const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i)).filter(Boolean);
-
-// Add to $set payload
-if (signatories.length) setFields.signatories = signatories;
-
-// In GET /api/meta response
-signatories: doc.signatories?.length ? doc.signatories : [],
 
 /* ── PUT /api/meta ────────────────────────────────────────── */
 router.put("/", async (req, res) => {
@@ -252,6 +242,7 @@ router.put("/", async (req, res) => {
     const rawDisciplineOptions = Array.isArray(req.body?.disciplineOptions) ? req.body.disciplineOptions : [];
     const rawNotifRules        = Array.isArray(req.body?.notifRules)        ? req.body.notifRules        : null;
     const rawPositionPerms     = req.body?.positionPerms ?? null;
+    const rawSignatories       = Array.isArray(req.body?.signatories)       ? req.body.signatories       : [];
 
     /* ── Sanitise buildings ── */
     let buildings = rawBuildings.map((b, i) => sanitiseBuilding(b, i)).filter(Boolean);
@@ -281,12 +272,15 @@ router.put("/", async (req, res) => {
 
     /* ── Sanitise string arrays ── */
     const colleges          = rawColleges.map(c => String(c || "").trim()).filter(Boolean);
-    const yearLevels        = rawYearLevels.map(y => String(y || "").trim()).filter(Boolean);
+    const yearLevels        = rawYearLevels2.map(y => String(y || "").trim()).filter(Boolean);
     const positionOptions   = rawPositionOptions.map(p => String(p || "").trim()).filter(Boolean);
     const disciplineOptions = rawDisciplineOptions.map(d => String(d || "").trim()).filter(Boolean);
 
     /* ── Sanitise positionPerms ── */
     const positionPerms = sanitisePositionPerms(rawPositionPerms);
+
+    /* ── Sanitise signatories ── */
+    const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i)).filter(Boolean);
 
     /* ── Build $set payload ── */
     const setFields = { buildings, concerns, statuses, priorities };
@@ -296,6 +290,7 @@ router.put("/", async (req, res) => {
     if (disciplineOptions.length) setFields.disciplineOptions = disciplineOptions;
     if (positionPerms)            setFields.positionPerms     = positionPerms;
     if (rawNotifRules !== null)   setFields.notifRules        = rawNotifRules;
+    if (signatories.length)       setFields.signatories       = signatories;
 
     /* ── Upsert ── */
     const updated = await Meta.findOneAndUpdate(
@@ -318,6 +313,7 @@ router.put("/", async (req, res) => {
                            ? updated.positionPerms
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(updated.notifRules) ? updated.notifRules : [],
+      signatories:       Array.isArray(updated.signatories) ? updated.signatories : [],
     });
   } catch (err) {
     console.error("PUT /meta error:", err);
