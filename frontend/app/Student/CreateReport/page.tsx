@@ -1139,11 +1139,11 @@ export default function Create() {
                   <div className="create-scope__group">
                     <label htmlFor="subConcern">Concern Category <RequiredStar value={formData.subConcern} /></label>
                     {formData.subConcern==="Other" ? (
-                      <div style={{ display: "flex", gap: "8px" }}>
+                      <div className="create-scope__inline-row">
                         <select
                           id="subConcern" name="subConcern"
                           value={formData.subConcern} onChange={handleChange}
-                          required style={{ flex: "0 0 120px" }}
+                          required className="create-scope__inline-select"
                         >
                           <option value="">Select sub concern</option>
                           {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -1152,7 +1152,7 @@ export default function Create() {
                           type="text" name="otherConcern"
                           placeholder="Specify sub concern"
                           value={formData.otherConcern}
-                          onChange={handleChange} required style={{ flex: "1" }}
+                          onChange={handleChange} required className="create-scope__inline-input"
                         />
                       </div>
                     ) : (
