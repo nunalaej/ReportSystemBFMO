@@ -104,6 +104,13 @@ const MetaSchema = new mongoose.Schema(
       default: ["1st Year","2nd Year","3rd Year","4th Year"],
     },
 
+    /* ✅ NEW: Hidden student statuses */
+    hiddenStudentStatuses: {
+      type:    [String],
+      default: [],
+    },
+
+
     /* ✅ Notification rules */
     notifRules: {
       type:    [NotifRuleSchema],

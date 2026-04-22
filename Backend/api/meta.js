@@ -229,6 +229,8 @@ router.get("/", async (req, res) => {
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(doc.notifRules) ? doc.notifRules : [],
       signatories:       Array.isArray(doc.signatories) ? doc.signatories : DEFAULT_SIGNATORIES,
+      hiddenStudentStatuses: doc.hiddenStudentStatuses || [], // ✅ Add this line
+
     });
   } catch (err) {
     console.error("GET /meta error:", err);
@@ -250,6 +252,11 @@ router.put("/", async (req, res) => {
     const rawNotifRules        = Array.isArray(req.body?.notifRules)        ? req.body.notifRules        : null;
     const rawPositionPerms     = req.body?.positionPerms ?? null;
     const rawSignatories       = Array.isArray(req.body?.signatories)       ? req.body.signatories       : [];
+
+    /* ✅ NEW: Hidden student statuses */
+    const rawHiddenStudentStatuses = Array.isArray(req.body?.hiddenStudentStatuses) 
+      ? req.body.hiddenStudentStatuses 
+      : [];
 
     /* ── Sanitise buildings ── */
     let buildings = rawBuildings.map((b, i) => sanitiseBuilding(b, i)).filter(Boolean);
@@ -289,6 +296,14 @@ router.put("/", async (req, res) => {
     /* ── Sanitise signatories ── */
     const signatories = rawSignatories.map((s, i) => sanitiseSignatory(s, i));
 
+
+    /* ✅ Sanitise hidden student statuses */
+    const hiddenStudentStatuses = rawHiddenStudentStatuses
+      .map(s => String(s || "").trim())
+      .filter(Boolean);
+
+
+
     /* ── Build $set payload ── */
     const setFields = { buildings, concerns, statuses, priorities };
     if (colleges.length)          setFields.colleges          = colleges;
@@ -299,6 +314,8 @@ router.put("/", async (req, res) => {
     if (rawNotifRules !== null)   setFields.notifRules        = rawNotifRules;
     // Always include signatories, even if empty
     setFields.signatories = signatories;
+    setFields.hiddenStudentStatuses = hiddenStudentStatuses; // ✅ Add this line
+
 
     /* ── Upsert ── */
     const updated = await Meta.findOneAndUpdate(
@@ -322,6 +339,8 @@ router.put("/", async (req, res) => {
                            : DEFAULT_POSITION_PERMS,
       notifRules:        Array.isArray(updated.notifRules) ? updated.notifRules : [],
       signatories:       Array.isArray(updated.signatories) ? updated.signatories : DEFAULT_SIGNATORIES,
+      hiddenStudentStatuses: updated.hiddenStudentStatuses || [], // ✅ Add this line
+
     });
   } catch (err) {
     console.error("PUT /meta error:", err);
