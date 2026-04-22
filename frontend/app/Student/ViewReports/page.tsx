@@ -85,6 +85,21 @@ const FALLBACK_STATUSES: MetaStatus[] = [
 
 const REPORTS_PER_PAGE = 10;
 
+// Helper function to get last visible status
+const getLastVisibleStatus = (report: Report, hiddenStatuses: string[]): string => {
+  if (!hiddenStatuses.includes(report.status || "Pending")) {
+    return report.status || "Pending";
+  }
+  if (report.history && report.history.length > 0) {
+    for (let i = report.history.length - 1; i >= 0; i--) {
+      if (!hiddenStatuses.includes(report.history[i].status)) {
+        return report.history[i].status;
+      }
+    }
+  }
+  return "Pending";
+};
+
 /* ── Timeline builder ── */
 function buildTimeline(report: Report): HistoryEntry[] {
   if (report.history?.length) {
@@ -100,15 +115,18 @@ function buildTimeline(report: Report): HistoryEntry[] {
   return entries.sort((a, b) => +new Date(a.at) - +new Date(b.at));
 }
 
-function buildStatusFlow(statuses: MetaStatus[]) {
-  return statuses.filter(s => s.name.toLowerCase() !== "archived");
+function buildStatusFlow(statuses: MetaStatus[], hiddenStatuses: string[]) {
+  return statuses.filter(s => 
+    s.name.toLowerCase() !== "archived" && 
+    !hiddenStatuses.includes(s.name)
+  );
 }
 
-function getStepState(stepName: string, current: string | undefined, statuses: MetaStatus[]): "completed" | "active" | "pending" {
-  const flow = buildStatusFlow(statuses);
-  const ci   = flow.findIndex(s => s.name === (current || "Pending"));
-  const si   = flow.findIndex(s => s.name === stepName);
-  if (si < ci)  return "completed";
+function getStepState(stepName: string, current: string, statuses: MetaStatus[], hiddenStatuses: string[]): "completed" | "active" | "pending" {
+  const flow = buildStatusFlow(statuses, hiddenStatuses);
+  const ci = flow.findIndex(s => s.name === current);
+  const si = flow.findIndex(s => s.name === stepName);
+  if (si < ci) return "completed";
   if (si === ci) return "active";
   return "pending";
 }
@@ -145,6 +163,7 @@ export default function StudentReportPage() {
   const [isMobile,        setIsMobile]        = useState(false);
   const [mounted,         setMounted]         = useState(false);
   const [metaStatuses,    setMetaStatuses]    = useState<MetaStatus[]>(FALLBACK_STATUSES);
+  const [hiddenStudentStatuses, setHiddenStudentStatuses] = useState<string[]>([]);
   const [followUpSending, setFollowUpSending] = useState<string | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
@@ -176,20 +195,24 @@ export default function StudentReportPage() {
     const role = user.publicMetadata?.role;
     if (role === "admin") { router.push("/Admin/"); return; }
     if (role === "staff") { router.push("/Staff/"); return; }
-    // ✅ Fall back to username if no email
-const email = 
-  user.primaryEmailAddress?.emailAddress ||
-  user.emailAddresses[0]?.emailAddress ||
-  user.username ||
-  "";
-setUserEmail(email);
+    const email = 
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses[0]?.emailAddress ||
+      user.username ||
+      "";
+    setUserEmail(email);
   }, [user, isLoaded, router]);
 
   /* ── Fetch meta ── */
   useEffect(() => {
     fetch(`${API_BASE}/api/meta?ts=${Date.now()}`, { cache: "no-store" })
       .then(r => r.json())
-      .then(d => { if (d?.statuses?.length > 0) setMetaStatuses(d.statuses); })
+      .then(d => { 
+        if (d?.statuses?.length > 0) setMetaStatuses(d.statuses);
+        if (d?.hiddenStudentStatuses && Array.isArray(d.hiddenStudentStatuses)) {
+          setHiddenStudentStatuses(d.hiddenStudentStatuses);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -240,16 +263,15 @@ setUserEmail(email);
 
   /* ── Inline Progress Stepper ── */
   const renderProgressStepper = (report: Report) => {
-    const flow     = buildStatusFlow(metaStatuses);
-    const timeline = buildTimeline(report);
-    const statusColor = getStatusColor(report.status);
+    const flow = buildStatusFlow(metaStatuses, hiddenStudentStatuses);
+    const displayStatus = getLastVisibleStatus(report, hiddenStudentStatuses);
+    const timeline = buildTimeline(report).filter(entry => !hiddenStudentStatuses.includes(entry.status));
 
     return (
       <div className="sr-progress-section">
-        {/* Compact horizontal stepper */}
         <div className="sr-stepper">
           {flow.map((step, idx) => {
-            const state = getStepState(step.name, report.status, metaStatuses);
+            const state = getStepState(step.name, displayStatus, metaStatuses, hiddenStudentStatuses);
             const isLast = idx === flow.length - 1;
             return (
               <React.Fragment key={step.id}>
@@ -288,7 +310,6 @@ setUserEmail(email);
           })}
         </div>
 
-        {/* Timeline */}
         {timeline.length > 0 && (
           <div className="sr-timeline">
             <p className="sr-timeline-title">History</p>
@@ -327,100 +348,102 @@ setUserEmail(email);
   };
 
   /* ── Details content ── */
-  const renderDetails = (report: Report) => (
-    <div className="sr-details">
-
-      {/* Top bar: status + actions */}
-      <div className="sr-details-topbar">
-        <div className="sr-status-pill" style={{ backgroundColor: getStatusColor(report.status) + "22", color: getStatusColor(report.status), border: `1px solid ${getStatusColor(report.status)}55` }}>
-          {report.status || "Pending"}
+  const renderDetails = (report: Report) => {
+    const displayStatus = getLastVisibleStatus(report, hiddenStudentStatuses);
+    
+    return (
+      <div className="sr-details">
+        {/* Top bar: status + actions */}
+        <div className="sr-details-topbar">
+          <div className="sr-status-pill" style={{ backgroundColor: getStatusColor(displayStatus) + "22", color: getStatusColor(displayStatus), border: `1px solid ${getStatusColor(displayStatus)}55` }}>
+            {displayStatus}
+          </div>
+          <div className="sr-details-actions">
+            <button
+              type="button"
+              className={`sr-followup-btn${followUpSending === report._id ? " sr-followup-btn--loading" : ""}`}
+              onClick={() => handleFollowUp(report)}
+              disabled={!!followUpSending}
+            >
+              <svg width="13" height="13" viewBox="0 0 448 512" fill="currentColor" style={{ flexShrink: 0 }}>
+                <path d="M224 0c-17.7 0-32 14.3-32 32V49.9C119.5 61.4 64 124.2 64 200v33.4c0 45.4-15.5 89.5-43.8 124.9L5.3 377c-5.8 7.2-6.9 17.1-2.9 25.4S14.8 416 24 416H424c9.2 0 17.6-5.3 21.6-13.6s2.9-18.2-2.9-25.4l-14.9-18.6C399.5 322.9 384 278.8 384 233.4V200c0-75.8-55.5-138.6-128-150.1V32c0-17.7-14.3-32-32-32zm0 96h8c57.4 0 104 46.6 104 104v33.4c0 47.9 13.9 94.6 39.7 134.6H72.3C98.1 328 112 281.3 112 233.4V200c0-57.4 46.6-104 104-104h8zm64 352H224 160c0 17 6.7 33.3 18.7 45.3s28.3 18.7 45.3 18.7s33.3-6.7 45.3-18.7s18.7-28.3 18.7-45.3z"/>
+              </svg>
+              {followUpSending === report._id ? "Sending…" : "Follow Up"}
+            </button>
+          </div>
         </div>
-        <div className="sr-details-actions">
-          <button
-            type="button"
-            className={`sr-followup-btn${followUpSending === report._id ? " sr-followup-btn--loading" : ""}`}
-            onClick={() => handleFollowUp(report)}
-            disabled={!!followUpSending}
-          >
-            <svg width="13" height="13" viewBox="0 0 448 512" fill="currentColor" style={{ flexShrink: 0 }}>
-              <path d="M224 0c-17.7 0-32 14.3-32 32V49.9C119.5 61.4 64 124.2 64 200v33.4c0 45.4-15.5 89.5-43.8 124.9L5.3 377c-5.8 7.2-6.9 17.1-2.9 25.4S14.8 416 24 416H424c9.2 0 17.6-5.3 21.6-13.6s2.9-18.2-2.9-25.4l-14.9-18.6C399.5 322.9 384 278.8 384 233.4V200c0-75.8-55.5-138.6-128-150.1V32c0-17.7-14.3-32-32-32zm0 96h8c57.4 0 104 46.6 104 104v33.4c0 47.9 13.9 94.6 39.7 134.6H72.3C98.1 328 112 281.3 112 233.4V200c0-57.4 46.6-104 104-104h8zm64 352H224 160c0 17 6.7 33.3 18.7 45.3s28.3 18.7 45.3 18.7s33.3-6.7 45.3-18.7s18.7-28.3 18.7-45.3z"/>
-            </svg>
-            {followUpSending === report._id ? "Sending…" : "Follow Up"}
-          </button>
-        </div>
-      </div>
 
-      {/* Image */}
-      <div className="sr-img-wrap">
-        <img
-          src={report.ImageFile || report.image || defaultImg}
-          alt="Report"
-          className="sr-img"
-          onClick={() => setFullscreenImage(report.ImageFile || report.image || defaultImg)}
-          onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
-        />
-        <span className="sr-img-hint">Click to enlarge</span>
-      </div>
-
-      {/* Meta */}
-      <h3 className="sr-details-heading">{report.heading}</h3>
-      <p className="sr-details-desc">{report.description || "No description provided."}</p>
-
-      <div className="sr-meta-grid">
-        <div className="sr-meta-item">
-          <span className="sr-meta-key">Building</span>
-          <span className="sr-meta-val">{formatBuilding(report)}</span>
+        {/* Image */}
+        <div className="sr-img-wrap">
+          <img
+            src={report.ImageFile || report.image || defaultImg}
+            alt="Report"
+            className="sr-img"
+            onClick={() => setFullscreenImage(report.ImageFile || report.image || defaultImg)}
+            onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
+          />
+          <span className="sr-img-hint">Click to enlarge</span>
         </div>
-        <div className="sr-meta-item">
-          <span className="sr-meta-key">Concern</span>
-          <span className="sr-meta-val">{formatConcern(report)}</span>
-        </div>
-        <div className="sr-meta-item">
-          <span className="sr-meta-key">College</span>
-          <span className="sr-meta-val">{report.college || "—"}</span>
-        </div>
-        <div className="sr-meta-item">
-          <span className="sr-meta-key">Submitted</span>
-          <span className="sr-meta-val">{report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "—"} <span className="sr-meta-rel">({getRelativeTime(report.createdAt)})</span></span>
-        </div>
-      </div>
 
-      {/* ── INLINE PROGRESS (always visible) ── */}
-      {renderProgressStepper(report)}
+        {/* Meta */}
+        <h3 className="sr-details-heading">{report.heading}</h3>
+        <p className="sr-details-desc">{report.description || "No description provided."}</p>
 
-      {/* Comments (read-only) */}
-      <div className="sr-comments">
-        <div className="sr-comments-header">
-          <span className="sr-comments-title">Staff Comments</span>
-          {(report.comments?.length || 0) > 0 && (
-            <span className="sr-comments-count">{report.comments!.length}</span>
+        <div className="sr-meta-grid">
+          <div className="sr-meta-item">
+            <span className="sr-meta-key">Building & Facilities</span>
+            <span className="sr-meta-val">{formatBuilding(report)}</span>
+          </div>
+          <div className="sr-meta-item">
+            <span className="sr-meta-key">Concern</span>
+            <span className="sr-meta-val">{formatConcern(report)}</span>
+          </div>
+          <div className="sr-meta-item">
+            <span className="sr-meta-key">College</span>
+            <span className="sr-meta-val">{report.college || "—"}</span>
+          </div>
+          <div className="sr-meta-item">
+            <span className="sr-meta-key">Submitted</span>
+            <span className="sr-meta-val">{report.createdAt ? new Date(report.createdAt).toLocaleDateString() : "—"} <span className="sr-meta-rel">({getRelativeTime(report.createdAt)})</span></span>
+          </div>
+        </div>
+
+        {/* INLINE PROGRESS */}
+        {renderProgressStepper(report)}
+
+        {/* Comments (read-only) */}
+        <div className="sr-comments">
+          <div className="sr-comments-header">
+            <span className="sr-comments-title">Staff Comments</span>
+            {(report.comments?.length || 0) > 0 && (
+              <span className="sr-comments-count">{report.comments!.length}</span>
+            )}
+          </div>
+          {report.comments && report.comments.length > 0 ? (
+            <ul className="sr-comments-list">
+              {report.comments.map((c, idx) => (
+                <li key={idx} className="sr-comment">
+                  <p className="sr-comment-text">{c.text || c.comment}</p>
+                  <div className="sr-comment-meta">
+                    {c.by && <span className="sr-comment-by">{c.by}</span>}
+                    {c.at && <span className="sr-comment-time">{new Date(c.at).toLocaleString()}</span>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="sr-comments-empty">No comments yet. Staff will update you here.</p>
           )}
         </div>
-        {report.comments && report.comments.length > 0 ? (
-          <ul className="sr-comments-list">
-            {report.comments.map((c, idx) => (
-              <li key={idx} className="sr-comment">
-                <p className="sr-comment-text">{c.text || c.comment}</p>
-                <div className="sr-comment-meta">
-                  {c.by && <span className="sr-comment-by">{c.by}</span>}
-                  {c.at && <span className="sr-comment-time">{new Date(c.at).toLocaleString()}</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="sr-comments-empty">No comments yet. Staff will update you here.</p>
-        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   /* ══════════════════════════════════════════════════════════ */
   return (
     <>
       <div className="sr-wrapper">
-
-        {/* ── Page header ── */}
+        {/* Page header */}
         <div className="sr-header">
           <div>
             <h1 className="sr-title">My Reports</h1>
@@ -434,7 +457,7 @@ setUserEmail(email);
           </a>
         </div>
 
-        {/* ── States ── */}
+        {/* States */}
         {!isLoaded && (
           <div className="sr-shimmer-grid">
             {[...Array(4)].map((_, i) => <div key={i} className="sr-shimmer" />)}
@@ -462,16 +485,16 @@ setUserEmail(email);
 
         {reports.length > 0 && (
           <div className="sr-layout">
-
-            {/* ── LEFT: Report list ── */}
+            {/* LEFT: Report list */}
             <div className="sr-list-col">
               {paginated.map(report => {
-                const isActive    = selectedReport?._id === report._id;
-                const color       = getStatusColor(report.status);
-                const latest      = report.comments?.[report.comments.length - 1];
-                const flow        = buildStatusFlow(metaStatuses);
-                const currentIdx  = flow.findIndex(s => s.name === (report.status || "Pending"));
-                const progress    = flow.length > 1 ? Math.round(((currentIdx < 0 ? 0 : currentIdx) / (flow.length - 1)) * 100) : 0;
+                const isActive = selectedReport?._id === report._id;
+                const displayStatusForCard = getLastVisibleStatus(report, hiddenStudentStatuses);
+                const color = getStatusColor(displayStatusForCard);
+                const latest = report.comments?.[report.comments.length - 1];
+                const flow = buildStatusFlow(metaStatuses, hiddenStudentStatuses);
+                const currentIdx = flow.findIndex(s => s.name === displayStatusForCard);
+                const progress = flow.length > 1 ? Math.round(((currentIdx < 0 ? 0 : currentIdx) / (flow.length - 1)) * 100) : 0;
 
                 return (
                   <div
@@ -480,11 +503,8 @@ setUserEmail(email);
                     style={isActive ? { borderColor: color, boxShadow: `0 0 0 2px ${color}30` } : {}}
                     onClick={() => { setSelectedReport(report); if (isMobile) window.scrollTo({ top: 0, behavior: "smooth" }); }}
                   >
-                    {/* Color stripe */}
                     <div className="sr-card-stripe" style={{ backgroundColor: color }} />
-
                     <div className="sr-card-inner">
-                      {/* Image */}
                       <div className="sr-card-img-wrap">
                         <img
                           src={report.ImageFile || report.image || defaultImg}
@@ -492,27 +512,20 @@ setUserEmail(email);
                           onError={e => { (e.target as HTMLImageElement).src = defaultImg; }}
                         />
                       </div>
-
-                      {/* Body */}
                       <div className="sr-card-body">
                         <div className="sr-card-head">
                           <h3 className="sr-card-title">{report.heading || "Untitled report"}</h3>
                           <span className="sr-card-pill" style={{ backgroundColor: color + "20", color, border: `1px solid ${color}40` }}>
-                            {report.status || "Pending"}
+                            {displayStatusForCard}
                           </span>
                         </div>
-
                         {report.reportId && <p className="sr-card-id">#{report.reportId}</p>}
-
                         <p className="sr-card-desc">{report.description || "No description."}</p>
-
                         <div className="sr-card-info">
                           <span>{formatBuilding(report)}</span>
                           <span className="sr-card-sep">·</span>
                           <span>{formatConcern(report)}</span>
                         </div>
-
-                        {/* Mini progress bar */}
                         <div className="sr-card-progress">
                           <div className="sr-card-progress-track">
                             <div
@@ -524,7 +537,6 @@ setUserEmail(email);
                             {progress === 100 ? "Done" : `${progress}%`}
                           </span>
                         </div>
-
                         <div className="sr-card-footer">
                           <span className="sr-card-time">{getRelativeTime(report.createdAt)}</span>
                           {latest && (
@@ -551,7 +563,7 @@ setUserEmail(email);
               )}
             </div>
 
-            {/* ── RIGHT: Detail panel (desktop) ── */}
+            {/* RIGHT: Detail panel (desktop) */}
             {!isMobile && selectedReport && (
               <div className="sr-detail-col">
                 {renderDetails(selectedReport)}
@@ -561,7 +573,7 @@ setUserEmail(email);
         )}
       </div>
 
-      {/* ── MOBILE DETAIL MODAL ── */}
+      {/* MOBILE DETAIL MODAL */}
       {isMobile && selectedReport && (
         <div className="sr-modal-backdrop" onClick={() => setSelectedReport(null)}>
           <div className="sr-modal" onClick={e => e.stopPropagation()}>
@@ -579,7 +591,7 @@ setUserEmail(email);
         </div>
       )}
 
-      {/* ── FULLSCREEN IMAGE ── */}
+      {/* FULLSCREEN IMAGE */}
       {fullscreenImage && (
         <div className="sr-fullscreen" onClick={() => setFullscreenImage(null)}>
           <img src={fullscreenImage} className="sr-fullscreen-img" onClick={e => e.stopPropagation()} />
@@ -587,7 +599,7 @@ setUserEmail(email);
         </div>
       )}
 
-      {/* ── TOASTS ── */}
+      {/* TOASTS */}
       {mounted && createPortal(
         <div className="sr-toast-container" aria-live="polite">
           {toasts.map(t => (

@@ -205,6 +205,7 @@ type TabId = "buildings" | "concerns" | "statuses" | "priorities" | "notificatio
 
 
 
+
 // Add IconPrinter component
 // Add IconPrinter component
 const IconPrinter = () => (
@@ -214,18 +215,15 @@ const IconPrinter = () => (
     <rect x="6" y="14" width="12" height="8"/>
   </svg>
 );
-
-// Add to NAV_TABS array
 const NAV_TABS: { id: TabId; label: string; icon: React.ReactNode; badge?: (s: any) => number }[] = [
   { id:"buildings",  label:"Buildings",         icon:<IconBuilding/>,  badge:s=>s.buildings.length  },
   { id:"concerns",   label:"Concerns",          icon:<IconTag/>,       badge:s=>s.concerns.length   },
   { id:"statuses",   label:"Statuses",          icon:<IconActivity/>,  badge:s=>s.statuses.length   },
   { id:"priorities", label:"Priorities & Rules",icon:<IconBell/>,      badge:s=>s.priorities.length },
-  { id:"students",   label:"Student Settings",  icon:<IconGraduate/>,  badge:s=>s.colleges.length+s.yearLevels.length },
+  { id:"students",   label:"Student Settings",  icon:<IconGraduate/>,  badge:s=>s.colleges.length + s.yearLevels.length + (s.hiddenStudentStatuses?.length || 0) },
   { id:"staff",      label:"Staff Management",  icon:<IconUsers/>,     badge:s=>s.staffList.length  },
-  { id:"printconfig", label:"Print Signatories", icon:<IconPrinter/>, badge:s=>s.signatories.length }, // NEW
+  { id:"printconfig", label:"Print Signatories", icon:<IconPrinter/>, badge:s=>s.signatories.length },
 ];
-
 
 // Add Signatory type
 type Signatory = { name: string; role: string; };
@@ -341,6 +339,8 @@ export default function AdminEditPage() {
   const [newYearLevel,     setNewYearLevel]     = useState("");
   const [editCollegeIdx,   setEditCollegeIdx]   = useState<number|null>(null);
   const [editYearLevelIdx, setEditYearLevelIdx] = useState<number|null>(null);
+const [hiddenStudentStatuses, setHiddenStudentStatuses] = useState<string[]>([]);
+
 
   const [positionOptions,   setPositionOptions]   = useState<string[]>(DEFAULT_POSITION_OPTIONS);
   const [disciplineOptions, setDisciplineOptions] = useState<string[]>(DEFAULT_DISCIPLINE_OPTIONS);
@@ -388,6 +388,7 @@ export default function AdminEditPage() {
 ]);
 const [newSignatoryName, setNewSignatoryName] = useState("");
 const [newSignatoryRole, setNewSignatoryRole] = useState("");
+
 
   /* ── Auth ── */
   const role = useMemo(() => {
@@ -441,6 +442,12 @@ const [newSignatoryRole, setNewSignatoryRole] = useState("");
       setSignatories(data.signatories);
     }
     
+
+    // ✅ Add this line - load hidden student statuses
+    if(Array.isArray(data.hiddenStudentStatuses)) {
+      setHiddenStudentStatuses(data.hiddenStudentStatuses);
+    }
+    
     /* ── KEY FIX: if positionPerms exists in DB, load it and mark synced ── */
     if(data.positionPerms && typeof data.positionPerms==="object" && Object.keys(data.positionPerms).length > 0) {
       setPositionPerms(data.positionPerms);
@@ -460,6 +467,8 @@ const [newSignatoryRole, setNewSignatoryRole] = useState("");
       setDisciplineOptions(DEFAULT_DISCIPLINE_OPTIONS);
       setPositionPerms(DEFAULT_PERMISSIONS);
       setPermsSynced(false);
+          setHiddenStudentStatuses([]); // ✅ Add this line
+
       setSignatories([
         { name: "", role: "Prepared by" },
         { name: "", role: "Reviewed by" },
@@ -615,6 +624,7 @@ const handleSave = async () => {
         positionOptions: positionOptions.map(p => String(p).trim()).filter(Boolean),
         disciplineOptions: disciplineOptions.map(d => String(d).trim()).filter(Boolean),
         positionPerms,
+        hiddenStudentStatuses: hiddenStudentStatuses,
         signatories: cleanSignatories // ✅ Added signatories
       })
     });
@@ -924,22 +934,138 @@ const badgeCounts = {
               )}
 
               {activeTab==="students" && (
-                <div>
-                  <div style={{ marginBottom:24 }}><h2 style={{ margin:"0 0 4px", fontSize:"1.2rem", fontWeight:800 }}>Student Report Settings</h2><p style={{ margin:0, fontSize:"0.78rem", color:"var(--tasks-text-3,#8a97a8)" }}>Configure options shown on the student report form</p></div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
-                    <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:20 }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}><h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>Colleges / Departments</h4><span className="admin-edit__panel-badge">{colleges.length}</span></div>
-                      {colleges.map((c,idx)=>(<div key={idx} className="admin-edit__subconcern-row">{editCollegeIdx===idx?(<input type="text" className="admin-edit__input" value={c} autoFocus onChange={e=>setColleges(p=>p.map((x,i)=>i===idx?e.target.value:x))} onBlur={()=>setEditCollegeIdx(null)} onKeyDown={e=>{if(e.key==="Enter")setEditCollegeIdx(null);}}/>):(<span style={{flex:1,fontSize:13,padding:"8px 10px",borderRadius:6,background:"var(--tasks-surface-2,#f8fafc)",cursor:"pointer"}} onClick={()=>setEditCollegeIdx(idx)}>{c}</span>)}<button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>setEditCollegeIdx(idx)}><IconPencil/></button><button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>{setColleges(p=>p.filter((_,i)=>i!==idx));addNotification(`College "${c}" removed.`,"concern");}}><IconTrash/></button></div>))}
-                      <div className="admin-edit__subconcern-row" style={{marginTop:10}}><input type="text" className="admin-edit__input" value={newCollege} placeholder="e.g. CLAW" onChange={e=>setNewCollege(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newCollege.trim()){setColleges(p=>[...p,newCollege.trim()]);addNotification(`College "${newCollege.trim()}" added.`,"concern");setNewCollege("");}}} /><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{if(!newCollege.trim())return;setColleges(p=>[...p,newCollege.trim()]);addNotification(`College "${newCollege.trim()}" added.`,"concern");setNewCollege("");}}>+ Add</button></div>
-                    </div>
-                    <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:20 }}>
-                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}><h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>Year Levels</h4><span className="admin-edit__panel-badge">{yearLevels.length}</span></div>
-                      {yearLevels.map((y,idx)=>(<div key={idx} className="admin-edit__subconcern-row">{editYearLevelIdx===idx?(<input type="text" className="admin-edit__input" value={y} autoFocus onChange={e=>setYearLevels(p=>p.map((x,i)=>i===idx?e.target.value:x))} onBlur={()=>setEditYearLevelIdx(null)} onKeyDown={e=>{if(e.key==="Enter")setEditYearLevelIdx(null);}}/>):(<span style={{flex:1,fontSize:13,padding:"8px 10px",borderRadius:6,background:"var(--tasks-surface-2,#f8fafc)",cursor:"pointer"}} onClick={()=>setEditYearLevelIdx(idx)}>{y}</span>)}<button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>setEditYearLevelIdx(idx)}><IconPencil/></button><button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>{setYearLevels(p=>p.filter((_,i)=>i!==idx));addNotification(`Year level "${y}" removed.`,"concern");}}><IconTrash/></button></div>))}
-                      <div className="admin-edit__subconcern-row" style={{marginTop:10}}><input type="text" className="admin-edit__input" value={newYearLevel} placeholder="e.g. 5th Year" onChange={e=>setNewYearLevel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newYearLevel.trim()){setYearLevels(p=>[...p,newYearLevel.trim()]);addNotification(`Year level "${newYearLevel.trim()}" added.`,"concern");setNewYearLevel("");}}} /><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{if(!newYearLevel.trim())return;setYearLevels(p=>[...p,newYearLevel.trim()]);addNotification(`Year level "${newYearLevel.trim()}" added.`,"concern");setNewYearLevel("");}}>+ Add</button></div>
-                    </div>
-                  </div>
-                </div>
+  <div>
+    <div style={{ marginBottom: 24 }}>
+      <h2 style={{ margin: "0 0 4px", fontSize: "1.2rem", fontWeight: 800 }}>Student Report Settings</h2>
+      <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--tasks-text-3,#8a97a8)" }}>
+        Configure what students can see in their report progress view
+      </p>
+    </div>
+    
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24 }}>
+      {/* Colleges column - unchanged */}
+      <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+          <h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>Colleges / Departments</h4>
+          <span className="admin-edit__panel-badge">{colleges.length}</span>
+        </div>
+        {colleges.map((c,idx)=>(<div key={idx} className="admin-edit__subconcern-row">{editCollegeIdx===idx?(<input type="text" className="admin-edit__input" value={c} autoFocus onChange={e=>setColleges(p=>p.map((x,i)=>i===idx?e.target.value:x))} onBlur={()=>setEditCollegeIdx(null)} onKeyDown={e=>{if(e.key==="Enter")setEditCollegeIdx(null);}}/>):(<span style={{flex:1,fontSize:13,padding:"8px 10px",borderRadius:6,background:"var(--tasks-surface-2,#f8fafc)",cursor:"pointer"}} onClick={()=>setEditCollegeIdx(idx)}>{c}</span>)}<button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>setEditCollegeIdx(idx)}><IconPencil/></button><button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>{setColleges(p=>p.filter((_,i)=>i!==idx));addNotification(`College "${c}" removed.`,"concern");}}><IconTrash/></button></div>))}
+        <div className="admin-edit__subconcern-row" style={{marginTop:10}}><input type="text" className="admin-edit__input" value={newCollege} placeholder="e.g. CLAW" onChange={e=>setNewCollege(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newCollege.trim()){setColleges(p=>[...p,newCollege.trim()]);addNotification(`College "${newCollege.trim()}" added.`,"concern");setNewCollege("");}}} /><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{if(!newCollege.trim())return;setColleges(p=>[...p,newCollege.trim()]);addNotification(`College "${newCollege.trim()}" added.`,"concern");setNewCollege("");}}>+ Add</button></div>
+      </div>
+      
+      {/* Year Levels column - unchanged */}
+      <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}><h4 style={{ margin:0, fontSize:13, fontWeight:700 }}>Year Levels</h4><span className="admin-edit__panel-badge">{yearLevels.length}</span></div>
+        {yearLevels.map((y,idx)=>(<div key={idx} className="admin-edit__subconcern-row">{editYearLevelIdx===idx?(<input type="text" className="admin-edit__input" value={y} autoFocus onChange={e=>setYearLevels(p=>p.map((x,i)=>i===idx?e.target.value:x))} onBlur={()=>setEditYearLevelIdx(null)} onKeyDown={e=>{if(e.key==="Enter")setEditYearLevelIdx(null);}}/>):(<span style={{flex:1,fontSize:13,padding:"8px 10px",borderRadius:6,background:"var(--tasks-surface-2,#f8fafc)",cursor:"pointer"}} onClick={()=>setEditYearLevelIdx(idx)}>{y}</span>)}<button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--edit" onClick={()=>setEditYearLevelIdx(idx)}><IconPencil/></button><button type="button" className="admin-edit__icon-btn admin-edit__icon-btn--delete" onClick={()=>{setYearLevels(p=>p.filter((_,i)=>i!==idx));addNotification(`Year level "${y}" removed.`,"concern");}}><IconTrash/></button></div>))}
+        <div className="admin-edit__subconcern-row" style={{marginTop:10}}><input type="text" className="admin-edit__input" value={newYearLevel} placeholder="e.g. 5th Year" onChange={e=>setNewYearLevel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newYearLevel.trim()){setYearLevels(p=>[...p,newYearLevel.trim()]);addNotification(`Year level "${newYearLevel.trim()}" added.`,"concern");setNewYearLevel("");}}} /><button type="button" className="btn btn-secondary btn-sm" onClick={()=>{if(!newYearLevel.trim())return;setYearLevels(p=>[...p,newYearLevel.trim()]);addNotification(`Year level "${newYearLevel.trim()}" added.`,"concern");setNewYearLevel("");}}>+ Add</button></div>
+      </div>
+    </div>
+
+    {/* NEW: Status Visibility Configuration */}
+    <div style={{ background:"var(--tasks-surface,#fff)", border:"1px solid var(--tasks-border,#e8ecf0)", borderRadius:12, padding:20 }}>
+      <div style={{ marginBottom: 16 }}>
+        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Student Status Visibility</h4>
+        <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--tasks-text-3,#8a97a8)" }}>
+          Select which statuses students should NOT see in their report progress view.
+          Students will only see the last visible status in their timeline.
+        </p>
+      </div>
+      
+      <div style={{ 
+        background: "#fef3c7", 
+        border: "1px solid #fcd34d", 
+        borderRadius: 8, 
+        padding: "10px 14px", 
+        marginBottom: 16,
+        fontSize: 12,
+        color: "#92400e"
+      }}>
+        <strong>💡 How it works:</strong> When a report's status changes to a hidden status (e.g., "Closed"), students will continue seeing the previous visible status (e.g., "Resolved"). This ensures students don't see internal completion states.
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {statuses.map(status => {
+          const isHidden = hiddenStudentStatuses.includes(status.name);
+          return (
+            <label 
+              key={status.id} 
+              style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: 12, 
+                padding: "10px 12px",
+                background: isHidden ? "#fef2f2" : "#f8fafc",
+                borderRadius: 8,
+                border: `1px solid ${isHidden ? "#fecaca" : "#e2e8f0"}`,
+                cursor: "pointer",
+                transition: "all 0.1s"
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isHidden}
+                onChange={() => {
+                  if (isHidden) {
+                    setHiddenStudentStatuses(prev => prev.filter(s => s !== status.name));
+                    addNotification(`Students can now see "${status.name}" status.`, "status");
+                  } else {
+                    setHiddenStudentStatuses(prev => [...prev, status.name]);
+                    addNotification(`"${status.name}" hidden from students.`, "status");
+                  }
+                }}
+                style={{ width: 18, height: 18, cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
+                <span style={{ 
+                  width: 12, 
+                  height: 12, 
+                  borderRadius: "50%", 
+                  backgroundColor: status.color,
+                  flexShrink: 0
+                }} />
+                <span style={{ 
+                  fontSize: 13, 
+                  fontWeight: 500,
+                  color: "var(--tasks-text-1,#0d1b2a)"
+                }}>
+                  {status.name}
+                </span>
+              </div>
+              {isHidden && (
+                <span style={{ 
+                  fontSize: 10, 
+                  background: "#fee2e2", 
+                  color: "#dc2626",
+                  padding: "2px 8px",
+                  borderRadius: 12,
+                  fontWeight: 600
+                }}>
+                  Hidden
+                </span>
               )}
+            </label>
+          );
+        })}
+      </div>
+
+      {hiddenStudentStatuses.length > 0 && (
+        <div style={{ 
+          marginTop: 16, 
+          padding: "10px 12px", 
+          background: "#eff6ff", 
+          borderRadius: 8,
+          border: "1px solid #bfdbfe",
+          fontSize: 12,
+          color: "#1e40af"
+        }}>
+          <strong>⚠️ Preview:</strong> Students will NOT see: <strong>{hiddenStudentStatuses.join(", ")}</strong>. 
+          When a report reaches a hidden status, students will continue seeing the previous visible status.
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
 {activeTab === "printconfig" && (
   <div>
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -998,7 +1124,7 @@ const badgeCounts = {
           Signatory List ({signatories.length})
         </p>
         <p style={{ fontSize: 11, color: "var(--tasks-text-4,#b8c4ce)", marginTop: 4 }}>
-          These will appear at the bottom of printed analytics reports
+          These will appear at the bottom of printed reports
         </p>
       </div>
 
@@ -1012,7 +1138,7 @@ const badgeCounts = {
         {signatories.map((sig, idx) => (
           <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
             <div className="admin-edit__field-group">
-              <label className="admin-edit__label">Name</label>
+              <label className="admin-edit__label">Name of Signatories</label>
               <input
                 type="text"
                 className="admin-edit__input"
@@ -1047,12 +1173,12 @@ const badgeCounts = {
       <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--tasks-border,#e8ecf0)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, alignItems: "end" }}>
           <div className="admin-edit__field-group">
-            <label className="admin-edit__label">New Name</label>
+            <label className="admin-edit__label">New Signatories</label>
             <input
               type="text"
               className="admin-edit__input"
               value={newSignatoryName}
-              placeholder="Enter name"
+              placeholder="Enter Name"
               onChange={e => setNewSignatoryName(e.target.value)}
             />
           </div>
