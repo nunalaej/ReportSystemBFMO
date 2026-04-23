@@ -983,7 +983,8 @@ export default function Create() {
                     {formData.building==="Other"&&formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
                   </div>
                   <div hidden>User Type</div>
-                  <div hidden>{isStudent ? "Student" : (formData.userType||"-")}</div>
+                  <div hidden
+                  >{isStudent ? "Student" : (formData.userType||"-")}</div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
 
@@ -1131,7 +1132,7 @@ export default function Create() {
                 </div>
 
                 <div className="create-scope__group">
-                  <label htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
+                  <label hidden htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
                   {isStudent ? (
                   <>
                     <div className="usertype-auto-badge">
