@@ -982,8 +982,8 @@ export default function Create() {
                     {formData.building||"-"}
                     {formData.building==="Other"&&formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
                   </div>
-                  <div>User Type</div>
-                  <div>{isStudent ? "Student" : (formData.userType||"-")}</div>
+                  <div hidden>User Type</div>
+                  <div hidden>{isStudent ? "Student" : (formData.userType||"-")}</div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
 
