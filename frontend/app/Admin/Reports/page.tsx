@@ -199,6 +199,7 @@ export default function ReportPage() {
   const [buildingFilter, setBuildingFilter] = useState("All Buildings");
   const [concernFilter,  setConcernFilter]  = useState("All Concerns");
   const [collegeFilter,  setCollegeFilter]  = useState("All Colleges");
+  const [yearFilter,    setYearFilter]    = useState("All Years");   // ← add this
   const [statusFilter,   setStatusFilter]   = useState("All Statuses");
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [searchQuery,    setSearchQuery]    = useState("");
@@ -565,10 +566,24 @@ useEffect(() => {
   ).map(r => r.concern).filter((v): v is string => Boolean(v)))];
 
   const collegeOptions = ["All Colleges", ...new Set(reports.filter(r =>
-    (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
-    (concernFilter  === "All Concerns"  || r.concern  === concernFilter) &&
-    statusMatchesFilter(r.status, statusFilter)
-  ).map(r => r.college || "Unspecified"))];
+  (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
+  (concernFilter  === "All Concerns"  || r.concern  === concernFilter) &&
+  statusMatchesFilter(r.status, statusFilter)
+).map(r => {
+  // College is stored as "CICS - 1st Year", extract just the college part
+  const college = r.college || "Unspecified";
+  return college.includes(" - ") ? college.split(" - ")[0].trim() : college;
+}))];
+
+const yearOptions = ["All Years", ...new Set(reports.filter(r =>
+  (buildingFilter === "All Buildings" || r.building === buildingFilter) &&
+  (concernFilter  === "All Concerns"  || r.concern  === concernFilter) &&
+  statusMatchesFilter(r.status, statusFilter) &&
+  (collegeFilter  === "All Colleges"  || (r.college || "").startsWith(collegeFilter))
+).map(r => {
+  const college = r.college || "";
+  return college.includes(" - ") ? college.split(" - ")[1].trim() : "";
+}).filter(Boolean))];
 
   const statusOptions = ["All Statuses", ...metaStatuses.map(s => s.name)];
 
@@ -592,22 +607,31 @@ useEffect(() => {
   }, [concernFilter, collegeFilter, statusFilter, reports, buildingFilter]);
 
   const filteredReports = reportsToDisplay.filter(r => {
-    const bm = buildingFilter === "All Buildings" || r.building === buildingFilter;
-    const cm = concernFilter  === "All Concerns"  || r.concern  === concernFilter;
-    const lm = collegeFilter  === "All Colleges"  || (r.college || "Unspecified") === collegeFilter;
-    const sm = statusMatchesFilter(r.status, statusFilter);
-    const qm = !searchQuery.trim() ||
-      (r.reportId    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.heading     || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.description || "").toLowerCase().includes(searchQuery.toLowerCase());
-    const um = userTypeFilter === "All" || (r.userType || "") === userTypeFilter;
-    const dm = isWithinDateRange(r.createdAt, dateFilter, customDateFrom, customDateTo);
-    return bm && cm && lm && sm && qm && um && dm;
-  });
+  const bm = buildingFilter === "All Buildings" || r.building === buildingFilter;
+  const cm = concernFilter  === "All Concerns"  || r.concern  === concernFilter;
+  
+  // ✅ Match college and year separately
+  const collegeRaw = r.college || "Unspecified";
+  const [rCollege, rYear] = collegeRaw.includes(" - ")
+    ? collegeRaw.split(" - ").map(s => s.trim())
+    : [collegeRaw, ""];
+  const lm = collegeFilter === "All Colleges" || rCollege === collegeFilter;
+  const ym = yearFilter    === "All Years"    || rYear    === yearFilter;
+
+  const sm = statusMatchesFilter(r.status, statusFilter);
+  const qm = !searchQuery.trim() ||
+    (r.reportId    || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (r.heading     || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (r.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+  const um = userTypeFilter === "All" || (r.userType || "") === userTypeFilter;
+  const dm = isWithinDateRange(r.createdAt, dateFilter, customDateFrom, customDateTo);
+  return bm && cm && lm && ym && sm && qm && um && dm;
+});
 
   useEffect(() => { setCurrentPage(1); },
-    [buildingFilter, concernFilter, collegeFilter, statusFilter, showDuplicates, searchQuery, userTypeFilter, dateFilter, customDateFrom, customDateTo]);
-
+  [buildingFilter, concernFilter, collegeFilter, yearFilter, statusFilter, // ← add yearFilter
+   showDuplicates, searchQuery, userTypeFilter, dateFilter, customDateFrom, customDateTo]);
+   
   const totalPages       = Math.max(1, Math.ceil(filteredReports.length / REPORTS_PER_PAGE));
   const startIndex       = (currentPage - 1) * REPORTS_PER_PAGE;
   const paginatedReports = filteredReports.slice(startIndex, startIndex + REPORTS_PER_PAGE);
@@ -705,12 +729,13 @@ useEffect(() => {
     setEditingIndex(null); setEditingText(""); setIsImageExpanded(false);
   }, []);
   const handleClearFilters = () => {
-    setBuildingFilter("All Buildings"); setConcernFilter("All Concerns");
-    setCollegeFilter("All Colleges");   setStatusFilter("All Statuses");
-    setShowDuplicates(false);           setCurrentPage(1);
-    setSearchQuery("");                 setUserTypeFilter("All");
-    setDateFilter("all");               setCustomDateFrom(""); setCustomDateTo("");
-  };
+  setBuildingFilter("All Buildings"); setConcernFilter("All Concerns");
+  setCollegeFilter("All Colleges");   setYearFilter("All Years");   // ← add yearFilter
+  setStatusFilter("All Statuses");    setShowDuplicates(false);
+  setCurrentPage(1);                  setSearchQuery("");
+  setUserTypeFilter("All");           setDateFilter("all");
+  setCustomDateFrom("");              setCustomDateTo("");
+};
   const showConfirm = (msg: string, fn: ()=>void|Promise<void>) => {
     confirmCallbackRef.current = fn; setConfirmDialog({ open:true, message:msg });
   };
@@ -1418,8 +1443,22 @@ useEffect(() => {
           <div className="filters">
             <div className="filter-field"><label htmlFor="building-filter">Building</label><select id="building-filter" value={buildingFilter} onChange={e => setBuildingFilter(e.target.value)}>{buildingOptions.map(b => <option key={b} value={b}>{b}</option>)}</select></div>
             <div className="filter-field"><label htmlFor="concern-filter">Concern</label><select id="concern-filter" value={concernFilter} onChange={e => setConcernFilter(e.target.value)}>{concernOptions.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-            <div className="filter-field"><label htmlFor="college-filter">College</label><select id="college-filter" value={collegeFilter} onChange={e => setCollegeFilter(e.target.value)}>{collegeOptions.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-            <div className="filter-field"><label htmlFor="status-filter">Status</label><select id="status-filter" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>{statusOptions.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+<div className="filter-field">
+  <label htmlFor="college-filter">College</label>
+  <select id="college-filter" value={collegeFilter} onChange={e => { setCollegeFilter(e.target.value); setYearFilter("All Years"); }}>
+    {collegeOptions.map(c => <option key={c} value={c}>{c}</option>)}
+  </select>
+</div>
+
+{/* ✅ Year filter — only shows if a college is selected */}
+{collegeFilter !== "All Colleges" && yearOptions.length > 1 && (
+  <div className="filter-field">
+    <label htmlFor="year-filter">Year</label>
+    <select id="year-filter" value={yearFilter} onChange={e => setYearFilter(e.target.value)}>
+      {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+    </select>
+  </div>
+)}            <div className="filter-field"><label htmlFor="status-filter">Status</label><select id="status-filter" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>{statusOptions.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             <label className="duplicate-toggle"><input type="checkbox" checked={showDuplicates} onChange={() => setShowDuplicates(p => !p)}/> Show duplicates</label>
           </div>
           <div className="date-filter-row">

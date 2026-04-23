@@ -202,6 +202,19 @@ const getSimilarityKey = (r: {
   return room ? `${building}|${concern}|${sub}|${room}` : `${building}|${concern}|${sub}`;
 };
 
+const isSimilarRoom = (a: string, b: string): boolean => {
+  if (!a || !b) return false;
+  const na = a.trim().toLowerCase();
+  const nb = b.trim().toLowerCase();
+  if (na === nb) return true;
+  // Check if either contains the other
+  if (na.includes(nb) || nb.includes(na)) return true;
+  // Check if they share significant words (2+ chars)
+  const wordsA = na.split(/\s+/).filter(w => w.length >= 3);
+  const wordsB = nb.split(/\s+/).filter(w => w.length >= 3);
+  return wordsA.some(w => wordsB.includes(w));
+};
+
 function normaliseRoomsPerFloor(raw: number | number[] | unknown, floors: number): number[] {
   let arr: number[];
   if (Array.isArray(raw)) {
@@ -509,23 +522,38 @@ export default function Create() {
   const progressPct   = useMemo(() => Math.round((filledCount/(requiredNow.length||1))*100), [filledCount, requiredNow]);
   const readyToSubmit = progressPct === 100;
 
-  /* ── Similarity check ── */
   const similarMatches = useMemo((): Report[] => {
-    if (!formData.building||!formData.concern) return [];
-    const currentKey = getSimilarityKey({
-      building:     formData.building==="Other" ? formData.otherBuilding : formData.building,
-      concern:      formData.concern,
-      subConcern:   formData.concern==="Other" ? "" : formData.subConcern,
-      otherConcern: formData.concern==="Other" ? formData.otherConcern : undefined,
-      room:         formData.room||undefined,
-      otherRoom:    formData.room ? undefined : formData.otherRoom||undefined,
-    });
-    if (!currentKey.trim()) return [];
-    return existingReports.filter((r) => {
-      if (norm(r.status||"Pending")==="archived") return false;
-      return getSimilarityKey(r)===currentKey;
-    });
-  }, [existingReports, formData]);
+  if (!formData.building || !formData.concern) return [];
+
+  const currentBuilding = formData.building === "Other" ? formData.otherBuilding : formData.building;
+  const currentConcern  = formData.concern;
+  const currentSub      = formData.concern === "Other" ? "" : formData.subConcern;
+  const currentRoom     = formData.room && formData.room !== "Other"
+    ? formData.room
+    : formData.otherRoom || "";
+
+  if (!currentBuilding.trim()) return [];
+
+  return existingReports.filter((r) => {
+    if (norm(r.status || "Pending") === "archived") return false;
+
+    const rBuilding = (r.building || "").trim();
+    const rConcern  = (r.concern  || "").trim();
+    const rSub      = (r.subConcern || r.otherConcern || "").trim();
+    const rRoom     = r.room && r.room !== "Other"
+      ? r.room.trim()
+      : (r.otherRoom || "").trim();
+
+    const buildingMatch = rBuilding.toLowerCase() === currentBuilding.toLowerCase();
+    const concernMatch  = rConcern.toLowerCase()  === currentConcern.toLowerCase();
+    const subMatch      = rSub.toLowerCase()      === currentSub.toLowerCase();
+
+    // ✅ Fuzzy room match — if no room specified, skip room check
+    const roomMatch = !currentRoom || !rRoom || isSimilarRoom(currentRoom, rRoom);
+
+    return buildingMatch && concernMatch && subMatch && roomMatch;
+  });
+}, [existingReports, formData]);
 
   const similarReportsCount = useMemo(() => similarMatches.length, [similarMatches]);
 
