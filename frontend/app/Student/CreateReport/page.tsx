@@ -955,6 +955,8 @@ export default function Create() {
                   </strong>
                 </div>
 
+
+<div hidden>
                 {generatedReportId && (
                   <>
                     <hr className="create-scope__summary-rule" />
@@ -964,6 +966,7 @@ export default function Create() {
                     </div>
                   </>
                 )}
+                </div>
 
                 <hr className="create-scope__summary-rule" />
 
@@ -1120,54 +1123,8 @@ export default function Create() {
     </p>
   )}
 </div>
-              {/* Subject */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
-                  <input
-                    id="heading" type="text" name="heading"
-                    placeholder="Short title of the issue"
-                    value={formData.heading} onChange={handleChange} required
-                  />
-                </div>
 
-                <div className="create-scope__group">
-                  <label hidden htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
-                  {isStudent ? (
-                  <>
-                    <div hidden className="usertype-auto-badge">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
-                      </svg>
-                      Student
-                    </div>
-                  </>
-                ) : (
-                  // ✅ Staff and Faculty only — no Student option
-                  <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
-                    <option value="">Select user type</option>
-                    <option value="Staff">Staff</option>
-                    <option value="Faculty">Faculty</option>
-                  </select>
-                )}
-              </div>
-              
-              </div>
 
-              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
-              
-
-              {/* Description */}
-              <div className="create-scope__group">
-                <label htmlFor="description">Description <RequiredStar value={formData.description} /></label>
-                <textarea
-                  id="description" name="description"
-                  placeholder="Describe the issue with details. Include location markers and safety risks."
-                  value={formData.description} onChange={handleChange} rows={5} required
-                />
-                <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
-              </div>
 
               {/* Concern & SubConcern */}
               <div className="create-scope__row-two">
@@ -1333,6 +1290,55 @@ export default function Create() {
                   </p>
                 </div>
               )}
+              
+              {/* Subject */}
+              <div className="create-scope__row-two">
+                <div className="create-scope__group">
+                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
+                  <input
+                    id="heading" type="text" name="heading"
+                    placeholder="Short title of the issue"
+                    value={formData.heading} onChange={handleChange} required
+                  />
+                </div>
+
+                <div className="create-scope__group">
+                  <label hidden htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
+                  {isStudent ? (
+                  <>
+                    <div hidden className="usertype-auto-badge">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+                      </svg>
+                      Student
+                    </div>
+                  </>
+                ) : (
+                  // ✅ Staff and Faculty only — no Student option
+                  <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
+                    <option value="">Select user type</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Faculty">Faculty</option>
+                  </select>
+                )}
+              </div>
+              
+              </div>
+
+              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
+              
+
+              {/* Description */}
+              <div className="create-scope__group">
+                <label htmlFor="description">Description <RequiredStar value={formData.description} /></label>
+                <textarea
+                  id="description" name="description"
+                  placeholder="Describe the issue with details. Include location markers and safety risks."
+                  value={formData.description} onChange={handleChange} rows={5} required
+                />
+                <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
+              </div>
 
               {/* Image Upload */}
               <div className="create-scope__group">
