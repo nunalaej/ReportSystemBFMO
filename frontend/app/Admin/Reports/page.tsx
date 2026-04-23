@@ -743,45 +743,54 @@ useEffect(() => {
   };
 
   const handleSaveChanges = async () => {
-    if (!selectedReport) return;
-    try {
-      setSaving(true);
-      const trimmed = commentText.trim();
-      const group   = reports.filter(r => getGroupKey(r) === getGroupKey(selectedReport));
-      
-      const updated = await Promise.all(group.map(async r => {
-        const res  = await fetch(`${API_BASE}/api/reports/${r._id}`, {
-          method:"PUT", headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({ 
-            status: statusValue, 
-            ...(trimmed ? { comment: trimmed } : {}),
-            sendEmail: sendEmail
-          }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || !data?.success) throw new Error(data?.message || "Failed");
-        return data.report as Report;
-      }));
-      
-      if (trimmed) {
-        const cr   = await fetch(`${API_BASE}/api/reports/${selectedReport._id}/comments`, {
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({ text:trimmed, by:"Admin", sendEmail: sendEmail }),
-        });
-        const cd = await cr.json().catch(() => null);
-        if (cr.ok && cd?.success) { 
-          const idx = updated.findIndex(u => u._id === selectedReport._id); 
-          if (idx !== -1) updated[idx] = cd.report; 
-        }
+  if (!selectedReport) return;
+  try {
+    setSaving(true);
+    const trimmed = commentText.trim();
+    const group = reports.filter(r => getGroupKey(r) === getGroupKey(selectedReport));
+
+    // ── Step 1: Update status only (remove comment from here) ──
+    const updated = await Promise.all(group.map(async r => {
+      const res = await fetch(`${API_BASE}/api/reports/${r._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: statusValue,
+          sendEmail: sendEmail,
+          // ✅ Removed: comment: trimmed — handled separately below
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || "Failed");
+      return data.report as Report;
+    }));
+
+    // ── Step 2: Add comment separately (only once, on the selected report) ──
+    if (trimmed) {
+      const cr = await fetch(`${API_BASE}/api/reports/${selectedReport._id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed, by: "Admin", sendEmail: sendEmail }),
+      });
+      const cd = await cr.json().catch(() => null);
+      if (cr.ok && cd?.success) {
+        const idx = updated.findIndex(u => u._id === selectedReport._id);
+        if (idx !== -1) updated[idx] = cd.report;
       }
-      
-      setReports(p => p.map(r => updated.find(u => u._id === r._id) || r));
-      const us = updated.find(u => u._id === selectedReport._id) || updated[0];
-      setSelectedReport(us); setStatusValue(us.status || "Pending"); setCommentText("");
-      showToast(`Status updated to "${statusValue}".${sendEmail ? " Email notification sent." : ""}`, "success");
-    } catch (e: any) { showToast(e.message || "Failed.", "error"); }
-    finally { setSaving(false); }
-  };
+    }
+
+    setReports(p => p.map(r => updated.find(u => u._id === r._id) || r));
+    const us = updated.find(u => u._id === selectedReport._id) || updated[0];
+    setSelectedReport(us);
+    setStatusValue(us.status || "Pending");
+    setCommentText("");
+    showToast(`Status updated to "${statusValue}".${sendEmail ? " Email notification sent." : ""}`, "success");
+  } catch (e: any) {
+    showToast(e.message || "Failed.", "error");
+  } finally {
+    setSaving(false);
+  }
+};
 
   const addIndividualComment = async () => {
     if (!selectedReport) return;

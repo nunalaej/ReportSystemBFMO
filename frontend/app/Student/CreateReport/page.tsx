@@ -690,12 +690,14 @@ export default function Create() {
       );
 
       if (formData.concern==="Other") {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", "");
-      } else {
-        data.append("concern",    formData.concern);
-        data.append("subConcern", formData.subConcern==="Other" ? "Other" : formData.subConcern);
-      }
+  data.append("concern",    formData.concern);
+  data.append("subConcern", "");
+} else {
+  data.append("concern",    formData.concern);
+  data.append("subConcern", formData.subConcern==="Other" 
+    ? formData.otherConcern.trim()   // ← use the typed value, not "Other"
+    : formData.subConcern);
+}
 
       data.append("building", formData.building==="Other" ? `Other: ${formData.otherBuilding.trim()}` : formData.building);
       data.append("floor",    formData.floor);
