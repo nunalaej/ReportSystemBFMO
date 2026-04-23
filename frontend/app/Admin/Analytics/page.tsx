@@ -902,7 +902,10 @@ const Analytics: FC = () => {
                 value={count}
                 color={STATUS_COLORS_MAP[name] || "#6C757D"}
                 sub={name.toLowerCase().includes("pending") ? "Needs attention" : 
+                     name.toLowerCase().includes("inspect") ? "Under inspection" :
+                      name.toLowerCase().includes("inprogress") ? "Work in progress" :
                       name.toLowerCase().includes("resolved") ? `${Math.round((count / filtered.length) * 100)}% of total` : 
+                      name.toLowerCase().includes("unfinished") ? `${Math.round((count / filtered.length) * 100)}% of total` : 
                       name.toLowerCase().includes("closed") ? "Completed & closed" : ""}
                 icon={getStatusIcon(name)}
               />
