@@ -526,9 +526,21 @@ export default function Create() {
   if (!formData.building || !formData.concern) return [];
 
   const currentBuilding = formData.building === "Other" ? formData.otherBuilding : formData.building;
-  const currentConcern  = formData.concern;
-  const currentSub      = formData.concern === "Other" ? "" : formData.subConcern;
-  const currentRoom     = formData.room && formData.room !== "Other"
+  
+  // Handle both normal concerns and "Other" concern
+  let currentConcern = formData.concern;
+  let currentSub = "";
+  
+  if (formData.concern === "Other") {
+    // For "Other" concern, use the otherConcern text as the concern for matching
+    currentConcern = "Other";
+    currentSub = formData.otherConcern.trim();
+  } else {
+    // For normal concerns
+    currentSub = formData.subConcern === "Other" ? formData.otherConcern.trim() : formData.subConcern;
+  }
+
+  const currentRoom = formData.room && formData.room !== "Other"
     ? formData.room
     : formData.otherRoom || "";
 
@@ -546,9 +558,19 @@ export default function Create() {
 
     const buildingMatch = rBuilding.toLowerCase() === currentBuilding.toLowerCase();
     const concernMatch  = rConcern.toLowerCase()  === currentConcern.toLowerCase();
-    const subMatch      = rSub.toLowerCase()      === currentSub.toLowerCase();
+    
+    // Special handling for "Other" concern matching
+    let subMatch = false;
+    if (currentConcern === "Other" && currentSub) {
+      // For "Other" concerns, match if the stored sub/other concern contains or is similar to the current otherConcern
+      subMatch = rSub.toLowerCase().includes(currentSub.toLowerCase()) || 
+                 currentSub.toLowerCase().includes(rSub.toLowerCase());
+    } else {
+      // Normal matching
+      subMatch = rSub.toLowerCase() === currentSub.toLowerCase();
+    }
 
-    // ✅ Fuzzy room match — if no room specified, skip room check
+    // Fuzzy room match — if no room specified, skip room check
     const roomMatch = !currentRoom || !rRoom || isSimilarRoom(currentRoom, rRoom);
 
     return buildingMatch && concernMatch && subMatch && roomMatch;
