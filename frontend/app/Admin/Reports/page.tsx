@@ -982,7 +982,7 @@ const yearOptions = ["All Years", ...new Set(reports.filter(r =>
         + Task
       </button>
     );
-    return <button type="button" className="list-create-task-btn" onClick={e => { e.stopPropagation(); openCreateTask(report); }}>+ Task</button>;
+    return <button type="button" className="list-create-task-btn" onClick={e => { e.stopPropagation(); openCreateTask(report); }}>Task</button>;
   };
 
   /* ── Guard ── */
