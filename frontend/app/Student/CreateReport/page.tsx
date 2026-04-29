@@ -1300,30 +1300,7 @@ export default function Create() {
                     placeholder="Short title of the issue"
                     value={formData.heading} onChange={handleChange} required
                   />
-                </div>
-
-                <div className="create-scope__group">
-                  <label hidden htmlFor="userType">User Type <RequiredStar value={isStudent ? "Student" : formData.userType} /></label>
-                  {isStudent ? (
-                  <>
-                    <div hidden className="usertype-auto-badge">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-                        <path d="M6 12v5c3 3 9 3 12 0v-5"/>
-                      </svg>
-                      Student
-                    </div>
-                  </>
-                ) : (
-                  // ✅ Staff and Faculty only — no Student option
-                  <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
-                    <option value="">Select user type</option>
-                    <option value="Staff">Staff</option>
-                    <option value="Faculty">Faculty</option>
-                  </select>
-                )}
-              </div>
-              
+                </div>x
               </div>
 
               {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
@@ -1340,11 +1317,64 @@ export default function Create() {
                 <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
               </div>
 
-              {/* Image Upload */}
               <div className="create-scope__group">
                 <label>
                   Attach an image. If there&apos;s more than one image to upload, please compile them into a single image.
                 </label>
+ 
+                {/* ── Mobile: Gallery + Camera buttons ── */}
+                <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+ 
+                  {/* Gallery / Files */}
+                  <label style={{
+                    flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                    padding:"10px 14px", borderRadius:8, cursor:"pointer",
+                    border:"1px solid var(--border,#e8ecf0)",
+                    background: formData.ImageFile ? "rgba(34,197,94,0.08)" : "var(--surface,#f9fafb)",
+                    color: formData.ImageFile ? "#16a34a" : "var(--text,#374151)",
+                    fontSize:"0.82rem", fontWeight:600, transition:"all 0.2s",
+                  }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    {formData.ImageFile ? "✓ " + formData.ImageFile.name.slice(0, 18) + (formData.ImageFile.name.length > 18 ? "…" : "") : "Choose from Gallery"}
+                    <input
+                      type="file"
+                      name="ImageFile"
+                      accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
+                      onChange={handleChange}
+                      style={{ display:"none" }}
+                    />
+                  </label>
+ 
+                  {/* Camera — capture="environment" opens rear camera directly on mobile */}
+                  <label style={{
+                    flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+                    padding:"10px 14px", borderRadius:8, cursor:"pointer",
+                    border:"1px solid var(--border,#e8ecf0)",
+                    background:"var(--surface,#f9fafb)",
+                    color:"var(--text,#374151)",
+                    fontSize:"0.82rem", fontWeight:600, transition:"all 0.2s",
+                  }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    Take a Photo
+                    <input
+                      type="file"
+                      name="ImageFile"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleChange}
+                      style={{ display:"none" }}
+                    />
+                  </label>
+                </div>
+ 
+                {/* ── Desktop: drag-and-drop fallback ── */}
                 <label
                   className="create-scope__dropzone"
                   onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
@@ -1354,19 +1384,26 @@ export default function Create() {
                     accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
                     onChange={handleChange}
                     required={!formData.ImageFile}
+                    style={{ display:"none" }}
                   />
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
-                    <div className="create-scope__hint">PNG, JPG up to 10 MB</div>
+                    <div className="create-scope__hint">
+                      {formData.ImageFile
+                        ? `✓ ${formData.ImageFile.name}`
+                        : "Or drag & drop · PNG, JPG up to 10 MB"}
+                    </div>
                   </div>
                 </label>
+ 
                 {preview && (
                   <img className="create-scope__preview-img" src={preview} alt="Preview" />
                 )}
               </div>
 
+              
               {/* Profanity Warning */}
               {hasProfanity && (
                 <p className="create-scope__hint create-scope__hint--error">
