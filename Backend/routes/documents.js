@@ -3,7 +3,7 @@ const express    = require("express");
 const router     = express.Router();
 const multer     = require("multer");
 const cloudinary = require("cloudinary").v2;
-const Document   = require("../models/Documents");
+const Document   = require("../models/Document");
 
 /* ── Multer: memory storage, PDF only, max 20 MB ── */
 const upload = multer({
@@ -26,10 +26,11 @@ const uploadPdfToCloudinary = (buffer, originalName) =>
 
     cloudinary.uploader.upload_stream(
       {
-        resource_type: "raw",
+        resource_type: "image",   // "image" type for PDFs allows direct browser viewing
         folder:        "bfmo-docs",
         public_id:     `${Date.now()}-${cleanName}`,
         format:        "pdf",
+        flags:         "attachment:false", // serve inline, not as download
       },
       (err, result) => { if (err) reject(err); else resolve(result); }
     ).end(buffer);
@@ -116,7 +117,7 @@ router.delete("/:id", async (req, res) => {
 
     if (doc.publicId) {
       try {
-        await cloudinary.uploader.destroy(doc.publicId, { resource_type: "raw" });
+        await cloudinary.uploader.destroy(doc.publicId, { resource_type: "image" });
       } catch (cdnErr) {
         console.warn(`[documents] Cloudinary delete warn: ${cdnErr.message}`);
       }
