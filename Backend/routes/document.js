@@ -3,7 +3,7 @@ const express    = require("express");
 const router     = express.Router();
 const multer     = require("multer");
 const cloudinary = require("cloudinary").v2;
-const Document   = require("../models/Document");
+const Document   = require("../models/Documents");
 
 /* ── Multer: memory storage, PDF only, max 20 MB ── */
 const upload = multer({
