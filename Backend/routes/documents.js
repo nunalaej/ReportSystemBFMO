@@ -26,11 +26,10 @@ const uploadPdfToCloudinary = (buffer, originalName) =>
 
     cloudinary.uploader.upload_stream(
       {
-        resource_type: "image",   // "image" type for PDFs allows direct browser viewing
+        resource_type: "raw",  // PDFs must be "raw" in Cloudinary
         folder:        "bfmo-docs",
         public_id:     `${Date.now()}-${cleanName}`,
         format:        "pdf",
-        flags:         "attachment:false", // serve inline, not as download
       },
       (err, result) => { if (err) reject(err); else resolve(result); }
     ).end(buffer);
@@ -81,7 +80,9 @@ router.post("/", upload.single("pdf"), async (req, res) => {
       uploadedBy:  uploadedBy?.trim() || "Admin",
     });
 
-    console.log(`[documents] Uploaded: "${doc.title}" → ${doc.fileUrl}`);
+    console.log(`[documents] Uploaded: "${doc.title}"`);
+    console.log(`[documents] File URL: ${doc.fileUrl}`);
+    console.log(`[documents] Resource type: raw (Cloudinary)`);
     res.status(201).json({ success: true, document: doc });
   } catch (err) {
     console.error("[documents POST /]", err.message);
@@ -117,7 +118,7 @@ router.delete("/:id", async (req, res) => {
 
     if (doc.publicId) {
       try {
-        await cloudinary.uploader.destroy(doc.publicId, { resource_type: "image" });
+        await cloudinary.uploader.destroy(doc.publicId, { resource_type: "raw" });
       } catch (cdnErr) {
         console.warn(`[documents] Cloudinary delete warn: ${cdnErr.message}`);
       }
