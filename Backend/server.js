@@ -31,7 +31,7 @@ app.use("/api/meta",      metaRouter);
 app.use("/api/user",      staffRouter);   // keep existing
 app.use("/api/staff",     staffRouter);   // ✅ ADD THIS — frontend calls /api/staff
 app.use("/api/notifications", notificationsRouter);
-app.use("/api/documents", require("./routes/documents"));
+app.use("/api/document", require("./routes/document"));
 
 const mongoUri = process.env.MONGODB_URI;
 const dbName   = process.env.MONGODB_NAME;
