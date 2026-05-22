@@ -53,6 +53,13 @@ export default function AdminDashboard() {
           <h2>Notification</h2>
           <p>Manage notifications and their statuses.</p>
         </button>
+        <button
+          className="admin-card"
+          onClick={() => router.push("/Admin/Documents")}
+        >
+          <h2>Documents</h2>
+          <p>Manage your system documents.</p>
+        </button>
       </section>
     </main>
   );

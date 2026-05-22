@@ -69,6 +69,18 @@
                   </p>
                 </div>
               </Link>
+
+              <Link href="/Student/Documents" className="card1">
+              <div className="card-inner">
+                <div className="card-icon-badge">
+                  <span className="card-icon">📂</span>
+                </div>
+                <h3 className="card-title">My Documents</h3>
+                <p className="card-text">
+                  View the Building & Facilities Management Office Documents.
+                </p>
+              </div>
+            </Link>
             </div>
           </section>
         </main>

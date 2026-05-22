@@ -25,14 +25,16 @@ const uploadPdfToCloudinary = (buffer, originalName) =>
       .slice(0, 60);
 
     cloudinary.uploader.upload_stream(
-      {
-        resource_type: "raw",  // PDFs must be "raw" in Cloudinary
-        folder:        "bfmo-docs",
-        public_id:     `${Date.now()}-${cleanName}`,
-        format:        "pdf",
-      },
-      (err, result) => { if (err) reject(err); else resolve(result); }
-    ).end(buffer);
+  {
+    resource_type: "raw",
+    folder:        "bfmo-docs",
+    public_id:     `${Date.now()}-${cleanName}`,
+    format:        "pdf",
+    access_mode:   "public",  // ← ADD THIS
+    type:          "upload",  // ← ADD THIS
+  },
+  (err, result) => { if (err) reject(err); else resolve(result); }
+).end(buffer);
   });
 
 /* ── GET /api/documents  — ?all=1 for admin, omit for students (published only) ── */
