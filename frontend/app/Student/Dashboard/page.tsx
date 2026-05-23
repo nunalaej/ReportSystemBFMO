@@ -72,7 +72,7 @@ export default function StudentDashboard() {
             <Link href="/Student/Documents" className="card1">
               <div className="card-inner">
                 <div className="card-icon-badge">
-                  <span className="card-icon">📂</span>
+                  <span className="card-icon">📄</span>
                 </div>
                 <h3 className="card-title">My Documents</h3>
                 <p className="card-text">

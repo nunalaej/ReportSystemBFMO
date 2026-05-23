@@ -601,6 +601,21 @@
   padding: clamp(16px, 3vw, 28px);
 }
 
+/* Add these to the existing .create-scope block */
+.create-scope {
+  /* ... existing vars ... */
+  --border: #24304a;       /* same as --outline */
+  --hover:  rgba(255,255,255,0.05);
+  --text-on-surface: #e6eef8;
+}
+
+.create-scope.create-scope--light {
+  /* ... existing vars ... */
+  --border: #e0e4f0;
+  --hover:  #f3f4f6;
+  --text-on-surface: #0e1626;
+}
+
 /* Panels inside sidebar - flatter, denser */
 .create-scope__sidebar .create-scope__panel {
   max-width: 100%;

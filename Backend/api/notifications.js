@@ -12,7 +12,7 @@ router.get("/", async (req, res) => {
     const unread = req.query.unread;
 
     const query = {};
-    if (type)   query.type = type;
+    if (type)              query.type = type;
     if (unread === "true") query.read = false;
 
     const [notifications, total] = await Promise.all([
@@ -23,6 +23,43 @@ router.get("/", async (req, res) => {
     const unreadCount = await Notification.countDocuments({ read: false });
 
     return res.json({ success: true, notifications, total, unreadCount });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── NEW: POST create a notification (used by student follow-up, etc.) ──
+router.post("/", async (req, res) => {
+  try {
+    const {
+      type, title, message,
+      taskId, taskName, reportId,
+      changedBy, changedByRole,
+      fromValue, toValue,
+      affectedStaff, meta,
+    } = req.body;
+
+    if (!title || !message) {
+      return res.status(400).json({ success: false, message: "title and message are required." });
+    }
+
+    const notif = await Notification.create({
+      type:         type         || "system",
+      title:        title,
+      message:      message,
+      taskId:       taskId       || undefined,
+      taskName:     taskName     || undefined,
+      reportId:     reportId     || undefined,
+      changedBy:    changedBy    || undefined,
+      changedByRole:changedByRole|| undefined,
+      fromValue:    fromValue    || undefined,
+      toValue:      toValue      || undefined,
+      affectedStaff: Array.isArray(affectedStaff) ? affectedStaff : [],
+      meta:         meta         || undefined,
+      read:         false,
+    });
+
+    return res.status(201).json({ success: true, notification: notif });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

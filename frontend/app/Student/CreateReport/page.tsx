@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useState,
   useCallback,
+  useRef,
   ChangeEvent,
   DragEvent,
   FormEvent,
@@ -18,10 +19,6 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { useTheme } from "@/app/ThemeProvider";
 
-/* ===============================
-   CONSTANTS & CONFIGURATION
-=============================== */
-
 const ALLOWED_IMAGE_MIME_TYPES = [
   "image/jpeg", "image/png", "image/heic",
   "image/heif", "image/webp", "image/gif",
@@ -31,18 +28,7 @@ const ALLOWED_IMAGE_EXTENSIONS = [
   "jpg", "jpeg", "png", "heic", "heif", "webp", "gif",
 ] as const;
 
-const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
-
-const CONCERN_INFO: Record<string, string> = {
-  Civil:
-    "Environment concerns in campus including paint, cracks, flooring, tiles, bathrooms, walls, ceilings, doors, windows, etc.",
-  Electrical:
-    "Electric concerns range from minor appliance issues to life-threatening safety hazards. Includes lightbulbs, aircons, switches, circuits, wires, outlets, etc.",
-  Mechanical:
-    "Issues with physical parts, systems, or machinery that cause inefficient operation, breakdown, or safety risks. Includes elevators, doors, machines, TV, projectors, fans, etc.",
-  "Safety Hazard":
-    "Physical dangers like slippery floors, uneven walkways, poorly lit areas, overloaded outlets, faulty wiring, improper chemical storage, loose handrails, broken windows, spikes, sharp objects, fire hazards, etc.",
-};
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
 interface BuildingMeta {
   id: string;
@@ -67,6 +53,12 @@ const FALLBACK_BUILDINGS: BuildingMeta[] = [
   { id: "other",        name: "Other",        floors: 1, roomsPerFloor: [1],           hasRooms: false },
 ];
 
+interface ConcernMeta {
+  id?: string;
+  label: string;
+  subconcerns?: string[];
+}
+
 const FALLBACK_CONCERNS: ConcernMeta[] = [
   { id: "electrical",    label: "Electrical",    subconcerns: ["Lights","Aircons","Wires","Outlets","Switches","Other"] },
   { id: "civil",         label: "Civil",         subconcerns: ["Walls","Ceilings","Cracks","Doors","Windows","Other"] },
@@ -75,7 +67,6 @@ const FALLBACK_CONCERNS: ConcernMeta[] = [
   { id: "other",         label: "Other",         subconcerns: ["Other"] },
 ];
 
-// ✅ Fallback defaults — overridden by meta API if available
 const FALLBACK_COLLEGE_OPTIONS: string[] = ["CICS","COCS","CTHM","CBAA","CLAC","COED","CEAT","CCJE","Staff"];
 const FALLBACK_YEAR_OPTIONS:    string[] = ["1st Year","2nd Year","3rd Year","4th Year"];
 
@@ -111,25 +102,74 @@ const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 const API_BASE = RAW_BASE.replace(/\/+$/, "");
 const META_URL = API_BASE ? `${API_BASE}/api/meta` : "/api/meta";
 
-/* ── Detect institutional student email: abc1234@dlsud.edu.ph ── */
 const isStudentEmail = (email: string): boolean =>
   /^[a-z]{2,4}\d{4}@dlsud\.edu\.ph$/i.test(email.trim());
 
-/* ===============================
-   TYPE DEFINITIONS
-=============================== */
+/* ══════════════════════════════════════════════════════════
+   CONCERN COLOR SYSTEM
+   Static map for the 4 built-in types + cycle for custom ones.
+══════════════════════════════════════════════════════════ */
+const CONCERN_COLORS_STATIC: Record<string, { bg: string; color: string }> = {
+  "Civil":         { bg: "#eff6ff", color: "#1d4ed8" },
+  "Electrical":    { bg: "#fefce8", color: "#a16207" },
+  "Mechanical":    { bg: "#f0fdf4", color: "#166534" },
+  "Safety Hazard": { bg: "#fff1f2", color: "#be123c" },
+  "Other":         { bg: "#f3f4f6", color: "#6b7280" },
+};
+
+const CONCERN_COLOR_CYCLE: { bg: string; color: string }[] = [
+  { bg: "#eff6ff", color: "#1d4ed8" },
+  { bg: "#fefce8", color: "#a16207" },
+  { bg: "#f0fdf4", color: "#166534" },
+  { bg: "#fff1f2", color: "#be123c" },
+  { bg: "#f5f3ff", color: "#6d28d9" },
+  { bg: "#fff7ed", color: "#9a3412" },
+  { bg: "#f0f9ff", color: "#0369a1" },
+  { bg: "#fdf2f8", color: "#9d174d" },
+];
+
+function getConcernColor(label: string, concerns: ConcernMeta[]): { bg: string; color: string } {
+  if (CONCERN_COLORS_STATIC[label]) return CONCERN_COLORS_STATIC[label];
+  const idx = concerns.findIndex(c => c.label === label);
+  return CONCERN_COLOR_CYCLE[(idx >= 0 ? idx : 0) % CONCERN_COLOR_CYCLE.length];
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIVE CONCERN SEARCH HELPERS
+   Both accept meta.concerns from the API so new concerns
+   added in Admin → Edit are reflected automatically.
+══════════════════════════════════════════════════════════ */
+
+/** Flat { label, concern } list built from live concern subconcerns */
+function buildKeywordOptions(concerns: ConcernMeta[]): { label: string; concern: string }[] {
+  return concerns.flatMap(c => [
+    { label: c.label.toLowerCase(), concern: c.label },
+    ...(c.subconcerns || [])
+      .filter(s => s.toLowerCase() !== "other")
+      .map(s => ({ label: s.toLowerCase(), concern: c.label })),
+  ]);
+}
+
+/** Returns best concern label for a free-text query */
+function detectConcernFromQuery(query: string, concerns: ConcernMeta[]): string | null {
+  if (!query.trim()) return null;
+  const q = query.toLowerCase().trim();
+  for (const concern of concerns) {
+    const label = concern.label.toLowerCase();
+    if (q.includes(label) || label.includes(q)) return concern.label;
+    if (concern.subconcerns?.some(s => {
+      const sl = s.toLowerCase();
+      return sl !== "other" && (q.includes(sl) || sl.includes(q));
+    })) return concern.label;
+  }
+  return null;
+}
 
 interface PanelProps {
   title?: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
-}
-
-interface ConcernMeta {
-  id?: string;
-  label: string;
-  subconcerns?: string[];
 }
 
 interface MetaState {
@@ -167,10 +207,6 @@ interface Report {
   otherRoom?: string;
 }
 
-/* ===============================
-   UTILITY FUNCTIONS
-=============================== */
-
 const isValidImageFile = (file: File): boolean => {
   const mimeValid = ALLOWED_IMAGE_MIME_TYPES.includes(file.type as (typeof ALLOWED_IMAGE_MIME_TYPES)[number]);
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -191,25 +227,12 @@ const containsProfanity = (text: string | undefined | null): boolean => {
   return PROFANITY_PATTERNS.some((re) => re.test(text.toLowerCase()) || re.test(normalizeLeet(text)));
 };
 
-const getSimilarityKey = (r: {
-  building?: string; concern?: string; subConcern?: string;
-  otherConcern?: string; room?: string; otherRoom?: string;
-}): string => {
-  const building = (r.building || "").trim();
-  const concern  = (r.concern  || "").trim();
-  const sub      = (r.subConcern || r.otherConcern || "").trim();
-  const room     = r.room && r.room !== "Other" ? r.room.trim() : (r.otherRoom || "").trim();
-  return room ? `${building}|${concern}|${sub}|${room}` : `${building}|${concern}|${sub}`;
-};
-
 const isSimilarRoom = (a: string, b: string): boolean => {
   if (!a || !b) return false;
   const na = a.trim().toLowerCase();
   const nb = b.trim().toLowerCase();
   if (na === nb) return true;
-  // Check if either contains the other
   if (na.includes(nb) || nb.includes(na)) return true;
-  // Check if they share significant words (2+ chars)
   const wordsA = na.split(/\s+/).filter(w => w.length >= 3);
   const wordsB = nb.split(/\s+/).filter(w => w.length >= 3);
   return wordsA.some(w => wordsB.includes(w));
@@ -255,10 +278,6 @@ function getRoomsForFloor(building: BuildingMeta|null, floorLabel: string): stri
   return Array.from({ length: count }, (_,i) => String(floorNum*100+i+1));
 }
 
-/* ===============================
-   REUSABLE COMPONENTS
-=============================== */
-
 const Panel = memo(({ title, subtitle, actions, children }: PanelProps) => (
   <section className="create-scope__panel">
     <header className="create-scope__panel-head">
@@ -273,24 +292,12 @@ const Panel = memo(({ title, subtitle, actions, children }: PanelProps) => (
 ));
 Panel.displayName = "Panel";
 
-const InfoTooltip = memo(({ text }: { text: string }) => (
-  <div className="tooltip-container">
-    <span className="tooltip">{text}</span>
-    <span className="text">More Info</span>
-  </div>
-));
-InfoTooltip.displayName = "InfoTooltip";
-
 const RequiredStar = memo(({ value }: { value: unknown }) => {
   const str = value == null ? "" : String(value).trim();
   if (!str) return <span className="create-scope__required-star"> *</span>;
   return null;
 });
 RequiredStar.displayName = "RequiredStar";
-
-/* ===============================
-   CUSTOM HOOKS
-=============================== */
 
 const useBodyScrollLock = (lock: boolean) => {
   useLayoutEffect(() => {
@@ -328,10 +335,6 @@ const useSidebarState = () => {
   return { sidebarOpen, setSidebarOpen, sidebarOverlayOpen, setSidebarOverlayOpen };
 };
 
-/* ===============================
-   MAIN COMPONENT
-=============================== */
-
 export default function Create() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
@@ -364,43 +367,49 @@ export default function Create() {
   const [meta,        setMeta]        = useState<MetaState>({ buildings: FALLBACK_BUILDINGS, concerns: FALLBACK_CONCERNS });
   const [metaLoading, setMetaLoading] = useState<boolean>(true);
   const [metaError,   setMetaError]   = useState<string>("");
-
-  // ✅ Dynamic college/year options from meta API
   const [collegeOptions, setCollegeOptions] = useState<string[]>(FALLBACK_COLLEGE_OPTIONS);
   const [yearOptions,    setYearOptions]    = useState<string[]>(FALLBACK_YEAR_OPTIONS);
+
+  const [concernSearch,       setConcernSearch]       = useState("");
+  const [concernSuggestions,  setConcernSuggestions]  = useState<{ label: string; concern: string }[]>([]);
+  const [showConcernDropdown, setShowConcernDropdown] = useState(false);
+  const concernSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (concernSearchRef.current && !concernSearchRef.current.contains(e.target as Node)) {
+        setShowConcernDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
 
-  /* ── Auto-fill email + detect user type ── */
   useEffect(() => {
-  if (!isLoaded || !user) return;
+    if (!isLoaded || !user) return;
+    const emailFromClerk =
+      user.primaryEmailAddress?.emailAddress ||
+      user.emailAddresses[0]?.emailAddress || "";
+    const username = user.username || "";
+    const identifier = emailFromClerk || (username ? `${username}` : "");
+    if (identifier) {
+      setCurrentUserEmail(identifier);
+      const student = isStudentEmail(identifier);
+      setFormData((f) => ({
+        ...f,
+        email:    identifier,
+        userType: student ? "Student" : "",
+        college:  student ? f.college : "",
+        year:     student ? f.year    : "",
+      }));
+    }
+  }, [isLoaded, user]);
 
-  // ✅ Try email first, fall back to username@dlsud.edu.ph, then just username
-  const emailFromClerk =
-    user.primaryEmailAddress?.emailAddress ||
-    user.emailAddresses[0]?.emailAddress || "";
-
-  const username = user.username || "";
-
-  // Use email if available, otherwise construct from username or use username as identifier
-  const identifier = emailFromClerk || (username ? `${username}` : "");
-
-  if (identifier) {
-    setCurrentUserEmail(identifier);
-    const student = isStudentEmail(identifier);
-    setFormData((f) => ({
-      ...f,
-      email:    identifier,
-      userType: student ? "Student" : "",
-      college:  student ? f.college : "",
-      year:     student ? f.year    : "",
-    }));
-  }
-}, [isLoaded, user]);
-
-  /* ── Load meta (buildings, concerns, colleges, yearLevels) ── */
+  /* ── Load meta — concerns come fully from Admin → Edit API ── */
   useEffect(() => {
     let alive = true;
     async function loadMeta() {
@@ -416,7 +425,6 @@ export default function Create() {
           concerns: Array.isArray(data.concerns) && data.concerns.length
             ? (data.concerns as ConcernMeta[]) : FALLBACK_CONCERNS,
         });
-        // ✅ Load dynamic college/year options from meta
         if (Array.isArray(data.colleges)   && data.colleges.length)   setCollegeOptions(data.colleges);
         if (Array.isArray(data.yearLevels) && data.yearLevels.length) setYearOptions(data.yearLevels);
       } catch {
@@ -429,7 +437,6 @@ export default function Create() {
     return () => { alive = false; };
   }, []);
 
-  /* ── Load existing reports for similarity check ── */
   useEffect(() => {
     (async () => {
       try {
@@ -446,7 +453,14 @@ export default function Create() {
     })();
   }, []);
 
-  /* ── Building/floor/room derived state ── */
+  useEffect(() => {
+    if (!isStudentEmail(formData.email)) {
+      setFormData((prev) => ({ ...prev, college: "Staff/Faculty", year: "Staff/Faculty" }));
+    } else {
+      setFormData((prev) => ({ ...prev, college: "", year: "" }));
+    }
+  }, [formData.email]);
+
   const selectedBuildingMeta = useMemo((): BuildingMeta|null => {
     if (!formData.building||formData.building==="Other") return null;
     return meta.buildings.find((b) => b.name===formData.building)??null;
@@ -473,43 +487,26 @@ export default function Create() {
 
   const hasRoom = useMemo(() => Array.isArray(availableRooms)&&availableRooms.length>0, [availableRooms]);
 
-  /* ── Conditional flags ── */
-  const showSubConcern       = !!formData.concern && formData.concern !== "Other";
-  const needsOtherConcern    = formData.concern === "Other";
-  const needsOtherSubConcern = formData.subConcern === "Other";
   const needsOtherBuilding   = formData.building === "Other";
   const roomIsOther          = formData.room === "Other";
+  const isStudent            = isStudentEmail(formData.email);
 
   const showFloorDropdown  = specificRoom && buildingHasRooms && !!formData.building && formData.building !== "Other";
   const showRoomDropdown   = showFloorDropdown && !!formData.floor && formData.floor !== "Other" && hasRoom;
   const needsOtherRoomText = specificRoom && buildingHasRooms && !!formData.building && formData.building !== "Other" && (roomIsOther || formData.floor === "Other");
   const needsOtherRoom     = specificRoom && !!formData.building && formData.building !== "Other" && !buildingHasRooms;
 
-  /* ── isStudent flag ── */
-  const isStudent = isStudentEmail(formData.email);
-
-  /* ── Required fields ── */
   const requiredNow = useMemo((): (keyof FormDataState)[] => {
-    const req: (keyof FormDataState)[] = [
-      "email","heading","description","concern","building",
-    ];
-    // ✅ College & year only required for students
+    const req: (keyof FormDataState)[] = ["email","heading","description","concern","building"];
     if (isStudent) { req.push("college"); req.push("year"); }
-    // ✅ userType only required for non-students (students are auto-detected)
     if (!isStudent) req.push("userType");
-    if (showSubConcern)       req.push("subConcern");
-    if (needsOtherConcern || needsOtherSubConcern) req.push("otherConcern");
     if (needsOtherBuilding)   req.push("otherBuilding");
     if (showFloorDropdown)    req.push("floor");
     if (showRoomDropdown)     req.push("room");
     if (needsOtherRoomText || needsOtherRoom) req.push("otherRoom");
     if (roomIsOther && showRoomDropdown)      req.push("otherRoom");
     return req;
-  }, [
-    isStudent, showSubConcern, needsOtherConcern, needsOtherSubConcern,
-    needsOtherBuilding, showFloorDropdown, showRoomDropdown,
-    needsOtherRoomText, needsOtherRoom, roomIsOther,
-  ]);
+  }, [isStudent, needsOtherBuilding, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom, roomIsOther]);
 
   const filledCount = useMemo(
     () => requiredNow.reduce((acc, key) => {
@@ -523,59 +520,24 @@ export default function Create() {
   const readyToSubmit = progressPct === 100;
 
   const similarMatches = useMemo((): Report[] => {
-  if (!formData.building || !formData.concern) return [];
-
-  const currentBuilding = formData.building === "Other" ? formData.otherBuilding : formData.building;
-  
-  // Handle both normal concerns and "Other" concern
-  let currentConcern = formData.concern;
-  let currentSub = "";
-  
-  if (formData.concern === "Other") {
-    // For "Other" concern, use the otherConcern text as the concern for matching
-    currentConcern = "Other";
-    currentSub = formData.otherConcern.trim();
-  } else {
-    // For normal concerns
-    currentSub = formData.subConcern === "Other" ? formData.otherConcern.trim() : formData.subConcern;
-  }
-
-  const currentRoom = formData.room && formData.room !== "Other"
-    ? formData.room
-    : formData.otherRoom || "";
-
-  if (!currentBuilding.trim()) return [];
-
-  return existingReports.filter((r) => {
-    if (norm(r.status || "Pending") === "archived") return false;
-
-    const rBuilding = (r.building || "").trim();
-    const rConcern  = (r.concern  || "").trim();
-    const rSub      = (r.subConcern || r.otherConcern || "").trim();
-    const rRoom     = r.room && r.room !== "Other"
-      ? r.room.trim()
-      : (r.otherRoom || "").trim();
-
-    const buildingMatch = rBuilding.toLowerCase() === currentBuilding.toLowerCase();
-    const concernMatch  = rConcern.toLowerCase()  === currentConcern.toLowerCase();
-    
-    // Special handling for "Other" concern matching
-    let subMatch = false;
-    if (currentConcern === "Other" && currentSub) {
-      // For "Other" concerns, match if the stored sub/other concern contains or is similar to the current otherConcern
-      subMatch = rSub.toLowerCase().includes(currentSub.toLowerCase()) || 
-                 currentSub.toLowerCase().includes(rSub.toLowerCase());
-    } else {
-      // Normal matching
-      subMatch = rSub.toLowerCase() === currentSub.toLowerCase();
-    }
-
-    // Fuzzy room match — if no room specified, skip room check
-    const roomMatch = !currentRoom || !rRoom || isSimilarRoom(currentRoom, rRoom);
-
-    return buildingMatch && concernMatch && subMatch && roomMatch;
-  });
-}, [existingReports, formData]);
+    if (!formData.building || !formData.concern) return [];
+    const currentBuilding = formData.building === "Other" ? formData.otherBuilding : formData.building;
+    const currentConcern  = formData.concern;
+    const currentSub      = formData.subConcern === "Other" ? formData.otherConcern.trim() : formData.subConcern;
+    const currentRoom     = formData.room && formData.room !== "Other" ? formData.room : formData.otherRoom || "";
+    if (!currentBuilding.trim()) return [];
+    return existingReports.filter((r) => {
+      if (norm(r.status || "Pending") === "archived") return false;
+      const rBuilding = (r.building || "").trim();
+      const rConcern  = (r.concern  || "").trim();
+      const rSub      = (r.subConcern || r.otherConcern || "").trim();
+      const rRoom     = r.room && r.room !== "Other" ? r.room.trim() : (r.otherRoom || "").trim();
+      return rBuilding.toLowerCase() === currentBuilding.toLowerCase() &&
+             rConcern.toLowerCase()  === currentConcern.toLowerCase() &&
+             (!currentSub || rSub.toLowerCase() === currentSub.toLowerCase()) &&
+             (!currentRoom || !rRoom || isSimilarRoom(currentRoom, rRoom));
+    });
+  }, [existingReports, formData]);
 
   const similarReportsCount = useMemo(() => similarMatches.length, [similarMatches]);
 
@@ -589,27 +551,16 @@ export default function Create() {
     return best.status||"Pending";
   }, [similarMatches]);
 
-  /* ── Summary text ── */
   const summaryText = useMemo((): string => {
     const parts: string[] = [];
     parts.push(`Title: ${formData.heading||"-"}`);
-    let concernDisplay = formData.concern||"-";
-    if (formData.concern==="Other"&&formData.otherConcern) {
-      concernDisplay = `Other: ${formData.otherConcern}`;
-    } else if (formData.subConcern) {
-      concernDisplay += formData.subConcern==="Other"&&formData.otherConcern
-        ? ` / Other: ${formData.otherConcern}` : ` / ${formData.subConcern}`;
-    }
-    parts.push(`Concern: ${concernDisplay}`);
-    let buildingDisplay = formData.building||"-";
-    if (formData.building==="Other"&&formData.otherBuilding) buildingDisplay = `Other: ${formData.otherBuilding}`;
-    parts.push(`Building: ${buildingDisplay}`);
+    parts.push(`Concern: ${formData.concern||"-"}${formData.otherConcern ? ` (${formData.otherConcern})` : formData.subConcern ? ` / ${formData.subConcern}` : ""}`);
+    parts.push(`Building: ${formData.building === "Other" && formData.otherBuilding ? `Other: ${formData.otherBuilding}` : formData.building||"-"}`);
     parts.push(`User Type: ${isStudent ? "Student" : (formData.userType||"-")}`);
     if (specificRoom) {
       if (showFloorDropdown&&formData.floor) parts.push(`Floor: ${formData.floor}`);
       if (showRoomDropdown||needsOtherRoomText) {
-        const roomDisplay = formData.room==="Other"&&formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room||"-";
-        parts.push(`Room: ${roomDisplay}`);
+        parts.push(`Room: ${formData.room==="Other"&&formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room||"-"}`);
       } else if (needsOtherRoom) { parts.push(`Spot: ${formData.otherRoom||"-"}`); }
     } else { parts.push("Specific room: No"); }
     if (isStudent&&formData.college) parts.push(`College: ${formData.college}${formData.year ? ` - ${formData.year}` : ""}`);
@@ -617,28 +568,11 @@ export default function Create() {
     return parts.join("\n");
   }, [formData, specificRoom, showFloorDropdown, showRoomDropdown, needsOtherRoomText, needsOtherRoom, isStudent]);
 
-  /* ── Options ── */
   const buildingOptions = useMemo((): string[] => {
     const list = meta.buildings.map((b) => String(b.name||"").trim()).filter((n) => n.length>0);
     return [...list.filter((x) => norm(x)!=="other").sort((a,b) => a.localeCompare(b)), ...list.filter((x) => norm(x)==="other")];
   }, [meta.buildings]);
 
-  const concernOptions = useMemo((): string[] => {
-    const list = meta.concerns.map((c) => c.label).filter((l) => l&&String(l).trim().length>0);
-    return [...list.filter((x) => norm(x)!=="other").sort((a,b) => String(a).localeCompare(String(b))), ...list.filter((x) => norm(x)==="other")];
-  }, [meta.concerns]);
-
-  const selectedConcern = useMemo(
-    () => meta.concerns.find((c) => c.label===formData.concern)||null,
-    [meta.concerns, formData.concern]
-  );
-
-  const dynamicSubconcernOptions = useMemo((): string[] => {
-    if (!selectedConcern||!Array.isArray(selectedConcern.subconcerns)) return [];
-    return selectedConcern.subconcerns;
-  }, [selectedConcern]);
-
-  /* ── Profanity ── */
   useEffect(() => {
     setHasProfanity([
       formData.heading, formData.description,
@@ -647,7 +581,6 @@ export default function Create() {
     ].some((t) => containsProfanity(t)));
   }, [formData]);
 
-  /* ── Handlers ── */
   const showMsg = useCallback((type: "success"|"error"|"info", text: string) => {
     setMessageType(type); setMessage(text);
   }, []);
@@ -656,11 +589,9 @@ export default function Create() {
     (e: ChangeEvent<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>) => {
       const { name, value } = e.target;
       const target = e.target as HTMLInputElement;
-
       if (name==="room"&&value==="Other") {
         setFormData((prev) => ({ ...prev, room: "Other", otherRoom: "" })); return;
       }
-
       if (target.files&&target.files[0]) {
         const file = target.files[0];
         if (!isValidImageFile(file)) {
@@ -670,10 +601,8 @@ export default function Create() {
         setFormData((prev) => ({ ...prev, ImageFile: file }));
         setPreview(URL.createObjectURL(file)); return;
       }
-
       setFormData((prev) => {
         const next = { ...prev, [name]: value } as FormDataState;
-        if (name==="concern")  { next.subConcern = ""; next.otherConcern = ""; }
         if (name==="building") { next.otherBuilding = ""; next.floor = ""; next.room = ""; next.otherRoom = ""; }
         if (name==="floor")    { next.room = ""; next.otherRoom = ""; }
         if (name==="room"&&value!=="Other") { next.otherRoom = ""; }
@@ -682,22 +611,6 @@ export default function Create() {
     },
     [showMsg]
   );
-
-  useEffect(() => {
-  if (!isStudent) {
-    setFormData((prev) => ({
-      ...prev,
-      college: "Staff/Faculty",
-      year: "Staff/Faculty",
-    }));
-  } else {
-    setFormData((prev) => ({
-      ...prev,
-      college: "",
-      year: "",
-    }));
-  }
-}, [isStudent]);
 
   const onDrop = useCallback((e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("is-dragover");
@@ -710,19 +623,17 @@ export default function Create() {
   const onDragOver  = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.add("is-dragover"); }, []);
   const onDragLeave = useCallback((e: DragEvent<HTMLLabelElement>) => { e.preventDefault(); e.currentTarget.classList.remove("is-dragover"); }, []);
 
-  /* ── Empty state for resets ── */
   const getEmptyState = useCallback((): FormDataState => {
-  const student = isStudentEmail(currentUserEmail);
-  return {
-    email:         currentUserEmail || "",
-    heading:       "", description:   "",
-    concern:       "", subConcern:    "", building: "",
-    college:       "", year:          "",
-    userType:      student ? "Student" : "",
-    floor:         "", room:          "", ImageFile: null,
-    otherConcern:  "", otherBuilding: "", otherRoom: "",
-  };
-}, [currentUserEmail]);
+    const student = isStudentEmail(currentUserEmail);
+    return {
+      email: currentUserEmail || "", heading: "", description: "",
+      concern: "", subConcern: "", building: "",
+      college: "", year: "",
+      userType: student ? "Student" : "",
+      floor: "", room: "", ImageFile: null,
+      otherConcern: "", otherBuilding: "", otherRoom: "",
+    };
+  }, [currentUserEmail]);
 
   const performSubmit = useCallback(async () => {
     setSubmitting(true); setIsConfirming(false); showMsg("info","Submitting report...");
@@ -732,37 +643,25 @@ export default function Create() {
       data.append("heading",     formData.heading);
       data.append("description", formData.description);
       data.append("userType",    isStudent ? "Student" : formData.userType);
-      // ✅ Only send college/year for students
       data.append("college",
         isStudent && formData.college
           ? (formData.year ? `${formData.college} - ${formData.year}` : formData.college)
           : ""
       );
-
-      if (formData.concern==="Other") {
-  data.append("concern",    formData.concern);
-  data.append("subConcern", "");
-} else {
-  data.append("concern",    formData.concern);
-  data.append("subConcern", formData.subConcern==="Other" 
-    ? formData.otherConcern.trim()   // ← use the typed value, not "Other"
-    : formData.subConcern);
-}
-
+      data.append("concern",    formData.concern);
+      data.append("subConcern", formData.subConcern || formData.otherConcern || "");
       data.append("building", formData.building==="Other" ? `Other: ${formData.otherBuilding.trim()}` : formData.building);
       data.append("floor",    formData.floor);
       data.append("room",     formData.room==="Other" ? `Other: ${formData.otherRoom.trim()}` : formData.room);
       data.append("otherConcern",  formData.otherConcern.trim());
       data.append("otherBuilding", formData.otherBuilding);
       data.append("otherRoom",     formData.otherRoom);
-
       if (similarStatus&&similarStatus!=="Pending") data.append("inheritedStatus", similarStatus);
       if (formData.ImageFile) data.append("ImageFile", formData.ImageFile);
 
       const submitUrl = API_BASE ? `${API_BASE}/api/reports` : "/api/reports";
       const res = await fetch(submitUrl, { method: "POST", body: data });
       const raw = await res.text().catch(() => "");
-
       if (!res.ok) { showMsg("error", raw||`Submission failed with status ${res.status}`); return; }
 
       let result: any = {};
@@ -776,6 +675,7 @@ export default function Create() {
         showMsg("success","Report submitted successfully.");
         setFormData(getEmptyState());
         setPreview(null); setSpecificRoom(false);
+        setConcernSearch(""); setConcernSuggestions([]);
       } else { showMsg("error", result.message||"Submission failed."); }
     } catch { showMsg("error","Network error while submitting report."); }
     finally { setSubmitting(false); }
@@ -809,90 +709,59 @@ export default function Create() {
     setFormData(getEmptyState());
     setPreview(null); setSpecificRoom(false);
     setIsConfirming(false); setGeneratedReportId("");
+    setConcernSearch(""); setConcernSuggestions([]);
     showMsg("info","Form cleared.");
   }, [getEmptyState, showMsg]);
 
-  /* ── Render ── */
+  /* ══════════════════════════════════════════════════════════
+     CONCERN SEARCH — wired to live meta.concerns
+  ══════════════════════════════════════════════════════════ */
+  const handleConcernSearch = useCallback((val: string) => {
+    setConcernSearch(val);
+    setShowConcernDropdown(true);
+
+    if (!val.trim()) {
+      setConcernSuggestions([]);
+      return;
+    }
+
+    const q = val.toLowerCase().trim();
+    const liveOptions = buildKeywordOptions(meta.concerns);
+    const matches = liveOptions
+      .filter(o => o.label.includes(q) || q.includes(o.label))
+      .slice(0, 8);
+
+    const detected = detectConcernFromQuery(val, meta.concerns);
+    if (detected) {
+      setFormData(f => ({ ...f, concern: detected, subConcern: val.trim(), otherConcern: "" }));
+    }
+
+    setConcernSuggestions(
+      matches.length ? matches : [{ label: val.trim(), concern: "Other" }]
+    );
+  }, [meta.concerns]);
+
+  const selectConcernSuggestion = useCallback((s: { label: string; concern: string }) => {
+    setConcernSearch(s.label);
+    setFormData(f => ({
+      ...f,
+      concern:      s.concern,
+      subConcern:   s.concern !== "Other" ? s.label : "",
+      otherConcern: s.concern === "Other"  ? s.label : "",
+    }));
+    setShowConcernDropdown(false);
+  }, []);
+
+  const clearConcern = useCallback(() => {
+    setFormData(f => ({ ...f, concern: "", subConcern: "", otherConcern: "" }));
+    setConcernSearch("");
+    setConcernSuggestions([]);
+  }, []);
+
   return (
     <div className={`create-scope ${light ? "create-scope--light" : ""}`}>
-      <style>{`
-        .tooltip-container {
-          --background-light: #ff5555;
-          --background-dark: #000000;
-          --text-color-light: #ffffff;
-          --text-color-dark: #ffffff;
-          --bubble-size: 12px;
-          --glow-color: rgba(255,255,255,0.5);
-          position: relative;
-          background: var(--background-light);
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 14px;
-          padding: 0.4em 1em;
-          color: var(--text-color-light);
-          border-radius: 8px;
-          display: inline-block;
-          margin-left: 8px;
-          border: none;
-        }
-        .tooltip {
-          position: absolute;
-          bottom: 125%;
-          left: 50%;
-          transform: translateX(-50%);
-          padding: 0.8em 1.2em;
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transition: all 0.3s;
-          border-radius: var(--bubble-size);
-          background: var(--background-light);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-          width: max-content;
-          max-width: 300px;
-          font-size: 13px;
-          line-height: 1.4;
-          z-index: 1000;
-          white-space: normal;
-        }
-        .tooltip::before {
-          content: "";
-          position: absolute;
-          top: 100%;
-          left: 50%;
-          transform: translateX(-50%);
-          border-style: solid;
-          border-width: 8px 8px 0;
-          border-color: var(--background-light) transparent transparent;
-        }
-        .tooltip-container:hover { background: var(--background-dark); color: var(--text-color-dark); box-shadow: 0 0 20px var(--glow-color); }
-        .tooltip-container:hover .tooltip { opacity: 1; visibility: visible; pointer-events: auto; }
-        .concern-label-wrapper { display: flex; align-items: center; gap: 8px; }
-        .similar-status-badge {
-          display: inline-block;
-          padding: 2px 10px;
-          border-radius: 999px;
-          font-size: 0.8rem;
-          font-weight: 600;
-          margin-left: 4px;
-        }
-        .usertype-auto-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 8px 12px;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 500;
-          background: rgba(59,130,246,0.1);
-          border: 1px solid rgba(59,130,246,0.25);
-          color: #3b82f6;
-        }
-      `}</style>
-
       <div className={`create-scope__layout ${sidebarOpen ? "" : "is-collapsed"}`}>
 
-        {/* ── Sidebar ── */}
         <aside
           id="app-sidebar"
           className={`create-scope__sidebar ${sidebarOverlayOpen ? "is-open" : ""}`}
@@ -917,7 +786,9 @@ export default function Create() {
                           {similarReportsCount} similar{" "}
                           {similarReportsCount===1 ? "report" : "reports"}
                           {similarStatus&&similarStatus!=="Pending" && (
-                            <span className="similar-status-badge" style={{
+                            <span style={{
+                              display:"inline-block", padding:"2px 10px", borderRadius:999,
+                              fontSize:"0.8rem", fontWeight:600, marginLeft:4,
                               background: STATUS_COLOR[similarStatus] ? STATUS_COLOR[similarStatus]+"22" : "#88888822",
                               color: STATUS_COLOR[similarStatus]??"#888",
                               border: `1px solid ${STATUS_COLOR[similarStatus]??"#888"}55`,
@@ -954,56 +825,39 @@ export default function Create() {
                     {readyToSubmit&&!hasProfanity ? "Yes" : "No"}
                   </strong>
                 </div>
-
-
-<div hidden>
-                {generatedReportId && (
-                  <>
-                    <hr className="create-scope__summary-rule" />
-                    <div className="create-scope__summary-row">
-                      <span>Report ID</span>
-                      <strong className="is-ok">{generatedReportId}</strong>
-                    </div>
-                  </>
-                )}
-                </div>
-
                 <hr className="create-scope__summary-rule" />
-
                 <div className="create-scope__summary-kv">
                   <div>Title</div>
                   <div>{formData.heading||"-"}</div>
                   <div>Concern</div>
                   <div>
-                    {formData.concern||"-"}
-                    {formData.concern==="Other"&&formData.otherConcern ? `: ${formData.otherConcern}`
-                      : formData.subConcern==="Other"&&formData.otherConcern ? ` / Other: ${formData.otherConcern}`
-                      : formData.subConcern ? ` / ${formData.subConcern}` : ""}
+                    {formData.concern ? (() => {
+                      const cc = getConcernColor(formData.concern, meta.concerns);
+                      return (
+                        <span style={{
+                          padding:"2px 8px", borderRadius:999, fontSize:"0.75rem", fontWeight:700,
+                          background: cc.bg, color: cc.color,
+                        }}>
+                          {formData.concern}
+                        </span>
+                      );
+                    })() : "-"}
+                    {formData.subConcern ? ` (${formData.subConcern})` : ""}
                   </div>
                   <div>Building</div>
                   <div>
                     {formData.building||"-"}
                     {formData.building==="Other"&&formData.otherBuilding ? `: ${formData.otherBuilding}` : ""}
                   </div>
-                  <div hidden>User Type</div>
-                  <div hidden
-                  >{isStudent ? "Student" : (formData.userType||"-")}</div>
                   <div>Specific room</div>
                   <div>{specificRoom ? "Yes" : "No"}</div>
-
-                  {specificRoom&&showFloorDropdown && (
-                    <><div>Floor</div><div>{formData.floor||"-"}</div></>
-                  )}
+                  {specificRoom&&showFloorDropdown && (<><div>Floor</div><div>{formData.floor||"-"}</div></>)}
                   {specificRoom&&(showRoomDropdown||needsOtherRoomText) && (
                     <><div>Room</div><div>
                       {formData.room==="Other"&&formData.otherRoom ? `Other: ${formData.otherRoom}` : formData.room||"-"}
                     </div></>
                   )}
-                  {specificRoom&&needsOtherRoom && (
-                    <><div>Spot</div><div>{formData.otherRoom||"-"}</div></>
-                  )}
-
-                  {/* ✅ Only show college in summary for students */}
+                  {specificRoom&&needsOtherRoom && (<><div>Spot</div><div>{formData.otherRoom||"-"}</div></>)}
                   {isStudent && (
                     <>
                       <div>College</div>
@@ -1013,7 +867,6 @@ export default function Create() {
                   <div>Photo</div>
                   <div>{formData.ImageFile ? "Attached" : "None"}</div>
                 </div>
-
                 <Panel>
                   <div className="create-scope__preview">
                     {preview
@@ -1030,7 +883,6 @@ export default function Create() {
           <div className="create-scope__scrim is-open" onClick={() => setSidebarOverlayOpen(false)} />
         )}
 
-        {/* ── Main form ── */}
         <main className="create-scope__main">
           <header className="create-scope__topbar">
             <div className="create-scope__topbar-left">
@@ -1046,12 +898,8 @@ export default function Create() {
             subtitle="Fill the form and attach a photo if available."
             actions={
               <div className="create-scope__toolbar">
-                <button type="button" className="view-reports-btn" onClick={viewreports} title="View Reports">
-                  View Reports
-                </button>
-                <button type="button" className="create-scope__reset-btn" onClick={resetForm}>
-                  Reset
-                </button>
+                <button type="button" className="view-reports-btn" onClick={viewreports}>View Reports</button>
+                <button type="button" className="create-scope__reset-btn" onClick={resetForm}>Reset</button>
               </div>
             }
           >
@@ -1065,7 +913,6 @@ export default function Create() {
 
             <form onSubmit={handleSubmit} className="create-scope__form">
 
-              {/* Email */}
               <div className="create-scope__group">
                 <label htmlFor="email">Email <RequiredStar value={formData.email} /></label>
                 <input
@@ -1076,167 +923,172 @@ export default function Create() {
                   readOnly={Boolean(currentUserEmail)}
                 />
               </div>
-<div className="create-scope__group">
-  <label>
-    College &amp; Year{" "}
-    <RequiredStar
-      value={
-        isStudent
-          ? formData.college && formData.year
-            ? "filled"
-            : ""
-          : "filled"
-      }
-    />
-  </label>
 
-  {isStudent ? (
-    <>
-      <select
-        name="college"
-        value={formData.college}
-        onChange={handleChange}
-        required
-      >
-        <option value="">Select college</option>
-        {collegeOptions.map((c) => (
-          <option key={c} value={c}>{c}</option>
-        ))}
-      </select>
-
-      <select
-        name="year"
-        value={formData.year}
-        onChange={handleChange}
-        required
-        style={{ marginTop: 8 }}
-      >
-        <option value="">Select year</option>
-        {yearOptions.map((y) => (
-          <option key={y} value={y}>{y}</option>
-        ))}
-      </select>
-    </>
-  ) : (
-    <p style={{ marginTop: 8, fontWeight: 500 }}>
-      Staff / Faculty
-    </p>
-  )}
-</div>
-
-
-
-              {/* Concern & SubConcern */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <div className="concern-label-wrapper">
-                    <label htmlFor="concern">Concern Type <RequiredStar value={formData.concern} /></label>
-                    {formData.concern&&CONCERN_INFO[formData.concern] && (
-                      <InfoTooltip text={CONCERN_INFO[formData.concern]} />
-                    )}
-                  </div>
-                  <select
-                    id="concern" name="concern"
-                    value={formData.concern} onChange={handleChange}
-                    required disabled={metaLoading}
-                  >
-                    <option value="">{metaLoading ? "Loading concerns..." : "Select concern"}</option>
-                    {concernOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-
-                {showSubConcern && (
-                  <div className="create-scope__group">
-                    <label htmlFor="subConcern">Concern Category <RequiredStar value={formData.subConcern} /></label>
-                    {formData.subConcern==="Other" ? (
-                      <div className="create-scope__inline-row">
-                        <select
-                          id="subConcern" name="subConcern"
-                          value={formData.subConcern} onChange={handleChange}
-                          required className="create-scope__inline-select"
-                        >
-                          <option value="">Select sub concern</option>
-                          {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <input
-                          type="text" name="otherConcern"
-                          placeholder="Specify sub concern"
-                          value={formData.otherConcern}
-                          onChange={handleChange} required className="create-scope__inline-input"
-                        />
-                      </div>
-                    ) : (
-                      <select
-                        id="subConcern" name="subConcern"
-                        value={formData.subConcern} onChange={handleChange} required
-                      >
-                        <option value="">Select concern</option>
-                        {dynamicSubconcernOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    )}
-                  </div>
+              <div className="create-scope__group">
+                <label>
+                  College &amp; Year{" "}
+                  <RequiredStar value={isStudent ? (formData.college && formData.year ? "filled" : "") : "filled"} />
+                </label>
+                {isStudent ? (
+                  <>
+                    <select name="college" value={formData.college} onChange={handleChange} required>
+                      <option value="">Select college</option>
+                      {collegeOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select name="year" value={formData.year} onChange={handleChange} required style={{ marginTop: 8 }}>
+                      <option value="">Select year</option>
+                      {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </>
+                ) : (
+                  <p style={{ marginTop: 8, fontWeight: 500 }}>Staff / Faculty</p>
                 )}
               </div>
 
-              {/* Other Concern */}
-              {needsOtherConcern && (
-                <div className="create-scope__group">
-                  <label htmlFor="otherConcern">Specify concern <RequiredStar value={formData.otherConcern} /></label>
-                  <input
-                    id="otherConcern" type="text" name="otherConcern"
-                    placeholder="Describe your concern"
-                    value={formData.otherConcern} onChange={handleChange} required
-                  />
-                </div>
-              )}
+              {/* ══ CONCERN SEARCH — live from Admin → Edit ══ */}
+              <div className="create-scope__group" ref={concernSearchRef} style={{ position: "relative" }}>
+                <label htmlFor="concern-search">
+                  What is the concern? <RequiredStar value={formData.concern} />
+                </label>
 
-              {/* Building & Specific Room Toggle */}
+                {formData.concern && (() => {
+                  const cc = getConcernColor(formData.concern, meta.concerns);
+                  return (
+                    <div style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      marginBottom: 8, padding: "8px 12px", borderRadius: 8,
+                      background: cc.bg,
+                      border: `1px solid ${cc.color}40`,
+                    }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke={cc.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: "0.8rem", color: cc.color, fontWeight: 700 }}>
+                          {formData.concern}
+                        </span>
+                        {formData.subConcern && (
+                          <span style={{ fontSize: "0.75rem", color: "var(--muted)", marginLeft: 6 }}>
+                            › {formData.subConcern}
+                          </span>
+                        )}
+                      </div>
+                      <button type="button" onClick={clearConcern} style={{
+                        background: "none", border: "none", cursor: "pointer",
+                        color: "var(--error)", fontSize: "0.8rem", fontWeight: 700, padding: "2px 6px",
+                      }}>
+                        ✕ Change
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                <input
+                  id="concern-search"
+                  type="text"
+                  placeholder="Type what's wrong — e.g. broken light, leaking pipe, cracked wall…"
+                  value={concernSearch}
+                  autoComplete="off"
+                  onChange={e => handleConcernSearch(e.target.value)}
+                  onFocus={() => { if (concernSearch.trim()) setShowConcernDropdown(true); }}
+                  style={{ width: "100%", boxSizing: "border-box" }}
+                />
+
+                {showConcernDropdown && concernSuggestions.length > 0 && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, zIndex: 200,
+                    background: "var(--surface)",
+                    border: "1px solid var(--outline)",
+                    borderRadius: 10, boxShadow: "0 6px 24px rgba(0,0,0,0.25)",
+                    maxHeight: 240, overflowY: "auto",
+                  }}>
+                    {concernSuggestions.map((s, i) => {
+                      const cc = getConcernColor(s.concern, meta.concerns);
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onMouseDown={e => { e.preventDefault(); selectConcernSuggestion(s); }}
+                          style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            width: "100%", padding: "10px 14px",
+                            background: "none", border: "none", cursor: "pointer", textAlign: "left",
+                            fontSize: "0.84rem",
+                            borderBottom: i < concernSuggestions.length - 1
+                              ? "1px solid var(--outline)" : "none",
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = "var(--hover, rgba(255,255,255,0.05))")}
+                          onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                        >
+                          <span style={{ color: "var(--text)", textTransform: "capitalize" }}>{s.label}</span>
+                          <span style={{
+                            fontSize: "0.7rem", fontWeight: 700,
+                            padding: "2px 8px", borderRadius: 999,
+                            background: cc.bg, color: cc.color,
+                            border: `1px solid ${cc.color}40`,
+                            whiteSpace: "nowrap", marginLeft: 8,
+                          }}>
+                            {s.concern}
+                          </span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        setFormData(f => ({ ...f, concern: "Other", subConcern: "", otherConcern: concernSearch.trim() }));
+                        setShowConcernDropdown(false);
+                      }}
+                      style={{
+                        display: "block", width: "100%", padding: "10px 14px",
+                        background: "var(--surface)", border: "none", cursor: "pointer",
+                        textAlign: "left", fontSize: "0.78rem", color: "var(--muted)", fontStyle: "italic",
+                        borderTop: "1px solid var(--outline)",
+                      }}
+                    >
+                      Can&apos;t find it? Mark as &quot;Other&quot;
+                    </button>
+                  </div>
+                )}
+
+                <p className="create-scope__hint">
+                  Type what&apos;s wrong and we&apos;ll figure out the category. E.g. &quot;busted bulb&quot;, &quot;cracked tiles&quot;, &quot;broken elevator&quot;.
+                </p>
+              </div>
+
               <div className="create-scope__row-two">
                 <div className="create-scope__group">
                   <label htmlFor="building">Building &amp; Facilities <RequiredStar value={formData.building} /></label>
-                  <select
-                    id="building" name="building"
-                    value={formData.building} onChange={handleChange}
-                    required disabled={metaLoading}
-                  >
+                  <select id="building" name="building" value={formData.building} onChange={handleChange} required disabled={metaLoading}>
                     <option value="">{metaLoading ? "Loading buildings..." : "Select building"}</option>
                     {buildingOptions.map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
-
                 <div className="create-scope__group">
                   <label className="create-scope__switch">
-                    <input
-                      type="checkbox" checked={specificRoom}
-                      onChange={() => {
-                        setSpecificRoom((v) => {
-                          const nv = !v;
-                          if (!nv) setFormData((f) => ({ ...f, floor: "", room: "", otherRoom: "" }));
-                          return nv;
-                        });
-                      }}
-                    />
+                    <input type="checkbox" checked={specificRoom} onChange={() => {
+                      setSpecificRoom((v) => {
+                        const nv = !v;
+                        if (!nv) setFormData((f) => ({ ...f, floor: "", room: "", otherRoom: "" }));
+                        return nv;
+                      });
+                    }} />
                     <span className="create-scope__slider" />
-                    <span className="create-scope__switch-label">
-                      Is there a specific location / spot / room?
-                    </span>
+                    <span className="create-scope__switch-label">Is there a specific location / spot / room?</span>
                   </label>
                 </div>
               </div>
 
-              {/* Other Building */}
               {needsOtherBuilding && (
                 <div className="create-scope__group">
                   <label htmlFor="otherBuilding">Specify building <RequiredStar value={formData.otherBuilding} /></label>
-                  <input
-                    id="otherBuilding" type="text" name="otherBuilding"
-                    placeholder="Specify the building name"
-                    value={formData.otherBuilding} onChange={handleChange} required
-                  />
+                  <input id="otherBuilding" type="text" name="otherBuilding" placeholder="Specify the building name"
+                    value={formData.otherBuilding} onChange={handleChange} required />
                 </div>
               )}
 
-              {/* Floor dropdown */}
               {showFloorDropdown && (
                 <div className="create-scope__group">
                   <label htmlFor="floor">Floor <RequiredStar value={formData.floor} /></label>
@@ -1247,7 +1099,6 @@ export default function Create() {
                 </div>
               )}
 
-              {/* Room dropdown */}
               {showRoomDropdown && (
                 <div className="create-scope__group">
                   <label htmlFor="room">Room <RequiredStar value={formData.room} /></label>
@@ -1258,80 +1109,65 @@ export default function Create() {
                 </div>
               )}
 
-              {/* Other room text */}
               {needsOtherRoomText && (
                 <div className="create-scope__group">
-                  <label htmlFor="otherRoomText">
-                    Specify room / spot <RequiredStar value={formData.otherRoom} />
-                  </label>
-                  <input
-                    id="otherRoomText" type="text" name="otherRoom"
-                    placeholder="Example: 1st floor near the exit"
-                    value={formData.otherRoom} onChange={handleChange} required
-                  />
+                  <label htmlFor="otherRoomText">Specify room / spot <RequiredStar value={formData.otherRoom} /></label>
+                  <input id="otherRoomText" type="text" name="otherRoom" placeholder="Example: 1st floor near the exit"
+                    value={formData.otherRoom} onChange={handleChange} required />
                   <p className="create-scope__hint">Please describe the exact room or location.</p>
                 </div>
               )}
 
-              {/* Free-text spot (no-room buildings) */}
               {needsOtherRoom && (
                 <div className="create-scope__group">
-                  <label htmlFor="otherRoom">
-                    Specify room / spot <RequiredStar value={formData.otherRoom} />
-                  </label>
-                  <input
-                    id="otherRoom" type="text" name="otherRoom"
+                  <label htmlFor="otherRoom">Specify room / spot <RequiredStar value={formData.otherRoom} /></label>
+                  <input id="otherRoom" type="text" name="otherRoom"
                     placeholder="Example: 1st floor near the exit, Main entrance, Hallway C"
-                    value={formData.otherRoom} onChange={handleChange} required
-                  />
+                    value={formData.otherRoom} onChange={handleChange} required />
                   <p className="create-scope__hint">
                     Describe the specific location within{" "}
                     {formData.building==="Other" ? "the building" : formData.building}.
                   </p>
                 </div>
               )}
-              
-              {/* Subject */}
-              <div className="create-scope__row-two">
-                <div className="create-scope__group">
-                  <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
-                  <input
-                    id="heading" type="text" name="heading"
-                    placeholder="Short title of the issue"
-                    value={formData.heading} onChange={handleChange} required
-                  />
-                </div>x
+
+              <div className="create-scope__group">
+                <label htmlFor="heading">Subject <RequiredStar value={formData.heading} /></label>
+                <input id="heading" type="text" name="heading" placeholder="Short title of the issue"
+                  value={formData.heading} onChange={handleChange} required />
               </div>
 
-              {/* ✅ User Type — auto-badge for students, Staff/Faculty dropdown for others */}
-              
+              {!isStudent && (
+                <div className="create-scope__group">
+                  <label htmlFor="userType">Reporter Type <RequiredStar value={formData.userType} /></label>
+                  <select id="userType" name="userType" value={formData.userType} onChange={handleChange} required>
+                    <option value="">Select type</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Faculty">Faculty</option>
+                    <option value="Visitor">Visitor</option>
+                  </select>
+                </div>
+              )}
 
-              {/* Description */}
               <div className="create-scope__group">
                 <label htmlFor="description">Description <RequiredStar value={formData.description} /></label>
-                <textarea
-                  id="description" name="description"
+                <textarea id="description" name="description"
                   placeholder="Describe the issue with details. Include location markers and safety risks."
-                  value={formData.description} onChange={handleChange} rows={5} required
-                />
+                  value={formData.description} onChange={handleChange} rows={5} required />
                 <p className="create-scope__hint">Tip: Add steps to reproduce or time observed.</p>
               </div>
 
               <div className="create-scope__group">
                 <label>
-                  Attach an image. If there&apos;s more than one image to upload, please compile them into a single image.
+                  Attach an image. If there&apos;s more than one image, please compile them into a single image.
                 </label>
- 
-                {/* ── Mobile: Gallery + Camera buttons ── */}
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
- 
-                  {/* Gallery / Files */}
                   <label style={{
                     flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                     padding:"10px 14px", borderRadius:8, cursor:"pointer",
-                    border:"1px solid var(--border,#e8ecf0)",
-                    background: formData.ImageFile ? "rgba(34,197,94,0.08)" : "var(--surface,#f9fafb)",
-                    color: formData.ImageFile ? "#16a34a" : "var(--text,#374151)",
+                    border:"1px solid var(--outline)",
+                    background: formData.ImageFile ? "rgba(34,197,94,0.08)" : "var(--surface)",
+                    color: formData.ImageFile ? "#16a34a" : "var(--text)",
                     fontSize:"0.82rem", fontWeight:600, transition:"all 0.2s",
                   }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1339,79 +1175,46 @@ export default function Create() {
                       <circle cx="8.5" cy="8.5" r="1.5"/>
                       <polyline points="21 15 16 10 5 21"/>
                     </svg>
-                    {formData.ImageFile ? "✓ " + formData.ImageFile.name.slice(0, 18) + (formData.ImageFile.name.length > 18 ? "…" : "") : "Choose from Gallery"}
-                    <input
-                      type="file"
-                      name="ImageFile"
-                      accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
-                      onChange={handleChange}
-                      style={{ display:"none" }}
-                    />
+                    {formData.ImageFile
+                      ? "✓ " + formData.ImageFile.name.slice(0, 18) + (formData.ImageFile.name.length > 18 ? "…" : "")
+                      : "Choose from Gallery"}
+                    <input type="file" name="ImageFile" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*" onChange={handleChange} style={{ display:"none" }} />
                   </label>
- 
-                  {/* Camera — capture="environment" opens rear camera directly on mobile */}
                   <label style={{
                     flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
                     padding:"10px 14px", borderRadius:8, cursor:"pointer",
-                    border:"1px solid var(--border,#e8ecf0)",
-                    background:"var(--surface,#f9fafb)",
-                    color:"var(--text,#374151)",
-                    fontSize:"0.82rem", fontWeight:600, transition:"all 0.2s",
+                    border:"1px solid var(--outline)", background:"var(--surface)",
+                    color:"var(--text)", fontSize:"0.82rem", fontWeight:600, transition:"all 0.2s",
                   }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                       <circle cx="12" cy="13" r="4"/>
                     </svg>
                     Take a Photo
-                    <input
-                      type="file"
-                      name="ImageFile"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleChange}
-                      style={{ display:"none" }}
-                    />
+                    <input type="file" name="ImageFile" accept="image/*" capture="environment" onChange={handleChange} style={{ display:"none" }} />
                   </label>
                 </div>
- 
-                {/* ── Desktop: drag-and-drop fallback ── */}
-                <label
-                  className="create-scope__dropzone"
-                  onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
-                >
-                  <input
-                    type="file" name="ImageFile"
-                    accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
-                    onChange={handleChange}
-                    required={!formData.ImageFile}
-                    style={{ display:"none" }}
-                  />
+                <label className="create-scope__dropzone" onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}>
+                  <input type="file" name="ImageFile" accept=".jpg,.jpeg,.png,.heic,.heif,.webp,.gif,image/*"
+                    onChange={handleChange} required={!formData.ImageFile} style={{ display:"none" }} />
                   <div className="create-scope__dropzone-inner">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                     </svg>
                     <div className="create-scope__hint">
-                      {formData.ImageFile
-                        ? `✓ ${formData.ImageFile.name}`
-                        : "Or drag & drop · PNG, JPG up to 10 MB"}
+                      {formData.ImageFile ? `✓ ${formData.ImageFile.name}` : "Or drag & drop · PNG, JPG up to 10 MB"}
                     </div>
                   </div>
                 </label>
- 
-                {preview && (
-                  <img className="create-scope__preview-img" src={preview} alt="Preview" />
-                )}
+                {preview && <img className="create-scope__preview-img" src={preview} alt="Preview" />}
               </div>
 
-              
-              {/* Profanity Warning */}
               {hasProfanity && (
                 <p className="create-scope__hint create-scope__hint--error">
                   Profanity or foul words were detected in your text. Please remove them before submitting.
                 </p>
               )}
 
-              {/* Submit */}
               <button
                 className="create-scope__btn create-scope__btn--primary create-scope__w-full"
                 type="submit"
@@ -1424,7 +1227,6 @@ export default function Create() {
         </main>
       </div>
 
-      {/* ── Confirmation Modal ── */}
       {isConfirming&&similarReportsCount>0 && (
         <div className="confirm-overlay">
           <div className="card">
@@ -1433,34 +1235,24 @@ export default function Create() {
               There {similarReportsCount===1 ? "is" : "are"}{" "}
               <strong>{similarReportsCount}</strong> similar report
               {similarReportsCount===1 ? "" : "s"} about the same building, room, and concern.
-
               {similarStatus&&similarStatus!=="Pending" && (
                 <>
                   <br /><br />
                   The existing report is currently{" "}
-                  <strong style={{ color: STATUS_COLOR[similarStatus]??"inherit" }}>
-                    {similarStatus}
-                  </strong>
-                  {similarStatus==="Resolved"
-                    ? " — this issue may already be fixed."
-                    : similarStatus==="In Progress"
-                    ? " — staff are already working on it."
-                    : similarStatus==="Waiting for Materials"
-                    ? " — staff are awaiting materials."
+                  <strong style={{ color: STATUS_COLOR[similarStatus]??"inherit" }}>{similarStatus}</strong>
+                  {similarStatus==="Resolved" ? " — this issue may already be fixed."
+                    : similarStatus==="In Progress" ? " — staff are already working on it."
                     : "."}
                   {" "}Submitting a duplicate may be unnecessary.
                 </>
               )}
-
               <br /><br />
               Are you sure you want to submit this report?
             </p>
             <div className="buttonContainer">
-              <button type="button" className="acceptButton" onClick={() => void performSubmit()}>
-                Submit
-              </button>
+              <button type="button" className="acceptButton" onClick={() => void performSubmit()}>Submit</button>
               <button type="button" className="declineButton"
-                onClick={() => { setIsConfirming(false); showMsg("info","Submission cancelled. You can adjust your report and try again."); }}>
+                onClick={() => { setIsConfirming(false); showMsg("info","Submission cancelled."); }}>
                 Cancel
               </button>
             </div>

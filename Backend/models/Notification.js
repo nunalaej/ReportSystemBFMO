@@ -4,10 +4,14 @@ const mongoose = require("mongoose");
 const NotificationSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["task_created", "task_updated", "task_status_changed", 
-           "task_deleted", "task_assigned", "task_escalated",
-           "task_completed", "report_updated", "report_archived",
-           "comment_added", "system"],
+    enum: [
+      "task_created", "task_updated", "task_status_changed",
+      "task_deleted", "task_assigned", "task_escalated",
+      "task_completed", "report_updated", "report_archived",
+      "comment_added", "system",
+      // ── Student-initiated ──
+      "student_followup",
+    ],
     default: "system"
   },
   title:      { type: String, required: true },
@@ -15,18 +19,18 @@ const NotificationSchema = new mongoose.Schema({
   taskId:     { type: String },
   taskName:   { type: String },
   reportId:   { type: String },
-  changedBy:  { type: String },         // who made the change
-  changedByRole: { type: String },      // "admin", "staff", "system"
-  fromValue:  { type: String },         // e.g. old status
-  toValue:    { type: String },         // e.g. new status
-  affectedStaff: [{ type: String }],   // staff notified
+  changedBy:  { type: String },
+  changedByRole: { type: String },
+  fromValue:  { type: String },
+  toValue:    { type: String },
+  affectedStaff: [{ type: String }],
   read:       { type: Boolean, default: false },
   readBy:     [{ type: String }],
   emailSent:  { type: Boolean, default: false },
   emailCount: { type: Number,  default: 0 },
   meta:       { type: mongoose.Schema.Types.Mixed },
 }, {
-  timestamps: true,
+  timestamps:  true,
   collection: "notifications",
 });
 

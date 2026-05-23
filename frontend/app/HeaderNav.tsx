@@ -153,6 +153,12 @@ const HeaderNav: FC = () => {
         label: "My Reports",
         onClick: () => router.push("/Student/ViewReports"),
       },
+      {
+        id: "documents",
+        icon: <ReportsIcon />,
+        label: "View Documents",
+        onClick: () => router.push("/Student/Documents"),
+      },
     ];
 
     return (
@@ -230,6 +236,12 @@ const HeaderNav: FC = () => {
       label: "Logs",
       onClick: () => router.push("/Logs"),
     },
+    {
+        id: "documents",
+        icon: <ReportsIcon />,
+        label: "View Documents",
+        onClick: () => router.push(role === "admin" ? "/Admin/Documents" : "/Staff/Documents"),
+      },
   ];
 
   const filteredNavItems = adminStaffNavItems.filter(

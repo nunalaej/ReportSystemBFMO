@@ -675,6 +675,7 @@ const handleSave = async () => {
   const addBuilding    = () => {const nb:BuildingMeta={id:`b-${Date.now()}`,name:"New Building",floors:1,roomsPerFloor:[1],hasRooms:true,singleLocationLabel:""};setBuildings(p=>[...p,nb]);setSelBuildingId(nb.id);addNotification(`Building "${nb.name}" added.`,"building");};
   const deleteBuilding = () => {if(!selBuilding)return;addNotification(`Building "${selBuilding.name}" deleted.`,"building");const rem=buildings.filter(b=>b.id!==selBuildingId);setBuildings(rem);setSelBuildingId(rem[0]?.id||"");};
 
+
   /* ── Concern handlers ── */
   const setCLabel    = (v:string) => setConcerns(p=>p.map(c=>c.id===selConcernId?{...c,label:v}:c));
   const addConcern   = () => {const nc:ConcernMeta={id:`c-${Date.now()}`,label:"New Concern",subconcerns:[]};setConcerns(p=>[...p,nc]);setSelConcernId(nc.id);addNotification(`Concern "${nc.label}" added.`,"concern");};
@@ -711,6 +712,8 @@ const handleSave = async () => {
   const deleteStaff=async(m:StaffMember)=>{if(!m._id)return;try{setStaffSaving(true);const res=await fetch(`${STAFF_URL}/${m._id}`,{method:"DELETE"});if(!res.ok)throw new Error();setStaffList(p=>p.filter(s=>s._id!==m._id));if(editStaffId===m._id){setEditStaffId(null);setEditStaffDraft(null);}addNotification(`Staff "${m.name}" removed.`,"staff");}catch{setStaffError("Failed to delete.");}finally{setStaffSaving(false);}};
   const createClerkAccount=async(member:StaffMember)=>{if(!member.clerkUsername?.trim()||!newClerkPw.trim()){setClerkResult({success:false,message:"Username and password are required."});return;}try{setClerkCreating(true);setClerkResult(null);const res=await fetch(`${API_BASE}/api/staff/create-clerk`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({staffId:member._id,username:member.clerkUsername.trim(),password:newClerkPw.trim(),name:member.name})});const data=await res.json().catch(()=>null);if(!res.ok||!data?.success)throw new Error(data?.message||"Failed.");setClerkResult({success:true,message:`Account "${member.clerkUsername}" created!`});setNewClerkPw("");setShowClerkForm(null);loadStaff();}catch(err:any){setClerkResult({success:false,message:err.message||"Failed."});}finally{setClerkCreating(false);}};
 
+
+  
   const filteredStaff = staffList.filter(s=>discFilter==="All"||s.disciplines.includes(discFilter));
 const badgeCounts = { 
   buildings:buildings.length, 
