@@ -258,8 +258,8 @@ export default function ReportPage() {
   const statusMatchesFilter=useCallback((rs:string|undefined,filter:string)=>{
     const current=rs||"Pending";
     const an=metaStatuses.find(s=>s.name.toLowerCase()==="archived")?.name||"Archived";
-    const rn=metaStatuses.find(s=>s.name.toLowerCase()==="resolved")?.name||"Resolved";
-    if (filter==="All Statuses") return current!==an&&current!==rn;
+    // "All Statuses" shows everything except Archived — Resolved, Unfinished, Closed, Cancelled etc. all visible
+    if (filter==="All Statuses") return current!==an;
     return current===filter;
   },[metaStatuses]);
 
@@ -407,13 +407,13 @@ export default function ReportPage() {
   const startIndex=(currentPage-1)*REPORTS_PER_PAGE;
   const paginatedReports=filteredReports.slice(startIndex,startIndex+REPORTS_PER_PAGE);
 
-  const statusCounts={
-    "Pending":         filteredReports.filter(r=>(r.status||"Pending")==="Pending").length,
-    "Pending Inspect": filteredReports.filter(r=>(r.status||"")==="Pending Inspect").length,
-    "In Progress":     filteredReports.filter(r=>(r.status||"")==="In Progress").length,
-    "Resolved":        filteredReports.filter(r=>(r.status||"")==="Resolved").length,
-    "Archived":        filteredReports.filter(r=>(r.status||"")==="Archived").length,
-  };
+  // Dynamic statusCounts — built from metaStatuses so Unfinished, Closed, Cancelled etc. are all counted
+  const statusCounts = Object.fromEntries(
+    metaStatuses.map(s => [
+      s.name,
+      filteredReports.filter(r => (r.status || "Pending") === s.name).length,
+    ])
+  );
 
   const executePrint=useCallback((sigs:Signatory[])=>{
     if (typeof window==="undefined") return;
@@ -476,6 +476,7 @@ export default function ReportPage() {
     try {
       setSaving(true);
       const trimmed=commentText.trim();
+      const prevStatus=selectedReport.status||"Pending";
       const group=reports.filter(r=>getGroupKey(r)===getGroupKey(selectedReport));
       const updated=await Promise.all(group.map(async r=>{
         const res=await fetch(`${API_BASE}/api/reports/${r._id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:statusValue,sendEmail})});
@@ -492,6 +493,28 @@ export default function ReportPage() {
       const us=updated.find(u=>u._id===selectedReport._id)||updated[0];
       setSelectedReport(us); setStatusValue(us.status||"Pending"); setCommentText("");
       showToast(`Status updated to "${statusValue}".${sendEmail?" Email notification sent.":""}`, "success");
+      // ── Notify bell when status actually changed ──
+      if (statusValue !== prevStatus) {
+        try {
+          await fetch(`${API_BASE}/api/notifications`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type:          "task_status_changed",
+              title:         `Status changed: "${selectedReport.heading||selectedReport.reportId||"Report"}"`,
+              message:       `Status changed from "${prevStatus}" to "${statusValue}" by ${user?.fullName||"Admin"}.`,
+              taskName:      selectedReport.heading||"",
+              reportId:      selectedReport.reportId||selectedReport._id,
+              changedBy:     user?.fullName||"Admin",
+              changedByRole: "admin",
+              fromValue:     prevStatus,
+              toValue:       statusValue,
+              affectedStaff: [],
+              read:          false,
+            }),
+          });
+        } catch { /* non-fatal */ }
+      }
     } catch(e:any){showToast(e.message||"Failed.","error");}
     finally{setSaving(false);}
   };
@@ -563,7 +586,7 @@ export default function ReportPage() {
       setTaskSaving(true);
       const finalStaff=taskStaffInput.trim()&&!taskStaff.includes(taskStaffInput.trim())?[...taskStaff,taskStaffInput.trim()]:taskStaff;
       const selectedP=metaPriorities.find(p=>p.id===taskPriority);
-      const res=await fetch(`${API_BASE}/api/tasks`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:user?.id||"admin",name:taskName.trim(),concernType:taskReport.concern||"Other",reportId:taskReport.reportId||taskReport._id,status:"Pending",assignedStaff:finalStaff,priority:selectedP?.name||"",checklist:taskChecklist,notes:taskNotes.trim(),createdBy:user?.fullName||"Admin"})});
+      const res=await fetch(`${API_BASE}/api/tasks`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:user?.id||"admin",name:taskName.trim(),concernType:taskReport.concern||"Other",reportId:taskReport.reportId||taskReport._id,reportMongoId:taskReport._id,status:"Pending",assignedStaff:finalStaff,priority:selectedP?.name||"",checklist:taskChecklist,notes:taskNotes.trim(),createdBy:user?.fullName||"Admin"})});
       const data=await res.json().catch(()=>null);
       if (!res.ok||!data?.success) throw new Error(data?.message||"Failed");
       showToast(`Task "${taskName}" created.`,"success"); await fetchTasks(); closeTaskModal();

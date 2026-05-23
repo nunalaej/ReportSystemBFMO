@@ -21,6 +21,7 @@ type Task = {
   name: string;
   concernType?: string;
   reportId?: string;
+  reportMongoId?: string;   // MongoDB _id of the linked report — more reliable than reportId
   status?: string;
   assignedStaff?: string[];
   priority?: string;
@@ -308,6 +309,7 @@ export default function TasksPage() {
 
   const saveEdit = async () => {
     if (!editDraft || !selectedTask) return;
+    const prevStatus = selectedTask.status || "Pending";
     try {
       setSaving(true);
       const res  = await fetch(`${API_BASE}/api/tasks/${selectedTask._id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({...editDraft,updatedBy:user?.fullName||"Admin"}) });
@@ -316,8 +318,31 @@ export default function TasksPage() {
       const updated = data.task as Task;
       setTasks(p=>p.map(t=>t._id===updated._id?updated:t));
       // If status changed and task has a linked report, sync the report status too
-      if (editDraft.status !== selectedTask.status && editDraft.reportId) {
-        await syncReportStatus(editDraft.reportId, editDraft.status||"Pending");
+      if (editDraft.status !== selectedTask.status && (editDraft.reportId || editDraft.reportMongoId)) {
+        await syncReportStatus(editDraft.reportId||"", editDraft.status||"Pending", editDraft.reportMongoId);
+      }
+      // ── Persist notification to DB if status changed ──
+      if (editDraft.status && editDraft.status !== prevStatus) {
+        try {
+          await fetch(`${API_BASE}/api/notifications`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type:          "task_status_changed",
+              title:         `Status changed: "${editDraft.name||selectedTask.name}"`,
+              message:       `Status changed from "${prevStatus}" to "${editDraft.status}" by ${user?.fullName||"Admin"}.`,
+              taskId:        selectedTask._id,
+              taskName:      editDraft.name||selectedTask.name,
+              reportId:      editDraft.reportId||undefined,
+              changedBy:     user?.fullName||"Admin",
+              changedByRole: "admin",
+              fromValue:     prevStatus,
+              toValue:       editDraft.status,
+              affectedStaff: editDraft.assignedStaff||[],
+              read:          false,
+            }),
+          });
+        } catch { /* non-fatal */ }
       }
       setSelectedTask(updated); setIsEditing(false); setEditDraft(null);
       showToast("Task updated.", "success");
@@ -330,32 +355,42 @@ export default function TasksPage() {
    * Finds the report by reportId (which is the report's reportId string like "230426026")
    * or by MongoDB _id, then PUTs the new status.
    */
-  const syncReportStatus = useCallback(async (reportId: string, newStatus: string) => {
-    if (!reportId) return;
+  const syncReportStatus = useCallback(async (reportId: string, newStatus: string, reportMongoId?: string) => {
+    if (!reportId && !reportMongoId) return;
     try {
-      // First try to find report by reportId field
-      const searchRes = await fetch(`${API_BASE}/api/reports?reportId=${encodeURIComponent(reportId)}`, { cache:"no-store" });
-      const searchData = await searchRes.json().catch(()=>null);
-      let report = null;
-      if (searchRes.ok && searchData) {
-        const list = Array.isArray(searchData) ? searchData : Array.isArray(searchData.reports) ? searchData.reports : null;
-        if (list) report = list.find((r: any) => r.reportId === reportId || r._id === reportId);
-        // If not found by reportId field, try direct _id lookup
-        if (!report) {
-          const byId = await fetch(`${API_BASE}/api/reports/${reportId}`, { cache:"no-store" });
-          if (byId.ok) report = await byId.json().catch(()=>null);
-        }
+      // If we have the MongoDB _id, use it directly — fastest and most reliable
+      if (reportMongoId) {
+        await fetch(`${API_BASE}/api/reports/${reportMongoId}`, {
+          method:  "PUT",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ status: newStatus, sendEmail: false }),
+        });
+        return;
       }
+      // Fallback: fetch all reports and match by reportId display string or _id
+      const res  = await fetch(`${API_BASE}/api/reports`, { cache: "no-store" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) return;
+      const list: any[] = Array.isArray(data) ? data
+        : Array.isArray(data.reports) ? data.reports
+        : Array.isArray(data.data)    ? data.data : [];
+      const report = list.find((r: any) =>
+        r.reportId === reportId ||
+        r._id      === reportId ||
+        String(r.reportId) === String(reportId) ||
+        String(r._id)      === String(reportId)
+      );
       if (!report?._id) return;
       await fetch(`${API_BASE}/api/reports/${report._id}`, {
-        method:"PUT",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ status: newStatus, sendEmail: false }),
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ status: newStatus, sendEmail: false }),
       });
     } catch {}
   }, []);
 
   const updateTaskStatus = async (task: Task, newStatus: string) => {
+    const prevStatus = task.status || "Pending";
     try {
       const res  = await fetch(`${API_BASE}/api/tasks/${task._id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({status:newStatus,updatedBy:user?.fullName||"Admin"}) });
       const data = await res.json().catch(()=>null);
@@ -366,9 +401,30 @@ export default function TasksPage() {
       addNotification(`Status of "${task.name}" changed to "${newStatus}".`,"status");
       showToast(`Status moved to "${newStatus}".`,"success");
       // ── Sync linked report status ──
-      if (task.reportId) {
-        syncReportStatus(task.reportId, newStatus);
+      if (task.reportId || task.reportMongoId) {
+        syncReportStatus(task.reportId||"", newStatus, task.reportMongoId);
       }
+      // ── Persist notification to DB ──
+      try {
+        await fetch(`${API_BASE}/api/notifications`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type:          "task_status_changed",
+            title:         `Status changed: "${task.name}"`,
+            message:       `Status changed from "${prevStatus}" to "${newStatus}" by ${user?.fullName||"Admin"}.`,
+            taskId:        task._id,
+            taskName:      task.name,
+            reportId:      task.reportId||undefined,
+            changedBy:     user?.fullName||"Admin",
+            changedByRole: "admin",
+            fromValue:     prevStatus,
+            toValue:       newStatus,
+            affectedStaff: task.assignedStaff||[],
+            read:          false,
+          }),
+        });
+      } catch { /* non-fatal */ }
     } catch (err: any) { showToast(err.message||"Failed.","error"); }
   };
 
