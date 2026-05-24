@@ -208,7 +208,7 @@ export default function ReportPage() {
   const [buildingFilter, setBuildingFilter] = useState("All Buildings");
   const [concernFilter,  setConcernFilter]  = useState("All Concerns");
   const [collegeFilter,  setCollegeFilter]  = useState("All Colleges");
-  const [statusFilter,   setStatusFilter]   = useState("All Statuses");
+  const [statusFilter,   setStatusFilter]   = useState("All Statuses (Active)");
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [searchQuery,    setSearchQuery]    = useState("");
   const [userTypeFilter, setUserTypeFilter] = useState("All");
@@ -227,6 +227,7 @@ export default function ReportPage() {
 
   /* ── Inline concern correction state ── */
   const [correctingConcern, setCorrectingConcern] = useState(false);
+  const [concernDraft,      setConcernDraft]      = useState("");
 
   const [progressReport, setProgressReport] = useState<Report|null>(null);
   const [showProgress,   setShowProgress]   = useState(false);
@@ -258,8 +259,14 @@ export default function ReportPage() {
   const statusMatchesFilter=useCallback((rs:string|undefined,filter:string)=>{
     const current=rs||"Pending";
     const an=metaStatuses.find(s=>s.name.toLowerCase()==="archived")?.name||"Archived";
-    // "All Statuses" shows everything except Archived — Resolved, Unfinished, Closed, Cancelled etc. all visible
-    if (filter==="All Statuses") return current!==an;
+    // "All Statuses" = active reports only — hides Archived, Resolved, Closed, Cancelled
+    const hiddenFromDefault = [
+      an,
+      metaStatuses.find(s=>s.name.toLowerCase()==="resolved")?.name||"Resolved",
+      metaStatuses.find(s=>s.name.toLowerCase()==="closed")?.name||"Closed",
+      metaStatuses.find(s=>s.name.toLowerCase()==="cancelled")?.name||"Cancelled",
+    ].filter(Boolean);
+    if (filter==="All Statuses (Active)" || filter==="All Statuses") return !hiddenFromDefault.includes(current);
     return current===filter;
   },[metaStatuses]);
 
@@ -377,7 +384,7 @@ export default function ReportPage() {
   const concernOptions=["All Concerns",...new Set(reports.filter(r=>(buildingFilter==="All Buildings"||r.building===buildingFilter)&&statusMatchesFilter(r.status,statusFilter)).map(r=>r.concern).filter((v):v is string=>Boolean(v)))];
   const collegeOptions=["All Colleges",...new Set(reports.filter(r=>(buildingFilter==="All Buildings"||r.building===buildingFilter)&&(concernFilter==="All Concerns"||r.concern===concernFilter)&&statusMatchesFilter(r.status,statusFilter)).map(r=>{const c=r.college||"Unspecified";return c.includes(" - ")?c.split(" - ")[0].trim():c;}))];
 
-  const statusOptions=["All Statuses",...metaStatuses.map(s=>s.name)];
+  const statusOptions=["All Statuses (Active)",...metaStatuses.map(s=>s.name)];
 
   useEffect(()=>{
     const valid=new Set(reports.filter(r=>(buildingFilter==="All Buildings"||r.building===buildingFilter)&&statusMatchesFilter(r.status,statusFilter)).map(r=>r.concern));
@@ -435,24 +442,26 @@ export default function ReportPage() {
   },[filteredReports,statusCounts]);
 
   /* ── Modal helpers ── */
-  const handleCardClick=(r:Report)=>{setSelectedReport(r);setStatusValue(r.status||"Pending");setCommentText("");setEditingIndex(null);setEditingText("");setIsImageExpanded(false);setSendEmail(true);setCorrectingConcern(false);};
-  const closeDetails=useCallback(()=>{setSelectedReport(null);setStatusValue("Pending");setCommentText("");setEditingIndex(null);setEditingText("");setIsImageExpanded(false);setCorrectingConcern(false);},[]);
-  const handleClearFilters=()=>{setBuildingFilter("All Buildings");setConcernFilter("All Concerns");setCollegeFilter("All Colleges");setStatusFilter("All Statuses");setShowDuplicates(false);setCurrentPage(1);setSearchQuery("");setUserTypeFilter("All");setDateFilter("all");setCustomDateFrom("");setCustomDateTo("");};
+  const handleCardClick=(r:Report)=>{setSelectedReport(r);setStatusValue(r.status||"Pending");setCommentText("");setEditingIndex(null);setEditingText("");setIsImageExpanded(false);setSendEmail(true);setCorrectingConcern(false);setConcernDraft("");};
+  const closeDetails=useCallback(()=>{setSelectedReport(null);setStatusValue("Pending");setCommentText("");setEditingIndex(null);setEditingText("");setIsImageExpanded(false);setCorrectingConcern(false);setConcernDraft("");},[]);
+  const handleClearFilters=()=>{setBuildingFilter("All Buildings");setConcernFilter("All Concerns");setCollegeFilter("All Colleges");setStatusFilter("All Statuses (Active)");setShowDuplicates(false);setCurrentPage(1);setSearchQuery("");setUserTypeFilter("All");setDateFilter("all");setCustomDateFrom("");setCustomDateTo("");};
   const showConfirm=(msg:string,fn:()=>void|Promise<void>)=>{confirmCallbackRef.current=fn;setConfirmDialog({open:true,message:msg});};
   const closeConfirm=()=>setConfirmDialog(d=>({...d,open:false}));
   const runConfirm=async()=>{closeConfirm();const action=confirmCallbackRef.current;if(!action)return;confirmCallbackRef.current=null;try{await Promise.resolve(action());}catch{showToast("Action failed.","error");}};
 
   /* ── Inline concern correction ── */
-  const handleCorrectConcern=async(newConcern:string)=>{
-    if (!selectedReport||newConcern===selectedReport.concern) {setCorrectingConcern(false);return;}
+  const handleCorrectConcern=async()=>{
+    if (!selectedReport || !concernDraft || concernDraft === selectedReport.concern) {
+      setCorrectingConcern(false); setConcernDraft(""); return;
+    }
     try {
-      const res=await fetch(`${API_BASE}/api/reports/${selectedReport._id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({concern:newConcern})});
+      const res=await fetch(`${API_BASE}/api/reports/${selectedReport._id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({concern:concernDraft})});
       const data=await res.json().catch(()=>null);
       if (!res.ok||!data?.success) throw new Error(data?.message||"Failed");
       setReports(p=>p.map(r=>r._id===data.report._id?data.report:r));
       setSelectedReport(data.report);
-      setCorrectingConcern(false);
-      showToast(`Concern type corrected to "${newConcern}".`,"success");
+      setCorrectingConcern(false); setConcernDraft("");
+      showToast(`Concern type corrected to "${concernDraft}".`,"success");
     } catch (e:any){showToast(e.message||"Failed to correct concern.","error");}
   };
 
@@ -738,19 +747,24 @@ export default function ReportPage() {
               <p style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <strong>Concern:</strong>
                 {correctingConcern ? (
-                  <span style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginTop:4}}>
                     <select
-                      defaultValue={selectedReport.concern||""}
+                      value={concernDraft || selectedReport.concern || ""}
                       autoFocus
-                      onChange={e=>handleCorrectConcern(e.target.value)}
-                      onBlur={()=>setCorrectingConcern(false)}
-                      style={{fontSize:"0.82rem",padding:"3px 8px",borderRadius:6,border:"1px solid var(--border,#e5e7eb)",cursor:"pointer"}}
+                      onChange={e => setConcernDraft(e.target.value)}
+                      style={{fontSize:"0.82rem",padding:"4px 10px",borderRadius:6,border:"1px solid #d1d5db",cursor:"pointer",background:"#fff",color:"#111827"}}
                     >
-                      <option value="">-- Select --</option>
+                      <option value="">-- Select concern --</option>
                       {CONCERN_TYPES.map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
-                    <button type="button" onClick={()=>setCorrectingConcern(false)}
-                      style={{background:"none",border:"none",cursor:"pointer",color:"#6b7280",fontSize:"0.8rem"}}>
+                    <button type="button"
+                      onClick={handleCorrectConcern}
+                      disabled={!concernDraft || concernDraft === selectedReport.concern}
+                      style={{padding:"4px 12px",borderRadius:6,background: (!concernDraft||concernDraft===selectedReport.concern)?"#e5e7eb":"#029006",color: (!concernDraft||concernDraft===selectedReport.concern)?"#9ca3af":"#fff",border:"none",fontWeight:700,fontSize:"0.78rem",cursor:(!concernDraft||concernDraft===selectedReport.concern)?"not-allowed":"pointer"}}>
+                      Save
+                    </button>
+                    <button type="button" onClick={()=>{setCorrectingConcern(false);setConcernDraft("");}}
+                      style={{background:"none",border:"none",cursor:"pointer",color:"#6b7280",fontSize:"0.78rem",fontWeight:600}}>
                       Cancel
                     </button>
                   </span>
@@ -763,7 +777,7 @@ export default function ReportPage() {
                     }}>
                       {formatConcern(selectedReport)}
                     </span>
-                    <button type="button" onClick={()=>setCorrectingConcern(true)}
+                    <button type="button" onClick={()=>{setCorrectingConcern(true);setConcernDraft(selectedReport.concern||"");}}
                       title="Correct concern type"
                       style={{background:"none",border:"1px solid var(--border,#e5e7eb)",borderRadius:6,cursor:"pointer",color:"#6b7280",fontSize:"0.7rem",padding:"2px 7px",fontWeight:600}}>
                       ✏️ Correct

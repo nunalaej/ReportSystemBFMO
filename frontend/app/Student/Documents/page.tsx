@@ -1,7 +1,7 @@
 // app/Student/Documents/page.tsx
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import { createPortal } from "react-dom";
 
@@ -9,22 +9,22 @@ const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE &&
     process.env.NEXT_PUBLIC_API_BASE.replace(/\/+$/, "")) || "";
 
-/* ── Types ── */
 type Doc = {
   _id: string; title: string; description: string; category: string;
   fileUrl: string; fileName: string; fileSize: number;
-  published: boolean; pinned: boolean;
-  createdAt: string;
+  published: boolean; pinned: boolean; createdAt: string;
 };
 
-const CATEGORY_ICONS: Record<string, string> = {
-  Forms: "📋", Guidelines: "📖", Policies: "⚖️",
-  Announcements: "📢", General: "📄", Other: "📎",
+const CATEGORY_META: Record<string, { icon: string; color: string; bg: string }> = {
+  Forms:         { icon: "📋", color: "#2563eb", bg: "#eff6ff" },
+  Guidelines:    { icon: "📖", color: "#7c3aed", bg: "#f5f3ff" },
+  Policies:      { icon: "⚖️", color: "#dc2626", bg: "#fef2f2" },
+  Announcements: { icon: "📢", color: "#d97706", bg: "#fffbeb" },
+  General:       { icon: "📄", color: "#059669", bg: "#ecfdf5" },
+  Other:         { icon: "📎", color: "#6b7280", bg: "#f9fafb" },
 };
-const CATEGORY_COLORS: Record<string, string> = {
-  Forms: "#3b82f6", Guidelines: "#8b5cf6", Policies: "#ef4444",
-  Announcements: "#f59e0b", General: "#6b7280", Other: "#6b7280",
-};
+
+const getMeta = (cat: string) => CATEGORY_META[cat] || CATEGORY_META["Other"];
 
 function fmtSize(bytes: number) {
   if (!bytes) return "";
@@ -33,36 +33,29 @@ function fmtSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/* ── Google Docs viewer — most reliable way to embed PDFs from Cloudinary ── */
-function getPdfIframeSrc(url: string): string {
-  if (!url) return "";
+function fmtDate(d: string) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function getPdfIframeSrc(url: string) {
   return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`;
 }
 
-function fmtDate(d: string) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString(undefined, { year:"numeric", month:"short", day:"numeric" });
-}
-
-/* ══════════════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════════════ */
 export default function StudentDocumentsPage() {
   const { isLoaded } = useUser();
-
-  const [docs,      setDocs]      = useState<Doc[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [search,    setSearch]    = useState("");
-  const [catFilter, setCatFilter] = useState("All");
-  const [previewDoc, setPreviewDoc] = useState<Doc|null>(null);
-  const [mounted,   setMounted]   = useState(false);
+  const [docs,       setDocs]       = useState<Doc[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [search,     setSearch]     = useState("");
+  const [catFilter,  setCatFilter]  = useState("All");
+  const [previewDoc, setPreviewDoc] = useState<Doc | null>(null);
+  const [mounted,    setMounted]    = useState(false);
   useEffect(() => setMounted(true), []);
 
-  /* ── Fetch published docs only ── */
   const fetchDocs = useCallback(async () => {
     try {
       setLoading(true);
-      const res  = await fetch(`${API_BASE}/api/documents?ts=${Date.now()}`, { cache:"no-store" });
+      const res  = await fetch(`${API_BASE}/api/documents?ts=${Date.now()}`, { cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.success) setDocs(data.documents || []);
     } catch {}
@@ -71,26 +64,23 @@ export default function StudentDocumentsPage() {
 
   useEffect(() => { fetchDocs(); }, []);
 
-  /* ── Body scroll lock ── */
   useEffect(() => {
     document.body.style.overflow = previewDoc ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [previewDoc]);
 
-  /* ── Escape key ── */
   useEffect(() => {
     const l = (e: KeyboardEvent) => { if (e.key === "Escape") setPreviewDoc(null); };
     if (previewDoc) window.addEventListener("keydown", l);
     return () => window.removeEventListener("keydown", l);
   }, [previewDoc]);
 
-  /* ── Filter ── */
   const allCategories = ["All", ...Array.from(new Set(docs.map(d => d.category).filter(Boolean)))];
 
   const filtered = docs.filter(d => {
     const sm = !search.trim() ||
       d.title.toLowerCase().includes(search.toLowerCase()) ||
-      d.description.toLowerCase().includes(search.toLowerCase()) ||
+      (d.description || "").toLowerCase().includes(search.toLowerCase()) ||
       d.category.toLowerCase().includes(search.toLowerCase());
     const cm = catFilter === "All" || d.category === catFilter;
     return sm && cm;
@@ -99,68 +89,116 @@ export default function StudentDocumentsPage() {
   const pinned = filtered.filter(d => d.pinned);
   const rest   = filtered.filter(d => !d.pinned);
 
-  /* ════════════════════════════════════════
-     DOCUMENT CARD
-  ════════════════════════════════════════ */
+  /* ── Document Card ── */
   const DocCard = ({ doc }: { doc: Doc }) => {
-    const icon  = CATEGORY_ICONS[doc.category]  || "📄";
-    const color = CATEGORY_COLORS[doc.category] || "#6b7280";
+    const meta = getMeta(doc.category);
     return (
-      <div
-        style={{
-          background:"var(--tasks-card,#1a2535)",
-          borderRadius:14,
-          border:"1px solid var(--border,#2a3a4a)",
-          padding:"18px 20px",
-          display:"flex",
-          flexDirection:"column",
-          gap:10,
-          transition:"transform 0.15s, box-shadow 0.15s",
-          cursor:"default",
-          position:"relative",
-          overflow:"hidden",
+      <div style={{
+        background: "#fff",
+        borderRadius: 14,
+        border: "1px solid #e5e7eb",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "box-shadow 0.2s, transform 0.2s",
+        cursor: "default",
+      }}
+        onMouseEnter={e => {
+          const el = e.currentTarget as HTMLDivElement;
+          el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.10)";
+          el.style.transform = "translateY(-2px)";
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = ""; }}
+        onMouseLeave={e => {
+          const el = e.currentTarget as HTMLDivElement;
+          el.style.boxShadow = "";
+          el.style.transform = "";
+        }}
       >
-        {/* Top color stripe */}
-        <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:color }}/>
+        {/* Color top bar */}
+        <div style={{ height: 4, background: meta.color, flexShrink: 0 }}/>
 
-        {/* Icon + category */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:4 }}>
-          <span style={{ fontSize:"1.6rem" }}>{icon}</span>
-          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-            {doc.pinned && <span style={{ fontSize:"0.68rem", background:"#3b82f622", color:"#3b82f6", border:"1px solid #3b82f640", borderRadius:999, padding:"1px 7px", fontWeight:700 }}>📌 Pinned</span>}
-            <span style={{ fontSize:"0.68rem", background:`${color}18`, color, border:`1px solid ${color}40`, borderRadius:999, padding:"2px 8px", fontWeight:700 }}>{doc.category}</span>
+        {/* Body */}
+        <div style={{ padding: "16px 18px", flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+
+          {/* Category + pinned badges */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: "0.7rem", fontWeight: 700, padding: "2px 9px", borderRadius: 999,
+              background: meta.bg, color: meta.color, border: `1px solid ${meta.color}30`,
+            }}>
+              {meta.icon} {doc.category}
+            </span>
+            {doc.pinned && (
+              <span style={{
+                fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                background: "#fef3c7", color: "#d97706", border: "1px solid #fde68a",
+              }}>📌 Pinned</span>
+            )}
+          </div>
+
+          {/* Title */}
+          <h3 style={{
+            margin: 0, fontSize: "0.92rem", fontWeight: 700,
+            color: "#111827", lineHeight: 1.35,
+            display: "-webkit-box", WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>{doc.title}</h3>
+
+          {/* Description */}
+          {doc.description && (
+            <p style={{
+              margin: 0, fontSize: "0.77rem", color: "#6b7280", lineHeight: 1.45,
+              display: "-webkit-box", WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical", overflow: "hidden",
+            }}>{doc.description}</p>
+          )}
+
+          {/* Meta row */}
+          <div style={{
+            marginTop: "auto", paddingTop: 6,
+            display: "flex", alignItems: "center", gap: 10,
+            fontSize: "0.7rem", color: "#9ca3af",
+          }}>
+            {doc.fileSize > 0 && <span>📦 {fmtSize(doc.fileSize)}</span>}
+            <span>🗓 {fmtDate(doc.createdAt)}</span>
           </div>
         </div>
 
-        {/* Title */}
-        <div>
-          <h3 style={{ margin:0, fontSize:"0.95rem", fontWeight:800, color:"var(--tasks-text-1,#e2e8f0)", lineHeight:1.3 }}>{doc.title}</h3>
-          {doc.description && <p style={{ margin:"5px 0 0", fontSize:"0.78rem", color:"var(--tasks-text-4,#b8c4ce)", lineHeight:1.4 }}>{doc.description}</p>}
-        </div>
-
-        {/* Meta */}
-        <div style={{ display:"flex", alignItems:"center", gap:12, fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:"auto" }}>
-          {doc.fileSize > 0 && <span>📦 {fmtSize(doc.fileSize)}</span>}
-          <span>🗓 {fmtDate(doc.createdAt)}</span>
-        </div>
-
         {/* Actions */}
-        <div style={{ display:"flex", gap:8, marginTop:4 }}>
+        <div style={{ display: "flex", borderTop: "1px solid #f3f4f6" }}>
           <button
             onClick={() => setPreviewDoc(doc)}
-            style={{ flex:1, padding:"9px 12px", borderRadius:8, background:"var(--tasks-bg,#0f1925)", border:"1px solid var(--border,#2a3a4a)", color:"var(--tasks-text-2,#cbd5e1)", fontWeight:600, fontSize:"0.8rem", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.15s" }}
+            style={{
+              flex: 1, padding: "11px", background: "#f9fafb", border: "none",
+              borderRight: "1px solid #f3f4f6", color: "#374151",
+              fontWeight: 600, fontSize: "0.78rem", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#f3f4f6")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#f9fafb")}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
             View
           </button>
           <a
             href={doc.fileUrl} target="_blank" rel="noopener noreferrer" download
-            style={{ flex:1, padding:"9px 12px", borderRadius:8, background:"#029006", color:"#fff", fontWeight:700, fontSize:"0.8rem", textDecoration:"none", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
+            style={{
+              flex: 1, padding: "11px", background: "#029006", color: "#fff",
+              fontWeight: 700, fontSize: "0.78rem", textDecoration: "none",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#027a05")}
+            onMouseLeave={e => (e.currentTarget.style.background = "#029006")}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
             Download
           </a>
         </div>
@@ -168,69 +206,146 @@ export default function StudentDocumentsPage() {
     );
   };
 
-  /* ════════════════════════════════════════
-     RENDER
-  ════════════════════════════════════════ */
+  /* ── Skeleton loader ── */
+  const Skeleton = () => (
+    <div style={{ borderRadius: 14, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+      <div style={{ height: 4, background: "#e5e7eb" }}/>
+      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ height: 20, width: "40%", borderRadius: 6, background: "#f3f4f6" }}/>
+        <div style={{ height: 16, width: "85%", borderRadius: 6, background: "#f3f4f6" }}/>
+        <div style={{ height: 14, width: "60%", borderRadius: 6, background: "#f3f4f6" }}/>
+        <div style={{ height: 12, width: "45%", borderRadius: 6, background: "#f3f4f6", marginTop: 6 }}/>
+      </div>
+      <div style={{ height: 42, background: "#f9fafb", borderTop: "1px solid #f3f4f6" }}/>
+    </div>
+  );
+
+  /* ── Section header ── */
+  const SectionHeader = ({ label, count }: { label: string; count?: number }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+      <div style={{ width: 3, height: 16, borderRadius: 2, background: "#029006" }}/>
+      <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#374151", textTransform: "uppercase", letterSpacing: "0.07em" }}>{label}</span>
+      {count !== undefined && (
+        <span style={{ fontSize: "0.7rem", color: "#9ca3af", background: "#f3f4f6", borderRadius: 999, padding: "1px 8px", fontWeight: 600 }}>{count}</span>
+      )}
+    </div>
+  );
+
   return (
     <>
-      <div style={{ padding:"24px 28px", maxWidth:1200, margin:"0 auto" }}>
+      <div style={{ padding: "28px 32px", maxWidth: 1200, margin: "0 auto" }}>
 
-        {/* ── Header ── */}
-        <div style={{ marginBottom:28 }}>
-          <h1 style={{ fontSize:"1.6rem", fontWeight:800, margin:0, color:"var(--tasks-text-1,#e2e8f0)" }}>
-            Documents
-          </h1>
-          <p style={{ margin:"4px 0 0", fontSize:"0.85rem", color:"var(--tasks-text-4,#b8c4ce)" }}>
+        {/* ── Page header ── */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.1rem" }}>
+              📂
+            </div>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, margin: 0, color: "#111827" }}>Documents</h1>
+          </div>
+          <p style={{ margin: "2px 0 0 46px", fontSize: "0.83rem", color: "#6b7280" }}>
             Official BFMO forms, guidelines, and policies — click to view or download.
           </p>
         </div>
 
-        {/* ── Search + Category filters ── */}
-        <div style={{ display:"flex", gap:10, marginBottom:24, flexWrap:"wrap", alignItems:"center" }}>
-          <div style={{ position:"relative", flex:"1", minWidth:200 }}>
-            <svg style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", opacity:0.4 }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        {/* ── Search + category filters ── */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 28, flexWrap: "wrap", alignItems: "center" }}>
+          {/* Search */}
+          <div style={{ position: "relative", flex: "1 1 220px" }}>
+            <svg style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "#9ca3af", pointerEvents: "none" }}
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
             <input
-              type="text" placeholder="Search documents…" value={search} onChange={e => setSearch(e.target.value)}
-              style={{ width:"100%", padding:"9px 12px 9px 32px", borderRadius:8, border:"1px solid var(--border,#2a3a4a)", background:"var(--tasks-card,#1a2535)", color:"var(--tasks-text-1,#e2e8f0)", fontSize:"0.84rem", outline:"none", boxSizing:"border-box" }}
+              type="text" placeholder="Search documents…" value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width: "100%", padding: "9px 12px 9px 33px", borderRadius: 9,
+                border: "1px solid #e5e7eb", background: "#fff",
+                color: "#111827", fontSize: "0.84rem", outline: "none",
+                boxSizing: "border-box", transition: "border-color 0.15s",
+              }}
+              onFocus={e => (e.target.style.borderColor = "#029006")}
+              onBlur={e => (e.target.style.borderColor = "#e5e7eb")}
             />
-          </div>
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {allCategories.map(cat => (
-              <button key={cat} onClick={() => setCatFilter(cat)} style={{ padding:"7px 16px", borderRadius:999, fontSize:"0.75rem", fontWeight:700, border:"1px solid var(--border,#2a3a4a)", cursor:"pointer", background: catFilter===cat ? "#029006" : "var(--tasks-card,#1a2535)", color: catFilter===cat ? "#fff" : "var(--tasks-text-3,#94a3b8)", transition:"all 0.15s" }}>
-                {CATEGORY_ICONS[cat] || ""} {cat}
+            {search && (
+              <button onClick={() => setSearch("")}
+                style={{ position: "absolute", right: 9, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, lineHeight: 1 }}>
+                ✕
               </button>
-            ))}
+            )}
+          </div>
+
+          {/* Category filter chips */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {allCategories.map(cat => {
+              const isActive = catFilter === cat;
+              const meta = cat === "All" ? null : getMeta(cat);
+              return (
+                <button key={cat} onClick={() => setCatFilter(cat)} style={{
+                  padding: "7px 14px", borderRadius: 999, fontSize: "0.75rem", fontWeight: 700,
+                  border: `1.5px solid ${isActive ? (meta?.color || "#029006") : "#e5e7eb"}`,
+                  background: isActive ? (meta?.bg || "#f0fdf4") : "#fff",
+                  color: isActive ? (meta?.color || "#029006") : "#6b7280",
+                  cursor: "pointer", transition: "all 0.15s",
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                }}>
+                  {cat !== "All" && meta?.icon} {cat}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* ── Loading ── */}
-        {loading && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
-            {[...Array(6)].map((_,i) => (
-              <div key={i} style={{ height:180, borderRadius:14, background:"var(--tasks-card,#1a2535)", opacity:0.5, animation:"pulse 1.5s infinite" }}/>
+        {/* ── Stats bar ── */}
+        {!loading && docs.length > 0 && (
+          <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+            {[
+              { label: "Total", value: docs.length, color: "#6366f1" },
+              { label: "Pinned", value: docs.filter(d => d.pinned).length, color: "#d97706" },
+              { label: "Showing", value: filtered.length, color: "#029006" },
+            ].map(s => (
+              <div key={s.label} style={{
+                display: "flex", alignItems: "center", gap: 8, padding: "8px 16px",
+                borderRadius: 10, background: "#fff", border: "1px solid #e5e7eb",
+              }}>
+                <span style={{ fontSize: "1.1rem", fontWeight: 800, color: s.color }}>{s.value}</span>
+                <span style={{ fontSize: "0.72rem", color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</span>
+              </div>
             ))}
           </div>
         )}
 
-        {/* ── Empty ── */}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign:"center", padding:"60px 20px", color:"var(--tasks-text-4,#b8c4ce)" }}>
-            <div style={{ fontSize:"3rem", marginBottom:12 }}>📂</div>
-            <p style={{ margin:0, fontSize:"0.95rem" }}>
-              {search || catFilter !== "All" ? "No documents match your search." : "No documents available yet."}
-            </p>
+        {/* ── Skeleton ── */}
+        {loading && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }}>
+            {[...Array(6)].map((_, i) => <Skeleton key={i}/>)}
           </div>
         )}
 
-        {/* ── Pinned section ── */}
+        {/* ── Empty state ── */}
+        {!loading && filtered.length === 0 && (
+          <div style={{ textAlign: "center", padding: "64px 20px" }}>
+            <div style={{ fontSize: "3.5rem", marginBottom: 12 }}>📭</div>
+            <p style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#374151" }}>No documents found</p>
+            <p style={{ margin: "6px 0 0", fontSize: "0.84rem", color: "#9ca3af" }}>
+              {search || catFilter !== "All" ? "Try adjusting your search or filter." : "Documents will appear here once published."}
+            </p>
+            {(search || catFilter !== "All") && (
+              <button onClick={() => { setSearch(""); setCatFilter("All"); }}
+                style={{ marginTop: 16, padding: "9px 20px", borderRadius: 8, background: "#029006", color: "#fff", border: "none", fontWeight: 700, fontSize: "0.84rem", cursor: "pointer" }}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Pinned ── */}
         {!loading && pinned.length > 0 && (
-          <div style={{ marginBottom:28 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-              <span style={{ fontSize:"1rem" }}>📌</span>
-              <h2 style={{ margin:0, fontSize:"0.85rem", fontWeight:800, color:"var(--tasks-text-3,#94a3b8)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Pinned</h2>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
-              {pinned.map(doc => <DocCard key={doc._id} doc={doc} />)}
+          <div style={{ marginBottom: 32 }}>
+            <SectionHeader label="Pinned" count={pinned.length}/>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }}>
+              {pinned.map(doc => <DocCard key={doc._id} doc={doc}/>)}
             </div>
           </div>
         )}
@@ -238,72 +353,77 @@ export default function StudentDocumentsPage() {
         {/* ── All docs ── */}
         {!loading && rest.length > 0 && (
           <div>
-            {pinned.length > 0 && (
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-                <h2 style={{ margin:0, fontSize:"0.85rem", fontWeight:800, color:"var(--tasks-text-3,#94a3b8)", textTransform:"uppercase", letterSpacing:"0.06em" }}>All Documents</h2>
-                <span style={{ fontSize:"0.75rem", color:"var(--tasks-text-4,#b8c4ce)" }}>({rest.length})</span>
-              </div>
-            )}
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:14 }}>
-              {rest.map(doc => <DocCard key={doc._id} doc={doc} />)}
+            <SectionHeader label={pinned.length > 0 ? "All Documents" : "Documents"} count={rest.length}/>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 14 }}>
+              {rest.map(doc => <DocCard key={doc._id} doc={doc}/>)}
             </div>
           </div>
         )}
       </div>
 
-      {/* ════════════════════════════════════════
-          PDF PREVIEW MODAL
-      ════════════════════════════════════════ */}
+      {/* ── PDF Preview Modal ── */}
       {mounted && previewDoc && createPortal(
         <div
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:9000, display:"flex", flexDirection:"column" }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 9000, display: "flex", flexDirection: "column" }}
           onClick={() => setPreviewDoc(null)}
         >
-          {/* Header bar */}
+          {/* Modal header */}
           <div
-            style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 20px", background:"var(--tasks-card,#1a2535)", borderBottom:"1px solid var(--border,#2a3a4a)", flexShrink:0 }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", background: "#fff", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:"1.3rem" }}>{CATEGORY_ICONS[previewDoc.category] || "📄"}</span>
-              <div>
-                <div style={{ fontWeight:800, color:"var(--tasks-text-1,#e2e8f0)", fontSize:"0.95rem" }}>{previewDoc.title}</div>
-                <div style={{ fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)", marginTop:1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                background: getMeta(previewDoc.category).bg,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "1.1rem",
+              }}>
+                {getMeta(previewDoc.category).icon}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, color: "#111827", fontSize: "0.92rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {previewDoc.title}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 1 }}>
                   {previewDoc.category} · {fmtSize(previewDoc.fileSize)} · {fmtDate(previewDoc.createdAt)}
                 </div>
               </div>
             </div>
-            <div style={{ display:"flex", gap:8 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
               <a
                 href={previewDoc.fileUrl} target="_blank" rel="noopener noreferrer" download
-                style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"8px 16px", borderRadius:8, background:"#029006", color:"#fff", textDecoration:"none", fontSize:"0.82rem", fontWeight:700 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 8, background: "#029006", color: "#fff", textDecoration: "none", fontSize: "0.81rem", fontWeight: 700 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
                 Download
               </a>
               <button
                 onClick={() => setPreviewDoc(null)}
-                style={{ background:"none", border:"1px solid var(--border,#2a3a4a)", borderRadius:8, cursor:"pointer", color:"var(--tasks-text-3,#94a3b8)", padding:"8px 14px", fontSize:"0.85rem", fontWeight:600 }}
+                style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, cursor: "pointer", color: "#374151", padding: "8px 14px", fontSize: "0.82rem", fontWeight: 600 }}
               >
                 ✕ Close
               </button>
             </div>
           </div>
 
-          {/* PDF iframe */}
-          <div style={{ flex:1, padding:16, overflow:"hidden" }} onClick={e => e.stopPropagation()}>
+          {/* Iframe */}
+          <div style={{ flex: 1, padding: 16, overflow: "hidden", background: "#f9fafb" }} onClick={e => e.stopPropagation()}>
             <iframe
               src={getPdfIframeSrc(previewDoc.fileUrl)}
-              style={{ width:"100%", height:"100%", border:"none", borderRadius:10 }}
+              style={{ width: "100%", height: "100%", border: "none", borderRadius: 10, background: "#fff" }}
               title={previewDoc.title}
             />
           </div>
 
-          {/* Mobile fallback hint */}
-          <div style={{ padding:"8px 20px", background:"var(--tasks-card,#1a2535)", borderTop:"1px solid var(--border,#2a3a4a)", textAlign:"center", flexShrink:0 }} onClick={e => e.stopPropagation()}>
-            <p style={{ margin:0, fontSize:"0.72rem", color:"var(--tasks-text-4,#b8c4ce)" }}>
+          {/* Fallback */}
+          <div style={{ padding: "8px 20px", background: "#fff", borderTop: "1px solid #e5e7eb", textAlign: "center", flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+            <p style={{ margin: 0, fontSize: "0.72rem", color: "#9ca3af" }}>
               PDF not loading?{" "}
-              <a href={previewDoc.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color:"#029006", textDecoration:"none", fontWeight:700 }}>
+              <a href={previewDoc.fileUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#029006", textDecoration: "none", fontWeight: 700 }}>
                 Open in new tab ↗
               </a>
             </p>
